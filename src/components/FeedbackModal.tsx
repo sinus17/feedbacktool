@@ -1,0 +1,428 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { X } from 'lucide-react';
+import { useStore } from '../store';
+import { ConfirmationModal } from './ConfirmationModal';
+import { formatFeedbackMessage } from '../utils/feedback';
+import { MobileLayout } from './feedback/MobileLayout';
+import { DesktopLayout } from './feedback/DesktopLayout';
+import type { VideoSubmission } from '../types';
+
+interface FeedbackModalProps {
+  submission: VideoSubmission;
+  onClose: () => void;
+}
+
+export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initialSubmission, onClose }) => {
+  const [newMessage, setNewMessage] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    isOpen: boolean;
+    messageId: string | null;
+  }>({
+    isOpen: false,
+    messageId: null,
+  });
+  const [confirmReady, setConfirmReady] = useState(false);
+  const chatRef = useRef<HTMLDivElement>(null);
+  const { updateSubmission, updateFeedback, deleteMessage, markMessagesAsRead, submissions, artists } = useStore();
+  const [currentSubmission, setCurrentSubmission] = useState(initialSubmission);
+  const isArtistView = window.location.pathname.startsWith('/artist/');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  useEffect(() => {
+    const updatedSubmission = submissions.find(s => s.id === currentSubmission.id);
+    if (updatedSubmission) {
+      setCurrentSubmission(updatedSubmission);
+    }
+  }, [submissions, currentSubmission.id]);
+
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }
+  }, [currentSubmission.messages]);
+
+  useEffect(() => {
+    if (isArtistView && currentSubmission.messages?.some(m => m.isAdmin && !m.readAt)) {
+      markMessagesAsRead(currentSubmission.id).catch(console.error);
+    }
+  }, [isArtistView, currentSubmission.id, currentSubmission.messages, markMessagesAsRead]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate input
+    // For artist view: require either notes or video URL
+    // For admin view: require message text
+    if (isSubmitting) return;
+    
+    if (isArtistView && !newMessage.trim() && !notes?.trim()) {
+      setError('Please provide either a video URL or notes');
+      return false;
+    }
+    
+    if (!isArtistView && !newMessage.trim()) {
+      setError('Please enter feedback text');
+      return false;
+    }
+    
+    // Check for Instagram reel URLs
+    if (newMessage.includes('instagram.com') && 
+        (newMessage.includes('/reel/') || newMessage.includes('/p/'))) {
+      setError('Instagram URLs should be submitted in the Ad Creatives section, not here.');
+      return false;
+    }
+    
+    // Check for Instagram reel URLs or TikTok auth codes in notes
+    if (notes) {
+      if (notes.includes('instagram.com') && 
+          (notes.includes('/reel/') || notes.includes('/p/'))) {
+        setError('Instagram URLs should be submitted in the Ad Creatives section, not here.');
+        return false;
+      }
+      
+      if (notes.trim().startsWith('#')) {
+        setError('TikTok auth codes should be submitted in the Ad Creatives section, not here.');
+        return false;
+      }
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      console.log('🔔 Feedback: Submitting feedback for', currentSubmission.projectName);
+      
+      if (isArtistView) {
+        console.log('🔔 Feedback: Artist view submission');
+        
+        // Only update video URL if it's provided
+        if (newMessage.trim()) {
+          console.log('🔔 Feedback: Updating video URL');
+          const { success, error: updateError } = await updateSubmission(
+            currentSubmission.id.toString(),
+            { videoUrl: newMessage.trim() }, 
+            false,  // Don't skip WhatsApp notification
+            true    // Flag to indicate this is an update from artist
+          );
+  
+          if (!success || updateError) {
+            // Check if submission was deleted by another process
+            if (updateError && updateError.message && updateError.message.includes('No submission found with the given ID')) {
+              onClose();
+              return;
+            }
+            throw updateError || new Error('Failed to update submission');
+          }
+        }
+        console.log('🔔 Feedback: Video URL updated successfully');
+
+        // Create a feedback message that includes the notes if provided
+        let feedbackMessage;
+        
+        if (newMessage.trim() && notes.trim()) {
+          feedbackMessage = 'I\'ve updated the video with a new version. The video URL has been updated.\n\nNotes: ' + notes.trim();
+        } else if (newMessage.trim()) {
+          feedbackMessage = 'I\'ve updated the video with a new version. The video URL has been updated.';
+        } else {
+          // Only notes provided
+          feedbackMessage = notes.trim();
+        }
+        
+        console.log('🔔 Feedback: Sending artist feedback message:', feedbackMessage.substring(0, 100) + (feedbackMessage.length > 100 ? '...' : ''));
+        
+        const { success: feedbackSuccess, error: feedbackError } = await updateFeedback(
+          currentSubmission.id,
+          feedbackMessage,
+          false
+        );
+
+        if (!feedbackSuccess || feedbackError) {
+          // Check if submission was deleted by another process
+          if (feedbackError && feedbackError.message && feedbackError.message.includes('No submission found with the given ID')) {
+            onClose();
+            return;
+          }
+          if (feedbackError && feedbackError.message === 'duplicate_entry') {
+            setError('This feedback message already exists. Please modify your message or try again.');
+            return;
+          }
+          if (feedbackError && feedbackError.message === 'duplicate_message_id') {
+            setError('A message with this ID already exists. Please try again.');
+            return;
+          }
+          console.error('Error adding feedback message:', feedbackError);
+          console.error('❌ Feedback: Failed to add artist feedback message');
+          throw feedbackError || new Error('Failed to add artist feedback');
+        } else {
+          console.log('✅ Feedback: Artist feedback message sent successfully');
+        }
+        
+        // Update the local submission status to reflect the change triggered by the database trigger
+        // This ensures the UI updates immediately without requiring a page refresh
+        setCurrentSubmission(prev => {
+          // Create a new message object to add to the messages array
+          const newMessageObj = {
+            id: Date.now().toString(), // Temporary ID until refresh
+            text: feedbackMessage,
+            isAdmin: false,
+            createdAt: new Date().toISOString(),
+            readAt: null
+          };
+          
+          return {
+            ...prev,
+            status: 'feedback-needed',
+            messages: [...prev.messages, newMessageObj]
+          };
+        });
+      } else {
+        console.log('🔔 Feedback: Admin view submission');
+        const formattedMessage = formatFeedbackMessage(newMessage);
+        console.log('🔔 Feedback: Sending admin feedback message:', formattedMessage.substring(0, 100) + (formattedMessage.length > 100 ? '...' : ''));
+        
+        const { success: feedbackSuccess, error: feedbackError } = await updateFeedback(
+          currentSubmission.id,
+          formattedMessage,
+          true
+        );
+
+        if (!feedbackSuccess || feedbackError) {
+          // Check if submission was deleted by another process
+          if (feedbackError && feedbackError.message && feedbackError.message.includes('No submission found with the given ID')) {
+            onClose();
+            return;
+          }
+          if (feedbackError && feedbackError.message === 'duplicate_entry') {
+            setError('This feedback message already exists. Please modify your message or try again.');
+            return;
+          }
+          if (feedbackError && feedbackError.message === 'duplicate_message_id') {
+            setError('A message with this ID already exists. Please try again.');
+            return;
+          }
+          console.error('❌ Feedback: Failed to add admin feedback message');
+          throw feedbackError || new Error('Failed to add admin feedback');
+        } else {
+          console.log('✅ Feedback: Admin feedback message sent successfully');
+        }
+        
+        // Update the local submission status to reflect the change triggered by the database trigger
+        // This ensures the UI updates immediately without requiring a page refresh
+        setCurrentSubmission(prev => {
+          // Create a new message object to add to the messages array
+          const newMessageObj = {
+            id: Date.now().toString(), // Temporary ID until refresh
+            text: formattedMessage,
+            isAdmin: true,
+            createdAt: new Date().toISOString(),
+            readAt: null
+          };
+          
+          return {
+            ...prev,
+            status: 'correction-needed',
+            messages: [...prev.messages, newMessageObj]
+          };
+        });
+      }
+
+      setNewMessage('');
+      setNotes('');
+      
+      // Update the submissions array in the store to reflect the status change
+      // This ensures other components using the same data are also updated
+      const updatedSubmissions = submissions.map(sub => {
+        if (sub.id === currentSubmission.id) {
+          // Create a new message object
+          const newMessageObj = {
+            id: Date.now().toString(), // Temporary ID until refresh
+            text: isArtistView 
+              ? (newMessage.trim() 
+                ? 'I\'ve updated the video with a new version.' + (notes ? '\n\nNotes: ' + notes : '') 
+                : notes) 
+              : newMessage,
+            isAdmin: !isArtistView,
+            createdAt: new Date().toISOString(),
+            readAt: null
+          };
+          
+          return {
+            ...sub,
+            status: isArtistView ? 'feedback-needed' : 'correction-needed',
+            messages: [...sub.messages, newMessageObj]
+          };
+        }
+        return sub;
+      });
+      
+      // Force a re-render of components using the submissions data
+      useStore.setState({ submissions: updatedSubmissions });
+    } catch (err) {
+      console.error('❌ Feedback: Error in feedback submission:', err);
+      console.error('Error in feedback submission:', err);
+      // Check if submission was deleted by another process
+      if (err instanceof Error && err.message.includes('No submission found with the given ID')) {
+        onClose();
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Failed to submit feedback');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleMarkAsReady = async () => {
+    if (isSubmitting) return;
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      setConfirmReady(false);
+      
+      // Get the current artist for WhatsApp notification
+      const artist = artists.find(a => a.id === currentSubmission.artistId);
+      
+      // Update the submission status
+      const { success, error: updateError } = await updateSubmission(
+        currentSubmission.id.toString(),
+        { status: 'ready' },
+        false  // Don't skip WhatsApp notification
+      );
+
+      if (!success || updateError) {
+        // Check if submission was deleted by another process
+        if (updateError && updateError.message && updateError.message.includes('No submission found with the given ID')) {
+          onClose();
+          return;
+        }
+        throw updateError || new Error('Failed to mark as ready');
+      }
+      
+      // Send a WhatsApp notification about the status change
+      try {
+        if (artist) {
+          const { WhatsAppService } = await import('../services/whatsapp');
+          await WhatsAppService.notifyArtist({
+            artist,
+            submission: {
+              ...currentSubmission,
+              status: 'ready'
+            },
+            feedback: 'Your video has been approved and is ready for use! ✅',
+            status: 'ready'
+          });
+        }
+      } catch (notifyError) {
+        console.error('Error sending ready notification:', notifyError);
+      }
+
+      onClose();
+    } catch (err) {
+      console.error('Error marking as ready:', err);
+      // Check if submission was deleted by another process
+      if (err instanceof Error && err.message.includes('No submission found with the given ID')) {
+        onClose();
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Failed to mark as ready');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      setConfirmDelete({ isOpen: false, messageId: null });
+
+      const { success, error: deleteError } = await deleteMessage(currentSubmission.id, messageId);
+      if (!success || deleteError) {
+        throw deleteError || new Error('Failed to delete message');
+      }
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete message');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const sharedProps = {
+    submission: currentSubmission,
+    isArtistView,
+    error,
+    newMessage,
+    notes,
+    isSubmitting,
+    hoveredMessageId,
+    chatRef,
+    onMessageChange: setNewMessage,
+    onNotesChange: setNotes,
+    onSubmit: handleSubmit,
+    onMessageHover: setHoveredMessageId,
+    onDeleteMessage: (id: string) => setConfirmDelete({ isOpen: true, messageId: id }),
+    onMarkAsReady: () => setConfirmReady(true)
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-[#121313] rounded-lg w-[90vw] max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+        <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-700">
+          <h2 className="text-xl font-semibold text-white">
+            {currentSubmission.projectName}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-200 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 min-h-0 p-2.5">
+          {isMobile ? (
+            <MobileLayout {...sharedProps} />
+          ) : (
+            <DesktopLayout {...sharedProps} />
+          )}
+        </div>
+      </div>
+
+      <ConfirmationModal
+        isOpen={confirmDelete.isOpen}
+        title="Delete Message"
+        message="Are you sure you want to delete this message? This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => confirmDelete.messageId && handleDeleteMessage(confirmDelete.messageId)}
+        onCancel={() => setConfirmDelete({ isOpen: false, messageId: null })}
+        isLoading={isSubmitting}
+      />
+      
+      <ConfirmationModal
+        isOpen={confirmReady}
+        title="Mark as Ready"
+        message="Are you sure you want to mark this video as ready? This will indicate that no further feedback is needed."
+        confirmLabel="Mark as Ready"
+        onConfirm={handleMarkAsReady}
+        onCancel={() => setConfirmReady(false)}
+        isLoading={isSubmitting}
+      />
+    </div>
+  );
+};

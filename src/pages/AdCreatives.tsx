@@ -1,0 +1,773 @@
+import React, { useEffect, useState, useMemo } from 'react';
+import { Copy, Trash2, Plus, Edit, Archive, HardDrive } from 'lucide-react';
+import { isSupabaseStorageUrl } from '../utils/video/player';
+import { removeSpecificAdCreative } from '../utils/removeAdCreative';
+import { normalizeString, stringsMatch, stringContains } from '../utils/contentPlanMatcher';
+import { useContentPlanStore } from '../store/contentPlanStore';
+import { useStore } from '../store';
+import { EditAdCreativeModal } from '../components/EditAdCreativeModal';
+import { AdCreativeSubmissionModal } from '../components/AdCreativeSubmissionModal';
+import { AdCreativesFilterMenu } from '../components/AdCreativesFilterMenu';
+import { ConfirmationModal } from '../components/ConfirmationModal';
+import { VideoPreviewModal } from '../components/VideoPreviewModal';
+import { Pagination } from '../components/Pagination';
+import { format } from 'date-fns';
+
+interface AdCreativesProps {
+  artistId?: string;
+}
+
+export function AdCreatives({ artistId }: AdCreativesProps) {
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
+  const [modalInitialized, setModalInitialized] = useState(false);
+  const [editingCreative, setEditingCreative] = useState<any>(null);
+  const [selectedArtist, setSelectedArtist] = useState(artistId || '');
+  const [selectedPlatform, setSelectedPlatform] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [previewModal, setPreviewModal] = useState<{
+    isOpen: boolean;
+    videoUrl: string;
+    videoName?: string;
+    platform: string;
+    creativeId?: string;
+  }>({
+    isOpen: false,
+    videoUrl: '',
+    videoName: '',
+    platform: '',
+    creativeId: ''
+  });
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    creativeId: string | null;
+  }>({
+    isOpen: false,
+    creativeId: null,
+  });
+
+  const { 
+    adCreatives, 
+    artists, 
+    fetchAdCreatives, 
+    fetchArtists, 
+    deleteAdCreative, 
+    updateAdCreativeStatus,
+    archiveAdCreative,
+    adCreativesPagination,
+    setAdCreativesPage,
+    loading, 
+    error 
+  } = useStore();
+
+  // Update selectedArtist when artistId prop changes
+  useEffect(() => {
+    if (artistId) {
+      setSelectedArtist(artistId);
+    }
+  }, [artistId]);
+
+  useEffect(() => {
+    // Fetch ad creatives with pagination
+    fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize);
+    fetchArtists();
+    setIsInitialized(true);
+    setModalInitialized(true);
+    
+    // Remove the specific problematic ad creative
+    removeSpecificAdCreative().then(result => {
+      if (result.success) {
+        console.log('Removed problematic ad creative');
+        // Refresh the list after removal
+        fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize);
+      }
+    });
+  }, [fetchAdCreatives, fetchArtists, adCreativesPagination.currentPage, adCreativesPagination.pageSize]);
+
+  const getArtistName = (artistId: string) => {
+    const artist = artists.find(a => a.id === artistId);
+    return artist?.name || 'Unknown Artist';
+  };
+  
+  const getArtistWhatsAppGroupId = (artistId: string) => {
+    const artist = artists.find(a => a.id === artistId);
+    return artist?.whatsappGroupId || null;
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200';
+      case 'active':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-200';
+      case 'archived':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-200';
+      case 'rejected':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-200';
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-200';
+    }
+  };
+
+  const handleCopyContent = async (creative: { id: string; content: string }) => {
+    try {
+      // If this is an Instagram URL and we don't have a thumbnail yet, try to fetch it
+      if (creative.platform === 'instagram' && !creative.instagram_thumbnail_url) {
+        try {
+          console.log('Fetching Instagram thumbnail for URL:', creative.content);
+          fetchInstagramThumbnail(creative.content, creative.id)
+            .then(() => fetchAdCreatives())
+            .catch(error => console.error('Error fetching Instagram thumbnail:', error));
+        } catch (thumbnailError) {
+          console.error('Error fetching Instagram thumbnail:', thumbnailError);
+        }
+      }
+      
+      await navigator.clipboard.writeText(creative.content);
+      
+      // If this is an Instagram URL and we don't have a thumbnail yet, try to fetch one
+      if (creative.platform === 'instagram' && 
+          !creative.instagram_thumbnail_url && 
+          creative.content.includes('instagram.com')) {
+        // This is now handled above
+      }
+      
+      await updateAdCreativeStatus(creative.id, 'active');
+      
+      // Send WhatsApp notification if it's a Supabase storage URL
+      if (isSupabaseStorageUrl(creative.content)) {
+        try {
+          const artistId = creative.artists_id;
+          const artistName = getArtistName(artistId);
+          const artistGroupId = getArtistWhatsAppGroupId(artistId);
+          const videoName = creative.videoName || 'Video';
+          
+          // Import WhatsAppService dynamically to avoid circular dependencies
+          const { WhatsAppService } = await import('../services/whatsapp');
+          
+          // Send notification
+          await WhatsAppService.notifyAdCreativeUpdate({
+            artistName,
+            artistId,
+            artistGroupId,
+            platform: creative.platform,
+            content: creative.content,
+            status: 'active',
+            videoName: videoName
+          });
+          
+          console.log('✅ WhatsApp notification sent for ad creative approval');
+        } catch (notifyError) {
+          console.error('❌ Error sending WhatsApp notification:', notifyError);
+        }
+      }
+      
+      // Force re-render by updating a state that doesn't affect filtering
+      setIsInitialized(prev => !prev);
+    } catch (err) {
+      console.error('Failed to copy content:', err);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (deleteConfirmation.creativeId) {
+      try {
+        await deleteAdCreative(deleteConfirmation.creativeId);
+      } catch (error) {
+        console.error('Failed to delete ad creative:', error);
+      }
+    }
+    setDeleteConfirmation({ isOpen: false, creativeId: null });
+  };
+
+  const handleArchive = async (creative: { id: string; status: string }) => {
+    try {
+      await archiveAdCreative(creative.id);
+      // Force re-render by updating a state that doesn't affect filtering
+      setIsInitialized(prev => !prev);
+    } catch (err) {
+      console.error('Failed to archive ad creative:', err);
+    }
+  };
+
+  const handleRowClick = (creative: any, event: React.MouseEvent) => {
+    // Don't open preview if clicking on buttons or links
+    const target = event.target as HTMLElement;
+    if (target.closest('button') || target.closest('a') || target.tagName === 'A') {
+      return;
+    }
+
+    // Only show preview for video content (dropbox and direct_upload)
+    if (creative.platform === 'dropbox' || creative.platform === 'direct_upload') {
+      setPreviewModal({
+        isOpen: true,
+        videoUrl: creative.content,
+        videoName: creative.videoName,
+        platform: creative.platform,
+        creativeId: creative.id
+      });
+    }
+  };
+
+  const filteredCreatives = useMemo(() => {
+    let filtered = [...adCreatives];
+
+    // If we're in artist view, filter by artist first
+    if (artistId) {
+      filtered = filtered.filter(creative => creative.artists_id === artistId);
+    } 
+    // Otherwise, apply the selected artist filter if any
+    else if (selectedArtist) {
+      filtered = filtered.filter(creative => creative.artists_id === selectedArtist);
+    }
+
+    // Apply platform filter only if a platform is selected
+    if (selectedPlatform) {
+      filtered = filtered.filter(creative => creative.platform === selectedPlatform);
+    }
+
+    // Apply status filter only if a status is selected
+    if (selectedStatus) {
+      filtered = filtered.filter(creative => creative.status === selectedStatus);
+    } else {
+      // If no status filter is selected, exclude archived items by default
+      // unless we're specifically looking for archived items
+      filtered = filtered.filter(creative => creative.status !== 'archived');
+    }
+
+    // Get content plan posts to determine order
+    const contentPlanStore = useContentPlanStore.getState();
+    const contentPlanPosts = contentPlanStore.posts;
+    
+    // Create a map of video names to their scheduled dates
+    const scheduledVideos = new Map();
+    contentPlanPosts.forEach(post => {
+      // Only add to map if both title and start date exist
+      if (post.title && post.start) {
+        // Store with normalized name for consistent matching
+        scheduledVideos.set(normalizeString(post.title), post.start);
+      }
+    });
+    
+    // Sort by scheduled date in content plan first, then by creation date
+    filtered.sort((a, b) => {
+      // Check if videos are in content plan
+      const aVideoName = normalizeString(a.videoName);
+      const bVideoName = normalizeString(b.videoName);
+      
+      // Find exact matches first
+      let aScheduledDate = scheduledVideos.get(aVideoName);
+      let bScheduledDate = scheduledVideos.get(bVideoName);
+      
+      // If no exact match, try to find partial matches
+      if (!aScheduledDate && aVideoName) {
+        for (const [title, date] of scheduledVideos.entries()) {
+          if (stringContains(title, aVideoName) || stringContains(aVideoName, title)) {
+            aScheduledDate = date;
+            break;
+          }
+        }
+      }
+      
+      if (!bScheduledDate && bVideoName) {
+        for (const [title, date] of scheduledVideos.entries()) {
+          if (stringContains(title, bVideoName) || stringContains(bVideoName, title)) {
+            bScheduledDate = date;
+            break;
+          }
+        }
+      }
+      
+      const aInContentPlan = !!aScheduledDate;
+      const bInContentPlan = !!bScheduledDate;
+      
+      // If both are in content plan, sort by scheduled date
+      if (aInContentPlan && bInContentPlan) {
+        const aDate = aScheduledDate.getTime();
+        const bDate = bScheduledDate.getTime();
+        return aDate - bDate; // Sort by scheduled date (earlier first)
+      }
+      
+      // If only one is in content plan, prioritize it
+      if (aInContentPlan) return -1;
+      if (bInContentPlan) return 1;
+      
+      // Otherwise, sort by creation date (newest first)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    return filtered;
+  }, [adCreatives, selectedArtist, selectedPlatform, selectedStatus, artistId, isInitialized]);
+
+  // Determine if we're in artist view
+  const isArtistView = !!artistId;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-semibold dark:text-white">
+            {isArtistView ? `${getArtistName(artistId)}'s Ad Creatives` : 'Ad Creatives'}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Manage Instagram Reels and TikTok URLs
+          </p>
+        </div>
+        <button onClick={() => setShowSubmissionModal(true)} className="btn">
+          <Plus className="h-5 w-5 mr-2" />
+          Add URLs
+        </button>
+      </div>
+
+      {/* Only show filter menu in admin view */}
+      {!isArtistView && (
+        <AdCreativesFilterMenu
+          selectedArtist={selectedArtist}
+          setSelectedArtist={setSelectedArtist}
+          selectedPlatform={selectedPlatform}
+          setSelectedPlatform={setSelectedPlatform}
+          selectedStatus={selectedStatus}
+          setSelectedStatus={setSelectedStatus}
+        />
+      )}
+
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                {!isArtistView && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Artist
+                  </th>
+                )}
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Platform
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Content
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Submitted
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {loading ? (
+                <tr>
+                  <td colSpan={isArtistView ? 5 : 6} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                    Loading...
+                  </td>
+                </tr>
+              ) : filteredCreatives.length === 0 ? (
+                <tr>
+                  <td colSpan={isArtistView ? 5 : 6} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                    {(selectedArtist || selectedPlatform || selectedStatus) ? 'No ad creatives match the selected filters' : 'No ad creatives found'}
+                  </td>
+                </tr>
+              ) : (
+                filteredCreatives.map((creative) => (
+                  <tr 
+                    key={creative.id} 
+                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                      (creative.platform === 'dropbox' || creative.platform === 'direct_upload') 
+                        ? 'cursor-pointer' 
+                        : ''
+                    }`}
+                    onClick={(e) => handleRowClick(creative, e)}
+                  >
+                    {!isArtistView && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 dark:text-gray-100">
+                          {getArtistName(creative.artists_id)}
+                        </div>
+                      </td>
+                    )}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        {creative.platform === 'instagram' ? (
+                          <img 
+                            src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
+                            alt="Instagram" 
+                            className="h-5 w-5" 
+                          /> 
+                        ) : creative.platform === 'dropbox' ? (
+                          // Check if it's a Supabase storage URL or regular Dropbox
+                          (creative.content.includes('://') && isSupabaseStorageUrl(creative.content)) ? (
+                            <div className="relative w-10 h-10 bg-gray-800 rounded overflow-hidden">
+                              {creative.thumbnail_url ? (
+                                <img 
+                                  src={creative.thumbnail_url} 
+                                  alt="Video thumbnail" 
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <HardDrive className="h-5 w-5 text-white" title="Storage" />
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="relative w-10 h-10 bg-gray-800 rounded overflow-hidden">
+                              {creative.thumbnail_url ? (
+                                <img 
+                                  src={creative.thumbnail_url} 
+                                  alt="Video thumbnail" 
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <svg 
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  viewBox="0 0 528 512"
+                                  className="h-5 w-5 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+                                >
+                                  <path fill="currentColor" d="M264.4 116.3l-132 84.3 132 84.3-132 84.3L0 284.1l132.3-84.3L0 116.3 132.3 32l132.1 84.3zM131.6 395.7l132-84.3 132 84.3-132 84.3-132-84.3zm132.8-111.6l132-84.3-132-83.6L395.7 32 528 116.3l-132.3 84.3L528 284.8l-132.3 84.3-131.3-85z"/>
+                                </svg>
+                              )}
+                            </div>
+                          )
+                        ) : (
+                          <div className="flex items-center">
+                            {(creative.content.includes('://') && isSupabaseStorageUrl(creative.content)) ? (
+                              <div className="relative w-10 h-10 bg-gray-800 rounded overflow-hidden">
+                                {creative.thumbnail_url ? (
+                                  <img 
+                                    src={creative.thumbnail_url} 
+                                    alt="Video thumbnail" 
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <HardDrive className="h-5 w-5 text-white" title="Storage" />
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <img 
+                                src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
+                                alt="TikTok"
+                                className="h-5 w-5"
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-1">
+                        {creative.videoName ? (
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                                {creative.videoName}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 mt-1 ml-4">
+                              <span className="text-gray-400">↳</span>
+                              <a
+                                className={`flex items-center gap-2 hover:underline truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] text-xs text-gray-500 dark:text-gray-400 ${
+                                  creative.platform === 'instagram' ? 'relative group' : ''
+                                }`}
+                                href={creative.content}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={creative.content}
+                              >
+                                {isSupabaseStorageUrl(creative.content) ? (
+                                  <span className="truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] text-xs text-gray-500 dark:text-gray-400">
+                                    {creative.content}
+                                  </span>
+                                ) : (
+                                  <span className="truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] text-xs text-gray-500 dark:text-gray-400">
+                                    {creative.content}
+                                  </span>
+                                )}
+                              </a>
+                              
+                              {/* Instagram thumbnail preview on hover */}
+                              {creative.platform === 'instagram' && (
+                                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10">
+                                  {creative.instagram_thumbnail_url ? (
+                                    <div className="bg-gray-900 rounded-md p-1 shadow-lg">
+                                      <img 
+                                        src={creative.instagram_thumbnail_url} 
+                                        alt="Instagram thumbnail" 
+                                        className="w-32 h-auto rounded"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="bg-gray-900 text-gray-200 rounded-md p-2 shadow-lg text-xs">
+                                      No thumbnail available
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Display merged Instagram URL if available */}
+                            {creative.mergedInstagramReelUrl && (
+                              <div className="flex items-center gap-1 mt-1 ml-4">
+                                <span className="text-gray-400">↳</span>
+                                <img 
+                                  src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
+                                  alt="Instagram"
+                                  className="h-4 w-4" 
+                                />
+                                <div className="relative group">
+                                  <a
+                                    href={creative.mergedInstagramReelUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="hover:underline truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] text-xs text-gray-500 dark:text-gray-400"
+                                    title={creative.mergedInstagramReelUrl}
+                                  >
+                                    {creative.mergedInstagramReelUrl}
+                                  </a>
+                                  
+                                  {/* Instagram thumbnail preview on hover */}
+                                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10">
+                                    {creative.instagram_thumbnail_url ? (
+                                      <div className="bg-gray-900 rounded-md p-1 shadow-lg">
+                                        <img 
+                                          src={creative.instagram_thumbnail_url} 
+                                          alt="Instagram thumbnail" 
+                                          className="w-32 h-auto rounded"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="bg-gray-900 text-gray-200 rounded-md p-2 shadow-lg text-xs">
+                                        No thumbnail available
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Display merged TikTok auth code if available */}
+                            {creative.mergedTiktokAuthCode && (
+                              <div className="flex items-center gap-1 mt-1 ml-4">
+                                <span className="text-gray-400">↳</span>
+                                <img 
+                                  src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
+                                  alt="TikTok"
+                                  className="h-4 w-4"
+                                />
+                                <span className="truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] text-xs text-gray-500 dark:text-gray-400" title={creative.mergedTiktokAuthCode}>
+                                  {creative.mergedTiktokAuthCode}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          creative.platform !== 'tiktok' ? (
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={creative.content}
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className={`hover:underline truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] ${
+                                  creative.platform === 'instagram' ? 'relative group' : ''
+                                }`}
+                                title={creative.content}
+                              >
+                                {creative.content}
+                                
+                                {/* Instagram thumbnail preview on hover */}
+                                {creative.platform === 'instagram' && (
+                                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10">
+                                    {creative.instagram_thumbnail_url ? (
+                                      <div className="bg-gray-900 rounded-md p-1 shadow-lg">
+                                        <img 
+                                          src={creative.instagram_thumbnail_url} 
+                                          alt="Instagram thumbnail" 
+                                          className="w-32 h-auto rounded"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="bg-gray-900 text-gray-200 rounded-md p-2 shadow-lg text-xs">
+                                        No thumbnail available
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </a>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px]" title={creative.content}>
+                                {creative.content}
+                              </span>
+                            </div>
+                          )
+                        )}
+                        
+                        {/* Display merged Instagram URL if available */}
+                        {creative.mergedInstagramReelUrl && !creative.videoName && (
+                          <div className="flex items-center gap-1 mt-1 ml-4">
+                            <span className="text-gray-400">↳</span>
+                            <img 
+                              src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
+                              alt="Instagram" 
+                              className="h-4 w-4"
+                            />
+                            <a
+                              href={creative.mergedInstagramReelUrl}
+                              target="_blank"
+                              rel="noopener noreferrer" 
+                              className="hover:underline truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] text-xs text-gray-500 dark:text-gray-400 relative group"
+                              title={creative.mergedInstagramReelUrl}
+                            >
+                              {creative.mergedInstagramReelUrl}
+                              
+                              {/* Instagram thumbnail preview on hover */}
+                              <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10">
+                                {creative.instagram_thumbnail_url ? (
+                                  <div className="bg-gray-900 rounded-md p-1 shadow-lg">
+                                    <img 
+                                      src={creative.instagram_thumbnail_url} 
+                                      alt="Instagram thumbnail" 
+                                      className="w-32 h-auto rounded"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="bg-gray-900 text-gray-200 rounded-md p-2 shadow-lg text-xs">
+                                    No thumbnail available
+                                  </div>
+                                )}
+                              </div>
+                            </a>
+                          </div>
+                        )}
+                        
+                        {/* Display merged TikTok auth code if available */}
+                        {creative.mergedTiktokAuthCode && !creative.videoName && (
+                          <div className="flex items-center gap-1 mt-1 ml-4">
+                            <span className="text-gray-400">↳</span>
+                            <img 
+                              src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
+                              alt="TikTok"
+                              className="h-4 w-4"
+                            />
+                            <span className="truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] text-xs text-gray-500 dark:text-gray-400" title={creative.mergedTiktokAuthCode}>
+                              {creative.mergedTiktokAuthCode}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(creative.status)}`}>
+                        {creative.status.charAt(0).toUpperCase() + creative.status.slice(1)}
+                      </span>
+                      {creative.status === 'rejected' && creative.rejectionReason && (
+                        <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                          {creative.rejectionReason}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {format(new Date(creative.createdAt), 'dd/MM/yy, HH:mm')}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => handleCopyContent(creative)}
+                          className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                          title="Copy Content"
+                        >
+                          <Copy className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => setEditingCreative(creative)}
+                          className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                          title="Edit Content"
+                        >
+                          <Edit className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => handleArchive(creative)}
+                          className={`${
+                            creative.status === 'archived'
+                              ? 'text-green-500 hover:text-green-600 dark:text-green-400 dark:hover:text-green-300'
+                              : 'text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300'
+                          } transition-colors`}
+                          title={creative.status === 'archived' ? 'Unarchive' : 'Archive'}
+                        >
+                          <Archive className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmation({
+                            isOpen: true,
+                            creativeId: creative.id
+                          })}
+                          className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {!selectedArtist && (
+          <Pagination
+            currentPage={adCreativesPagination.currentPage}
+            totalPages={adCreativesPagination.totalPages}
+            totalCount={adCreativesPagination.totalCount}
+            pageSize={adCreativesPagination.pageSize}
+            onPageChange={(page) => {
+              setAdCreativesPage(page);
+              fetchAdCreatives(page, adCreativesPagination.pageSize);
+            }}
+            loading={loading}
+          />
+        )}
+      </div>
+
+      {showSubmissionModal && modalInitialized && (
+        <AdCreativeSubmissionModal
+          isOpen={showSubmissionModal}
+          onClose={() => setShowSubmissionModal(false)}
+          artistId={selectedArtist}
+        />
+      )}
+
+      {editingCreative && (
+        <EditAdCreativeModal
+          creative={editingCreative}
+          onClose={() => setEditingCreative(null)}
+        />
+      )}
+
+      <ConfirmationModal
+        isOpen={deleteConfirmation.isOpen}
+        title="Delete Ad Creative"
+        message="Are you sure you want to delete this ad creative? This action cannot be undone."
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirmation({ isOpen: false, creativeId: null })}
+      />
+
+      <VideoPreviewModal
+        isOpen={previewModal.isOpen}
+        onClose={() => setPreviewModal({ ...previewModal, isOpen: false })}
+        videoUrl={previewModal.videoUrl}
+        videoName={previewModal.videoName}
+        platform={previewModal.platform}
+        creativeId={previewModal.creativeId}
+      />
+    </div>
+  );
+}

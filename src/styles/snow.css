@@ -1,0 +1,88 @@
+/* Base snow container styles */
+.snow-container {
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Snow particle styles */
+.snow {
+  position: fixed;
+  background: white;
+  border-radius: 50%;
+  opacity: 0;
+  animation: snowfall linear infinite;
+  filter: blur(1px);
+  will-change: transform;
+}
+
+/* Varied snow sizes */
+.snow:nth-child(3n) { width: 3px; height: 3px; }
+.snow:nth-child(3n+1) { width: 4px; height: 4px; }
+.snow:nth-child(3n+2) { width: 6px; height: 6px; }
+
+/* Vertical snowfall animation with minimal horizontal drift */
+@keyframes snowfall {
+  0% {
+    transform: translateY(-10%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.6;
+    transform: translateY(100vh) translateX(var(--drift, 0));
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(110vh) translateX(var(--drift, 0));
+  }
+}
+
+/* Generate varied animations for snow particles */
+.snow {
+  animation-timing-function: linear;
+  animation-duration: var(--fall-duration, 8s);
+  animation-delay: var(--fall-delay, 0s);
+}
+
+/* Snowstorm styles */
+.snowstorm-container {
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.snowstorm {
+  position: fixed;
+  background: white;
+  border-radius: 50%;
+  opacity: 0;
+  animation: stormfall linear infinite;
+  filter: blur(1px);
+  will-change: transform;
+}
+
+/* Varied snowstorm sizes */
+.snowstorm:nth-child(2n) { width: 4px; height: 4px; }
+.snowstorm:nth-child(2n+1) { width: 6px; height: 6px; }
+
+/* Vertical storm animation */
+@keyframes stormfall {
+  0% {
+    transform: translateY(-10%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(110vh);
+    opacity: 0;
+  }
+}
+
+/* Generate varied animations for snowstorm particles */
+.snowstorm {
+  animation-duration: var(--storm-duration, 2s);
+  animation-delay: var(--storm-delay, 0s);
+}

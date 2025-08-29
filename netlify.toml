@@ -1,0 +1,30 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  
+# Redirect from old domain to new domain
+[[redirects]]
+  from = "https://serene-faloodeh-c87125.netlify.app/*"
+  to = "https://tool.swipeup-marketing.com/:splat"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/*"
+    [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[build.environment]
+  NODE_VERSION = "18"
+  SITE_NAME = "serene-faloodeh-c87125"
+  SITE_ID = "c87125-serene-faloodeh"
+  VITE_SUPABASE_URL = "https://wrlgoxbzlngdtomjhvnz.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndybGdveGJ6bG5nZHRvbWpodm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI0OTA3NzcsImV4cCI6MjA0ODA2Njc3N30.ZCAreV5YsR26maw8QrulmTq7GSXvfpYuKXP-ocTfhtk"
+  VITE_WHAPI_TOKEN = "coRWJTwRGdqohY8gykipkezKA4SPO5dh"
+  VITE_TEAM_GROUP_ID = "120363291976373833"
