@@ -1,11 +1,10 @@
 import { WHATSAPP_CONFIG } from '../../config/whatsapp';
-import { WhatsAppAPI } from './api';
-import type { NotificationContext, WhatsAppService } from './types';
+import type { NotificationContext, WhatsAppService as IWhatsAppService } from './types';
 import { supabase } from '../../lib/supabase';
 
-class WhatsAppServiceImpl implements WhatsAppService {
+class WhatsAppServiceImpl implements IWhatsAppService {
   private readonly TEAM_GROUP_ID = import.meta.env.VITE_TEAM_GROUP_ID || '120363291976373833';
-  private readonly BACKGROUND_NOTIFICATIONS = true; // Enable background notifications
+  // Notification configuration
   private readonly NOTIFICATION_RULES = {
     ADMIN_FEEDBACK_TO_ARTIST_ONLY: true,  // When admin sends feedback, only notify artist
     ARTIST_UPDATE_TO_TEAM_ONLY: true,     // When artist updates, only notify team
@@ -14,10 +13,10 @@ class WhatsAppServiceImpl implements WhatsAppService {
 
   private async logNotification(
     type: 'feedback' | 'whatsapp_message' | 'ad_creative_submission' | 'notification',
-    status: 'success' | 'error',
+    status: 'success' | 'error' | 'info',
     message: string,
     error?: string | null,
-    metadata?: Record<string, unknown>
+    metadata?: any
   ) {
     try {
       await supabase.from('whatsapp_logs').insert({
@@ -33,7 +32,7 @@ class WhatsAppServiceImpl implements WhatsAppService {
             hasToken: !!WHATSAPP_CONFIG.TOKEN
           }
         }
-      }).select();
+      } as any).select();
     } catch (e) {
       console.error('Error logging WhatsApp notification:', e);
     }
