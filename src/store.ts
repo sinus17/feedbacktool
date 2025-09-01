@@ -85,7 +85,7 @@ interface StoreState {
   setAdCreativesPage: (page: number) => void;
 }
 
-const useStoreImpl = create<StoreState>((set, get) => ({
+const useStore = create<StoreState>((set, get) => ({
   // Initial state
   submissions: [],
   artists: [],
@@ -1037,4 +1037,4 @@ const useStoreImpl = create<StoreState>((set, get) => ({
   })),
 }));
 
-export { useStoreImpl as useStore };
+export { useStore };
