@@ -68,8 +68,15 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
   }, [artistId]);
 
   useEffect(() => {
-    // Fetch ad creatives with pagination
-    fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize);
+    // Build filters object
+    const filters = {
+      artistId: artistId || selectedArtist || undefined,
+      platform: selectedPlatform || undefined,
+      status: selectedStatus || undefined
+    };
+    
+    // Fetch ad creatives with pagination and filters
+    fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize, filters);
     fetchArtists();
     setIsInitialized(true);
     setModalInitialized(true);
@@ -79,10 +86,10 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
       if (result.success) {
         console.log('Removed problematic ad creative');
         // Refresh the list after removal
-        fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize);
+        fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize, filters);
       }
     });
-  }, [fetchAdCreatives, fetchArtists, adCreativesPagination.currentPage, adCreativesPagination.pageSize]);
+  }, [fetchAdCreatives, fetchArtists, adCreativesPagination.currentPage, adCreativesPagination.pageSize, artistId, selectedArtist, selectedPlatform, selectedStatus]);
 
   const getArtistName = (artistId: string) => {
     const artist = artists.find(a => a.id === artistId);
@@ -210,30 +217,8 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
   };
 
   const filteredCreatives = useMemo(() => {
+    // Since filtering is now done server-side, we just need to sort the results
     let filtered = [...adCreatives];
-
-    // If we're in artist view, filter by artist first
-    if (artistId) {
-      filtered = filtered.filter(creative => creative.artists_id === artistId);
-    } 
-    // Otherwise, apply the selected artist filter if any
-    else if (selectedArtist) {
-      filtered = filtered.filter(creative => creative.artists_id === selectedArtist);
-    }
-
-    // Apply platform filter only if a platform is selected
-    if (selectedPlatform) {
-      filtered = filtered.filter(creative => creative.platform === selectedPlatform);
-    }
-
-    // Apply status filter only if a status is selected
-    if (selectedStatus) {
-      filtered = filtered.filter(creative => creative.status === selectedStatus);
-    } else {
-      // If no status filter is selected, exclude archived items by default
-      // unless we're specifically looking for archived items
-      filtered = filtered.filter(creative => creative.status !== 'archived');
-    }
 
     // Get content plan posts to determine order
     const contentPlanStore = useContentPlanStore.getState();
@@ -297,7 +282,7 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
     });
 
     return filtered;
-  }, [adCreatives, selectedArtist, selectedPlatform, selectedStatus, artistId, isInitialized]);
+  }, [adCreatives, isInitialized]);
 
   // Determine if we're in artist view
   const isArtistView = !!artistId;
@@ -722,7 +707,7 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
             </tbody>
           </table>
         </div>
-        {!selectedArtist && (
+        {!isArtistView && (
           <Pagination
             currentPage={adCreativesPagination.currentPage}
             totalPages={adCreativesPagination.totalPages}
@@ -730,7 +715,13 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
             pageSize={adCreativesPagination.pageSize}
             onPageChange={(page) => {
               setAdCreativesPage(page);
-              fetchAdCreatives(page, adCreativesPagination.pageSize);
+              // Build filters object for pagination
+              const filters = {
+                artistId: artistId || selectedArtist || undefined,
+                platform: selectedPlatform || undefined,
+                status: selectedStatus || undefined
+              };
+              fetchAdCreatives(page, adCreativesPagination.pageSize, filters);
             }}
             loading={loading}
           />

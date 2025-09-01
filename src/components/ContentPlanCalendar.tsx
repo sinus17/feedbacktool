@@ -39,6 +39,7 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
   const [draggedPost, setDraggedPost] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'month' | 'agenda'>('month');
   const [downloadingVideos, setDownloadingVideos] = useState<Set<string>>(new Set());
+  const [currentDate, setCurrentDate] = useState(new Date());
   
   useEffect(() => {
     fetchPosts(artistId);
@@ -95,96 +96,24 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
     return { style };
   };
   
-  // Custom toolbar component with arrow icons
-  const CustomToolbar = (toolbar: any) => {
-    const goToBack = () => {
-      toolbar.onNavigate('PREV');
-    };
-    
-    const goToNext = () => {
-      toolbar.onNavigate('NEXT');
-    };
-    
-    const goToCurrent = () => {
-      toolbar.onNavigate('TODAY');
-    };
-    
-    const label = () => {
-      const date = moment(toolbar.date);
-      return (
-        <span className="text-lg font-medium dark:text-white">
-          {date.format('MMMM YYYY')}
-        </span>
-      );
-    };
-    
-    return (
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center space-x-2">
-          <motion.button
-            type="button"
-            onClick={goToBack}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            whileTap={{ scale: 0.95 }}
-          >
-            <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-          </motion.button>
-          <motion.button
-            type="button"
-            onClick={goToCurrent}
-            className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            whileTap={{ scale: 0.95 }}
-          >
-            Today
-          </motion.button>
-          <motion.button
-            type="button"
-            onClick={goToNext}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            whileTap={{ scale: 0.95 }}
-          >
-            <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-          </motion.button>
-        </div>
-        
-        <div className="text-center">
-          {label()}
-        </div>
-        
-        <div className="flex space-x-2">
-          <motion.button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium rounded-md ${
-              currentView === 'month'
-                ? 'bg-primary-500 text-white'
-                : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-            onClick={() => {
-              setCurrentView('month');
-              toolbar.onView(Views.MONTH);
-            }}
-            whileTap={{ scale: 0.95 }}
-          >
-            Month
-          </motion.button>
-          <motion.button
-            type="button"
-            className={`px-4 py-2 text-sm font-medium rounded-md ${
-              currentView === 'agenda'
-                ? 'bg-primary-500 text-white'
-                : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-            onClick={() => {
-              setCurrentView('agenda');
-              toolbar.onView(Views.AGENDA);
-            }}
-            whileTap={{ scale: 0.95 }}
-          >
-            Agenda
-          </motion.button>
-        </div>
-      </div>
-    );
+  // Navigation functions for calendar
+  const goToBack = () => {
+    const newDate = moment(currentDate).subtract(1, 'month').toDate();
+    setCurrentDate(newDate);
+  };
+  
+  const goToNext = () => {
+    const newDate = moment(currentDate).add(1, 'month').toDate();
+    setCurrentDate(newDate);
+  };
+  
+  const goToCurrent = () => {
+    setCurrentDate(new Date());
+  };
+
+  // Custom toolbar component (simplified for month view only)
+  const CustomToolbar = () => {
+    return null; // We'll render our own header outside the calendar
   };
   
   // Custom date cell component to highlight today
@@ -444,6 +373,69 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
         )}
       </AnimatePresence>
       
+      {/* Navigation Header - Always Visible */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center space-x-2">
+          <motion.button
+            type="button"
+            onClick={goToBack}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            whileTap={{ scale: 0.95 }}
+          >
+            <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={goToCurrent}
+            className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            whileTap={{ scale: 0.95 }}
+          >
+            Today
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={goToNext}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            whileTap={{ scale: 0.95 }}
+          >
+            <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+          </motion.button>
+        </div>
+        
+        <div className="text-center">
+          <span className="text-lg font-medium dark:text-white">
+            {moment(currentDate).format('MMMM YYYY')}
+          </span>
+        </div>
+        
+        <div className="flex space-x-2">
+          <motion.button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium rounded-md ${
+              currentView === 'month'
+                ? 'bg-primary-500 text-white'
+                : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+            onClick={() => setCurrentView('month')}
+            whileTap={{ scale: 0.95 }}
+          >
+            Month
+          </motion.button>
+          <motion.button
+            type="button"
+            className={`px-4 py-2 text-sm font-medium rounded-md ${
+              currentView === 'agenda'
+                ? 'bg-primary-500 text-white'
+                : 'border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+            onClick={() => setCurrentView('agenda')}
+            whileTap={{ scale: 0.95 }}
+          >
+            Agenda
+          </motion.button>
+        </div>
+      </div>
+      
       <motion.div 
         className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 h-[600px]"
         initial={{ opacity: 0, y: 20 }}
@@ -464,9 +456,9 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
             onEventDrop={handleEventDrop}
             eventPropGetter={eventStyleGetter}
             views={['month']}
-            view={currentView}
-            onView={(view) => setCurrentView(view as 'month' | 'agenda')}
-            defaultDate={new Date()}
+            view="month"
+            date={currentDate}
+            onNavigate={(date: Date) => setCurrentDate(date)}
             popup
             components={{
               event: ({ event }) => (

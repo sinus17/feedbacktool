@@ -36,7 +36,11 @@ interface StoreState {
     status?: string;
   }) => Promise<void>;
   fetchArtists: () => Promise<void>;
-  fetchAdCreatives: (page?: number, limit?: number) => Promise<void>;
+  fetchAdCreatives: (page?: number, limit?: number, filters?: {
+    artistId?: string;
+    platform?: string;
+    status?: string;
+  }) => Promise<void>;
   
   addSubmission: (submission: Omit<VideoSubmission, 'id' | 'messages' | 'createdAt' | 'updatedAt'>) => Promise<{ data?: VideoSubmission; error?: Error }>;
   updateSubmission: (id: string, updates: Partial<VideoSubmission>, skipNotification?: boolean, isArtistUpdate?: boolean) => Promise<{ success: boolean; error?: Error }>;
@@ -206,16 +210,32 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   // Fetch ad creatives
-  fetchAdCreatives: async (page = 1, limit = 50) => {
+  fetchAdCreatives: async (page = 1, limit = 50, filters = {}) => {
     try {
       set({ loading: true, error: null });
 
       const from = (page - 1) * limit;
       const to = from + limit - 1;
 
-      const { data, error, count } = await supabase
+      let query = supabase
         .from('ad_creatives')
-        .select('*', { count: 'exact' })
+        .select('*', { count: 'exact' });
+
+      // Apply filters
+      if (filters.artistId) {
+        query = query.eq('artists_id', filters.artistId);
+      }
+      if (filters.platform) {
+        query = query.eq('platform', filters.platform);
+      }
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      } else {
+        // If no status filter is selected, exclude archived items by default
+        query = query.neq('status', 'archived');
+      }
+
+      const { data, error, count } = await query
         .range(from, to)
         .order('created_at', { ascending: false });
 
@@ -405,13 +425,73 @@ export const useStore = create<StoreState>((set, get) => ({
         }))
       };
 
-      // Update store
       set(state => ({
         submissions: state.submissions.map(sub => 
-          sub.id === id ? transformedSubmission : sub
+          sub.id.toString() === id.toString() ? transformedSubmission : sub
         ),
         loading: false
       }));
+
+      // Automatically create ad creative if song-specific video is set to ready
+      if (updates.status === 'ready' && transformedSubmission.type === 'song-specific') {
+        try {
+          console.log('🎯 Auto-creating ad creative for song-specific video:', transformedSubmission.projectName);
+          
+          // Check if ad creative already exists for this submission
+          const existingAdCreative = get().adCreatives.find(ac => ac.submissionId === transformedSubmission.id.toString());
+          
+          if (!existingAdCreative) {
+            const { data: adCreativeData, error: adCreativeError } = await supabase
+              .from('ad_creatives')
+              .insert({
+                artists_id: transformedSubmission.artistId,
+                platform: 'direct_upload',
+                content: transformedSubmission.videoUrl,
+                status: 'pending',
+                video_name: transformedSubmission.projectName,
+                submission_id: transformedSubmission.id
+              })
+              .select()
+              .single();
+
+            if (adCreativeError) {
+              if (adCreativeError.code === '23505' && adCreativeError.message.includes('ad_creatives_content_key')) {
+                console.log('Ad creative already exists for this content URL');
+              } else {
+                throw adCreativeError;
+              }
+            } else {
+              console.log('✅ Successfully created ad creative:', adCreativeData.id);
+              
+              const transformedCreative: AdCreative = {
+                id: adCreativeData.id,
+                createdAt: adCreativeData.created_at,
+                artists_id: adCreativeData.artists_id,
+                platform: adCreativeData.platform,
+                content: adCreativeData.content,
+                status: adCreativeData.status,
+                rejectionReason: adCreativeData.rejection_reason,
+                updatedAt: adCreativeData.updated_at,
+                videoName: adCreativeData.video_name,
+                mergedInstagramReelUrl: adCreativeData.merged_instagram_reel_url,
+                mergedTiktokAuthCode: adCreativeData.merged_tiktok_auth_code,
+                submissionId: adCreativeData.submission_id,
+                thumbnail_url: adCreativeData.thumbnail_url,
+                instagram_thumbnail_url: adCreativeData.instagram_thumbnail_url,
+                tiktok_thumbnail_url: adCreativeData.tiktok_thumbnail_url
+              };
+
+              set(state => ({
+                adCreatives: [transformedCreative, ...state.adCreatives]
+              }));
+            }
+          } else {
+            console.log('Ad creative already exists for this submission');
+          }
+        } catch (adCreativeError) {
+          console.error('Error auto-creating ad creative:', adCreativeError);
+        }
+      }
 
       // Send WhatsApp notification if not skipped
       if (!skipNotification) {
@@ -419,15 +499,15 @@ export const useStore = create<StoreState>((set, get) => ({
           const artist = get().artists.find(a => a.id === transformedSubmission.artistId);
           if (artist) {
             const { WhatsAppService } = await import('./services/whatsapp');
-            
             if (isArtistUpdate) {
-              await WhatsAppService.notifyTeam({
+              await WhatsAppService.notifyArtist({
                 artist,
                 submission: transformedSubmission,
-                feedback: 'Artist updated video'
+                feedback: `Status updated to: ${transformedSubmission.status}`,
+                status: transformedSubmission.status
               });
             } else {
-              await WhatsAppService.notifyArtist({
+              await WhatsAppService.notifyTeam({
                 artist,
                 submission: transformedSubmission,
                 feedback: `Status updated to: ${transformedSubmission.status}`,

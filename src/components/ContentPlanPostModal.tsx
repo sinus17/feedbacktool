@@ -155,8 +155,8 @@ export const ContentPlanPostModal: React.FC<ContentPlanPostModalProps> = ({
       setLoading(true);
       setError(null);
       
-      // Delete the content plan post without changing the submission status
-      await deletePost(post.id, false);
+      // Delete the content plan post and reset the submission status to ready
+      await deletePost(post.id, true);
       onClose();
     } catch (err) {
       console.error('Error removing post from content plan:', err);

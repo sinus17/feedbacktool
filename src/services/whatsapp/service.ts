@@ -128,6 +128,24 @@ class WhatsAppServiceImpl implements WhatsAppService {
       console.log('🔔 WhatsApp: notifyTeam called for submission:', context.submission?.projectName);
       console.log('🔔 WhatsApp: Using token:', WHATSAPP_CONFIG.TOKEN ? 'Available (hidden)' : 'Not available');
       
+      // Skip team notifications when video status is set to "ready"
+      const submissionStatus = context.submission?.status || '';
+      if (submissionStatus === 'ready') {
+        console.log('🔔 WhatsApp: Skipping team notification - status is ready (artist notification only)');
+        await this.logNotification(
+          'notification',
+          'info',
+          `Team notification skipped for ready status: ${context.submission?.projectName}`,
+          undefined,
+          {
+            ...context,
+            skipped: true,
+            reason: 'Status is ready - artist notification only'
+          }
+        );
+        return;
+      }
+      
       const teamGroupId = this.TEAM_GROUP_ID;
       const cleanTeamGroupId = teamGroupId ? teamGroupId.replace(/[^0-9]/g, '').trim() : '';
       
