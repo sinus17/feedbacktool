@@ -760,6 +760,27 @@ const useStore = create<StoreState>((set, get) => ({
         )
       }));
 
+      // Send WhatsApp notification for feedback
+      if (isAdmin) {
+        try {
+          const submission = get().submissions.find(s => s.id.toString() === submissionId.toString());
+          const artist = get().artists.find(a => a.id === submission?.artistId);
+          
+          if (artist && submission) {
+            const { WhatsAppService } = await import('./services/whatsapp');
+            await WhatsAppService.notifyArtist({
+              artist,
+              submission,
+              feedback: message,
+              status: submission.status
+            });
+            console.log('✅ WhatsApp notification sent for feedback on:', submission.projectName);
+          }
+        } catch (notifyError) {
+          console.error('Error sending WhatsApp notification for feedback:', notifyError);
+        }
+      }
+
       return { success: true };
     } catch (error) {
       console.error('Error updating feedback:', error);
