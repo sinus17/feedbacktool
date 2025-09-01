@@ -374,10 +374,13 @@ class WhatsAppServiceImpl implements WhatsAppService {
       // Ensure we have feedback text
       const feedbackText = context.feedback || 'New feedback available';
       
-      // For "ready" status, create a specific message
-      const messageText = isReadyStatus 
-        ? 'Your video has been approved and is ready for use! ✅' 
-        : feedbackText;
+      // Create status-specific messages
+      let messageText = feedbackText;
+      if (isReadyStatus) {
+        messageText = 'Your video has been approved and is ready for use! ✅';
+      } else if (isCorrectionNeeded) {
+        messageText = `🔄 Correction needed for your video.\n\n${feedbackText || 'Please check the feedback and make necessary adjustments.'}`;
+      }
       
       console.log('🔔 WhatsApp: Preparing artist notification for', context.artist.name);
       
@@ -418,9 +421,10 @@ class WhatsAppServiceImpl implements WhatsAppService {
         return;
       }
       
-      // Only send to team group if this is NOT a correction-needed status or ready status and not using new rules
-      // This prevents correction-needed and ready notifications from going to the internal team when using old rules
-      if (!isCorrectionNeeded && !isReadyStatus && feedbackText && !this.NOTIFICATION_RULES.ADMIN_FEEDBACK_TO_ARTIST_ONLY) {
+      // Only send to team group if this is NOT a ready status and not using new rules
+      // This prevents ready notifications from going to the internal team when using old rules
+      // Correction-needed notifications should still go to both artist and team
+      if (!isReadyStatus && feedbackText && !this.NOTIFICATION_RULES.ADMIN_FEEDBACK_TO_ARTIST_ONLY) {
         console.log('🔔 WhatsApp: Preparing team notification for admin feedback (not correction or ready)');
         try {
           const teamGroupId = this.TEAM_GROUP_ID;
