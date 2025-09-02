@@ -469,9 +469,9 @@ const useStore = create<StoreState>((set, get) => ({
               .from('ad_creatives')
               .insert({
                 artists_id: transformedSubmission.artistId,
-                platform: 'Instagram',
-                content: transformedSubmission.projectName,
-                status: 'draft',
+                platform: transformedSubmission.videoUrl.includes('supabase.co/storage/v1/object/public/') ? 'direct_upload' : 'dropbox',
+                content: transformedSubmission.videoUrl,
+                status: 'pending',
                 video_name: transformedSubmission.projectName,
                 submission_id: transformedSubmission.id,
               } as any)
@@ -479,8 +479,8 @@ const useStore = create<StoreState>((set, get) => ({
               .single();
 
             if (adCreativeError) {
-              if (adCreativeError.code === '23505' && adCreativeError.message.includes('ad_creatives_content_key')) {
-                console.log('Ad creative already exists for this content URL');
+              if (adCreativeError.code === '23505' || adCreativeError.code === '23514') {
+                console.log('Ad creative already exists for this submission (created by trigger)');
               } else {
                 throw adCreativeError;
               }
@@ -514,6 +514,13 @@ const useStore = create<StoreState>((set, get) => ({
           }
         } catch (adCreativeError) {
           console.error('Error auto-creating ad creative:', adCreativeError);
+        }
+        
+        // Refresh ad creatives to show any created by database trigger
+        try {
+          await get().fetchAdCreatives();
+        } catch (refreshError) {
+          console.error('Error refreshing ad creatives:', refreshError);
         }
       }
 

@@ -12,7 +12,6 @@ export class VideoUploader {
   private options: VideoUploaderOptions;
   private abortController: AbortController;
   private startTime: number = 0;
-  private uploadedBytes: number = 0;
 
   constructor(options: VideoUploaderOptions) {
     this.options = options;
@@ -45,13 +44,6 @@ export class VideoUploader {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  private formatTime(seconds: number): string {
-    if (!isFinite(seconds) || seconds <= 0) return '0s';
-    if (seconds < 60) return `${Math.round(seconds)}s`;
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.round(seconds % 60);
-    return `${minutes}m ${remainingSeconds}s`;
-  }
 
   async uploadFile(file: File) {
     try {
@@ -72,7 +64,6 @@ export class VideoUploader {
 
       console.log(`Starting upload: ${file.name} (${this.formatFileSize(file.size)})`);
       this.startTime = Date.now();
-      this.uploadedBytes = 0;
 
       // Generate a unique filename
       const timestamp = new Date().getTime();
@@ -94,7 +85,6 @@ export class VideoUploader {
         );
         
         simulatedUploaded = Math.min(simulatedUploaded + increment, fileSize * 0.95); // Stop at 95%
-        this.uploadedBytes = simulatedUploaded;
         
         const { progress, remainingTime, uploadSpeed } = this.calculateProgress(simulatedUploaded, fileSize);
         this.options.onProgress?.(progress, remainingTime, uploadSpeed);
@@ -105,13 +95,12 @@ export class VideoUploader {
       }, 100); // Update every 100ms for smoother progress
 
       // Upload file to Supabase Storage
-      const { error: uploadError, data } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('videos')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false,
-          contentType: file.type,
-          abortSignal: this.abortController.signal
+          contentType: file.type
         });
 
       clearInterval(progressInterval);

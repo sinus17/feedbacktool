@@ -20,13 +20,18 @@ export const SubmissionForm: React.FC<SubmissionFormProps> = ({ onClose, artistI
     fileSize: string;
   } | null>(null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    projectName: string;
+    videoUrl: string;
+    type: 'song-specific' | 'off-topic';
+    artistId: string;
+    notes: string;
+  }>({
     projectName: '',
     videoUrl: '',
-    type: 'song-specific' as const,
+    type: 'song-specific',
     artistId: artistId || '',
-    notes: '',
-    status: 'new' as const
+    notes: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -295,10 +300,10 @@ export const SubmissionForm: React.FC<SubmissionFormProps> = ({ onClose, artistI
                   name="type"
                   value="song-specific"
                   checked={formData.type === 'song-specific'}
-                  onChange={(e) =>
+                  onChange={() =>
                     setFormData({
                       ...formData,
-                      type: e.target.value as 'song-specific' | 'off-topic',
+                      type: 'song-specific',
                     })
                   }
                   className="mr-2"
@@ -312,10 +317,10 @@ export const SubmissionForm: React.FC<SubmissionFormProps> = ({ onClose, artistI
                   name="type"
                   value="off-topic"
                   checked={formData.type === 'off-topic'}
-                  onChange={(e) =>
+                  onChange={() =>
                     setFormData({
                       ...formData,
-                      type: e.target.value as 'song-specific' | 'off-topic',
+                      type: 'off-topic',
                     })
                   }
                   className="mr-2"
