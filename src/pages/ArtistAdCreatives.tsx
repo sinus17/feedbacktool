@@ -11,7 +11,7 @@ import { useState, useEffect, useMemo } from 'react';
 
 export const ArtistAdCreatives: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { artists, adCreatives, fetchAdCreatives, fetchArtists, deleteAdCreative, loading, error } = useStore();
+  const { artists, adCreatives, fetchAdCreatives, fetchArtists, deleteAdCreative, loading } = useStore();
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [previewModal, setPreviewModal] = useState<{
@@ -40,29 +40,51 @@ export const ArtistAdCreatives: React.FC = () => {
   useEffect(() => {
     console.log('ArtistAdCreatives: Fetching data for artist ID:', id);
     if (id) {
-      fetchAdCreatives().catch(console.error);
+      // Use server-side filtering like the admin view
+      const filters = {
+        artistId: id,
+        status: undefined // Don't filter by status initially to see all creatives
+      };
+      fetchAdCreatives(1, 1000, filters).catch(console.error); // Fetch more records
       fetchArtists().catch(console.error);
     }
-  }, [id]);
+  }, [id, fetchAdCreatives, fetchArtists]);
+
+  // Debug: Find ad creatives that show "Florian Bunke" in admin view
+  const getArtistName = (artistId: string) => {
+    const artist = artists.find(a => a.id === artistId);
+    return artist?.name || 'Unknown Artist';
+  };
+  
+  const florianNamedCreatives = adCreatives.filter(creative => 
+    getArtistName(creative.artists_id) === 'Florian Bunke'
+  );
+  
+  console.log('ArtistAdCreatives: Ad creatives showing as "Florian Bunke" in admin:', 
+    florianNamedCreatives.length, 
+    florianNamedCreatives.map(c => ({ 
+      id: c.id, 
+      artists_id: c.artists_id, 
+      resolvedName: getArtistName(c.artists_id),
+      content: c.content.substring(0, 50) + '...'
+    }))
+  );
+  
+  console.log('ArtistAdCreatives: Target artist ID:', id, 'vs actual artist IDs in Florian creatives:', 
+    [...new Set(florianNamedCreatives.map(c => c.artists_id))]
+  );
 
   const filteredCreatives = useMemo(() => {
-    console.log('ArtistAdCreatives: Filtering creatives for artist ID:', id);
-    console.log('ArtistAdCreatives: Total ad creatives:', adCreatives.length);
-    
+    // Since we're now using server-side filtering, the adCreatives should already be filtered by artist ID
+    // Just filter out archived ones and sort
+    console.log('ArtistAdCreatives: Server-filtered ad creatives count:', adCreatives.length);
     const filtered = adCreatives
-      .filter(creative => {
-        // Convert both to strings for comparison since IDs might be different types
-        const matches = String(creative.artists_id) === String(id) && creative.status !== 'archived';
-        if (matches) {
-          console.log('ArtistAdCreatives: Found matching creative:', creative.id, creative.content);
-        }
-        return matches;
-      })
+      .filter(creative => creative.status !== 'archived')
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
-    console.log('ArtistAdCreatives: Filtered creatives count:', filtered.length);
+    console.log('ArtistAdCreatives: Final filtered creatives count (excluding archived):', filtered.length);
     return filtered;
-  }, [adCreatives, id]);
+  }, [adCreatives]);
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -267,7 +289,7 @@ export const ArtistAdCreatives: React.FC = () => {
                                       className="w-full h-full object-cover"
                                     />
                                   ) : (
-                                    <HardDrive className="h-5 w-5 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" title="Storage" />
+                                    <HardDrive className="h-5 w-5 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
                                   )}
                                 </div>
                               ) : (
@@ -300,7 +322,7 @@ export const ArtistAdCreatives: React.FC = () => {
                                         className="w-full h-full object-cover"
                                       />
                                     ) : (
-                                      <HardDrive className="h-5 w-5 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" title="Storage" />
+                                      <HardDrive className="h-5 w-5 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
                                     )}
                                   </div>
                                 ) : (

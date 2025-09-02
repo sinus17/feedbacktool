@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, Loader, Calendar, Download, Search, ChevronDown } from 'lucide-react';
+import { X, AlertCircle, Loader, Calendar, Search, ChevronDown } from 'lucide-react';
 import { useContentPlanStore, ContentPlanPost } from '../store/contentPlanStore';
 import { useStore } from '../store';
 import { VideoPlayer } from './VideoPlayer';
@@ -24,15 +24,26 @@ export const ContentPlanPostModal: React.FC<ContentPlanPostModalProps> = ({
   // Filter out archived artists
   const activeArtists = artists.filter(artist => !artist.archived);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string;
+    start: Date;
+    end: Date;
+    allDay: boolean;
+    resourceId: string;
+    submissionId: string;
+    status: VideoSubmission['status'];
+    type: VideoSubmission['type'];
+    videoUrl: string;
+    notes: string;
+  }>({
     title: '',
     start: new Date(),
     end: new Date(),
     allDay: true,
     resourceId: artistId || '',
     submissionId: '',
-    status: 'posted' as const,
-    type: 'song-specific' as const,
+    status: 'posted',
+    type: 'song-specific',
     videoUrl: '',
     notes: ''
   });
@@ -180,18 +191,18 @@ export const ContentPlanPostModal: React.FC<ContentPlanPostModalProps> = ({
     }
   };
   
-  const handleDownload = () => {
-    if (!formData.videoUrl) return;
-    
-    try {
-      const url = new URL(formData.videoUrl);
-      url.searchParams.set('dl', '1');
-      window.open(url.toString(), '_blank', 'noopener,noreferrer');
-    } catch (error) {
-      console.error('Error processing video URL:', error);
-      window.open(formData.videoUrl, '_blank', 'noopener,noreferrer');
-    }
-  };
+  // const handleDownload = () => {
+  //   if (!formData.videoUrl) return;
+  //   
+  //   try {
+  //     const url = new URL(formData.videoUrl);
+  //     url.searchParams.set('dl', '1');
+  //     window.open(url.toString(), '_blank', 'noopener,noreferrer');
+  //   } catch (error) {
+  //     console.error('Error processing video URL:', error);
+  //     window.open(formData.videoUrl, '_blank', 'noopener,noreferrer');
+  //   }
+  // };
 
   const modalVariants = {
     hidden: { opacity: 0, scale: 0.9 },

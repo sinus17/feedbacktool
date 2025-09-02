@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, momentLocalizer, Views } from 'react-big-calendar';
+import { Calendar, momentLocalizer } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import moment from 'moment';
 import { useContentPlanStore } from '../store/contentPlanStore';
 import { useStore } from '../store';
-import { Loader, AlertCircle, Filter, Plus, ChevronLeft, ChevronRight, ExternalLink, Download } from 'lucide-react';
+import { Loader, AlertCircle, Filter, Plus, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { ContentPlanPostModal } from './ContentPlanPostModal';
 import { ContentPlanFilterMenu } from './ContentPlanFilterMenu';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,7 +27,6 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
     loading, 
     error, 
     fetchPosts, 
-    selectedDate,
     setSelectedDate,
     movePost
   } = useContentPlanStore();
@@ -252,49 +251,8 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
     }
   };
 
-  // Custom agenda event component with content type and video name separated
-  const CustomAgendaEvent = ({ event }: any) => {
-    return (
-      <div className="grid grid-cols-3 gap-4 w-full items-center">
-        {/* Date Column */}
-        <div className="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
-          {moment(event.start).format('DD-MM-YYYY')}
-        </div>
-        
-        {/* Type Column */}
-        <div className="flex-shrink-0">
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            event.type === 'song-specific' 
-              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300' 
-              : 'bg-violet-100 text-violet-800 dark:bg-violet-900/20 dark:text-violet-300'
-          }`}>
-            {event.type === 'song-specific' ? 'Song' : 'Off-Topic'}
-          </span>
-        </div>
-        
-        {/* Name Column */}
-        <div className="font-medium text-gray-900 dark:text-white relative overflow-hidden min-w-0">
-          <span className={`block ${
-            event.title && event.title.length > 50 
-              ? 'truncate-fade' 
-              : ''
-          }`}>
-            {event.title}
-          </span>
-        </div>
-      </div>
-    );
-  };
 
-  // Custom agenda header to customize column headers
-  const CustomAgendaHeader = ({ label }: { label: string }) => {
-    return null; // We'll use our own table header
-  };
 
-  // Custom agenda date formatter to ensure uniform date format
-  const formatAgendaDate = (date: Date, culture: string, localizer: any) => {
-    return moment(date).format('DD-MM-YYYY'); // Uniform date format with hyphens
-  };
   
   if (loading && posts.length === 0) {
     return (
@@ -446,8 +404,8 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
           <DragAndDropCalendar
             localizer={localizer}
             events={posts}
-            startAccessor="start"
-            endAccessor="end"
+            startAccessor={(event: any) => new Date(event.start)}
+            endAccessor={(event: any) => new Date(event.end)}
             style={{ height: '100%' }}
             onSelectSlot={handleSelectSlot}
             onSelectEvent={handleSelectPost}
@@ -461,7 +419,7 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
             onNavigate={(date: Date) => setCurrentDate(date)}
             popup
             components={{
-              event: ({ event }) => (
+              event: ({ event }: { event: any }) => (
                 <motion.div 
                   className="truncate text-sm cursor-move"
                   whileHover={{ scale: 1.02 }}

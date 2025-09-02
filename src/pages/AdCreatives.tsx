@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Copy, Trash2, Plus, Edit, Archive, HardDrive } from 'lucide-react';
 import { isSupabaseStorageUrl } from '../utils/video/player';
 import { removeSpecificAdCreative } from '../utils/removeAdCreative';
-import { normalizeString, stringsMatch, stringContains } from '../utils/contentPlanMatcher';
+import { normalizeString, stringContains } from '../utils/contentPlanMatcher';
 import { useContentPlanStore } from '../store/contentPlanStore';
 import { useStore } from '../store';
 import { EditAdCreativeModal } from '../components/EditAdCreativeModal';
@@ -56,8 +56,7 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
     archiveAdCreative,
     adCreativesPagination,
     setAdCreativesPage,
-    loading, 
-    error 
+    loading 
   } = useStore();
 
   // Update selectedArtist when artistId prop changes
@@ -116,16 +115,17 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
     }
   };
 
-  const handleCopyContent = async (creative: { id: string; content: string }) => {
+  const handleCopyContent = async (creative: any) => {
     try {
       // If this is an Instagram URL and we don't have a thumbnail yet, try to fetch it
       if (creative.platform === 'instagram' && !creative.instagram_thumbnail_url) {
         try {
           console.log('Fetching Instagram thumbnail for URL:', creative.content);
-          fetchInstagramThumbnail(creative.content, creative.id)
-            .then(() => fetchAdCreatives())
-            .catch(error => console.error('Error fetching Instagram thumbnail:', error));
-        } catch (thumbnailError) {
+          // TODO: Implement fetchInstagramThumbnail function
+          // fetchInstagramThumbnail(creative.content, creative.id)
+          //   .then(() => fetchAdCreatives())
+          //   .catch((error: any) => console.error('Error fetching Instagram thumbnail:', error));
+        } catch (thumbnailError: any) {
           console.error('Error fetching Instagram thumbnail:', thumbnailError);
         }
       }
@@ -171,8 +171,8 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
       
       // Force re-render by updating a state that doesn't affect filtering
       setIsInitialized(prev => !prev);
-    } catch (err) {
-      console.error('Failed to copy content:', err);
+    } catch (err: any) {
+      console.error('Error copying content:', err);
     }
   };
 
@@ -180,8 +180,8 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
     if (deleteConfirmation.creativeId) {
       try {
         await deleteAdCreative(deleteConfirmation.creativeId);
-      } catch (error) {
-        console.error('Failed to delete ad creative:', error);
+      } catch (error: any) {
+        console.error('Error deleting ad creative:', error);
       }
     }
     setDeleteConfirmation({ isOpen: false, creativeId: null });
@@ -192,8 +192,8 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
       await archiveAdCreative(creative.id);
       // Force re-render by updating a state that doesn't affect filtering
       setIsInitialized(prev => !prev);
-    } catch (err) {
-      console.error('Failed to archive ad creative:', err);
+    } catch (err: any) {
+      console.error('Error archiving creative:', err);
     }
   };
 
@@ -394,7 +394,7 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                                 />
                               ) : (
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                  <HardDrive className="h-5 w-5 text-white" title="Storage" />
+                                  <HardDrive className="h-5 w-5 text-white" />
                                 </div>
                               )}
                             </div>
@@ -429,7 +429,7 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                                   />
                                 ) : (
                                   <div className="absolute inset-0 flex items-center justify-center">
-                                    <HardDrive className="h-5 w-5 text-white" title="Storage" />
+                                    <HardDrive className="h-5 w-5 text-white" />
                                   </div>
                                 )}
                               </div>
