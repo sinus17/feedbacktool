@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Video, Instagram, Calendar, Trash2, Plus, HardDrive, Loader, MessageSquare } from 'lucide-react';
 import { useStore } from '../store';
@@ -7,7 +7,6 @@ import { ConfirmationModal } from '../components/ConfirmationModal';
 import { VideoPreviewModal } from '../components/VideoPreviewModal';
 import { format } from 'date-fns';
 import { isSupabaseStorageUrl } from '../utils/video/player';
-import { useState, useEffect, useMemo } from 'react';
 
 export const ArtistAdCreatives: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,18 +36,36 @@ export const ArtistAdCreatives: React.FC = () => {
   
   const artist = artists.find(a => a.id === id);
 
-  useEffect(() => {
-    console.log('ArtistAdCreatives: Fetching data for artist ID:', id);
+  // Function to fetch artist-specific ad creatives
+  const fetchArtistAdCreatives = useCallback(async () => {
     if (id) {
-      // Use server-side filtering like the admin view
+      console.log('ArtistAdCreatives: Fetching data for artist ID:', id);
       const filters = {
         artistId: id,
         status: undefined // Don't filter by status initially to see all creatives
       };
-      fetchAdCreatives(1, 1000, filters).catch(console.error); // Fetch more records
-      fetchArtists().catch(console.error);
+      await fetchAdCreatives(1, 1000, filters); // Fetch more records
     }
-  }, [id, fetchAdCreatives, fetchArtists]);
+  }, [id, fetchAdCreatives]);
+
+  useEffect(() => {
+    fetchArtistAdCreatives().catch(console.error);
+    fetchArtists().catch(console.error);
+  }, [fetchArtistAdCreatives, fetchArtists]);
+
+  // Watch for changes in adCreatives length and re-fetch if needed to maintain filtering
+  const [lastCreativesCount, setLastCreativesCount] = useState(0);
+  
+  useEffect(() => {
+    const currentCount = adCreatives.length;
+    if (currentCount > lastCreativesCount && lastCreativesCount > 0) {
+      // New creatives were added, re-fetch to maintain proper filtering
+      setTimeout(() => {
+        fetchArtistAdCreatives().catch(console.error);
+      }, 100);
+    }
+    setLastCreativesCount(currentCount);
+  }, [adCreatives.length, lastCreativesCount, fetchArtistAdCreatives]);
 
   // Debug: Find ad creatives that show "Florian Bunke" in admin view
   const getArtistName = (artistId: string) => {
@@ -75,16 +92,33 @@ export const ArtistAdCreatives: React.FC = () => {
   );
 
   const filteredCreatives = useMemo(() => {
-    // Since we're now using server-side filtering, the adCreatives should already be filtered by artist ID
-    // Just filter out archived ones and sort
-    console.log('ArtistAdCreatives: Server-filtered ad creatives count:', adCreatives.length);
+    console.log('ArtistAdCreatives: Filtering creatives for artist ID:', id);
+    console.log('ArtistAdCreatives: Total ad creatives in state:', adCreatives.length);
+    
+    // CRITICAL: Always filter by artist ID to prevent privacy leak
+    // Even if server-side filtering was used, we must ensure client-side filtering as a safety net
     const filtered = adCreatives
-      .filter(creative => creative.status !== 'archived')
+      .filter(creative => {
+        const belongsToArtist = String(creative.artists_id) === String(id);
+        const notArchived = creative.status !== 'archived';
+        const shouldInclude = belongsToArtist && notArchived;
+        
+        if (!belongsToArtist && creative.artists_id) {
+          console.warn('ArtistAdCreatives: PRIVACY VIOLATION PREVENTED - Creative belongs to different artist:', {
+            creativeId: creative.id,
+            creativeArtistId: creative.artists_id,
+            currentArtistId: id,
+            content: creative.content?.substring(0, 50)
+          });
+        }
+        
+        return shouldInclude;
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
-    console.log('ArtistAdCreatives: Final filtered creatives count (excluding archived):', filtered.length);
+    console.log('ArtistAdCreatives: Final filtered creatives count for artist', id, ':', filtered.length);
     return filtered;
-  }, [adCreatives]);
+  }, [adCreatives, id]);
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {

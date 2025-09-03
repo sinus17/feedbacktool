@@ -73,7 +73,7 @@ interface StoreState {
   deleteMessage: (submissionId: string | number, messageId: string | number) => Promise<{ success: boolean; error?: Error }>;
   markMessagesAsRead: (submissionId: string | number) => Promise<void>;
   
-  addAdCreatives: (creatives: any[]) => Promise<void>;
+  addAdCreatives: (creatives: any[]) => Promise<AdCreative[] | undefined>;
   updateAdCreativeStatus: (id: string, status: string, rejectionReason?: string) => Promise<void>;
   deleteAdCreative: (id: string) => Promise<void>;
   archiveAdCreative: (id: string) => Promise<void>;
@@ -887,10 +887,27 @@ const useStore = create<StoreState>((set, get) => ({
         tiktok_thumbnail_url: creative.tiktok_thumbnail_url
       }));
 
-      set(state => ({
-        adCreatives: [...transformedCreatives, ...state.adCreatives],
-        loading: false
-      }));
+      // Only update global state if we're in the main admin view
+      // Artist views should re-fetch to maintain proper filtering
+      set(state => {
+        // Check if current state appears to be filtered (small count suggests filtering)
+        const appearsFiltered = state.adCreatives.length < 100; // Reasonable threshold
+        
+        if (appearsFiltered) {
+          // Don't pollute filtered state - let components re-fetch
+          console.log('Store: Skipping global state update - appears to be filtered view');
+          return { loading: false };
+        } else {
+          // Update global state for main admin view
+          return {
+            adCreatives: [...transformedCreatives, ...state.adCreatives],
+            loading: false
+          };
+        }
+      });
+
+      // Return the created creatives so components can handle them appropriately
+      return transformedCreatives;
     } catch (error) {
       console.error('Error adding ad creatives:', error);
       set({ 
