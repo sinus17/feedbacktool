@@ -15,9 +15,11 @@ export interface Message {
   id: string | number;
   text: string;
   isAdmin: boolean;
+  userId?: string | null;
   videoUrl?: string;
   createdAt: string;
   readAt?: string | null;
+  updatedAt?: string;
 }
 
 export interface Artist {
@@ -27,6 +29,7 @@ export interface Artist {
   submissions: number;
   lastSubmission?: string | null;
   archived?: boolean;
+  avatarUrl?: string | null;
 }
 
 export interface AdCreative {

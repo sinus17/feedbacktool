@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, XCircle, AlertCircle } from 'lucide-react';
 import { formatDateTime } from '../utils/dateFormatter';
+import { OptimizedImage } from './OptimizedImage';
 
 interface MessageBubbleProps {
   text: string;
@@ -8,6 +9,8 @@ interface MessageBubbleProps {
   isOwn: boolean;
   readAt?: string | null;
   isAdmin: boolean;
+  senderName?: string;
+  avatarUrl?: string;
   onDelete?: () => Promise<void>;
   showDeleteButton: boolean;
 }
@@ -18,6 +21,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   isOwn,
   readAt,
   isAdmin,
+  senderName,
+  avatarUrl,
   onDelete,
   showDeleteButton,
 }) => {
@@ -49,6 +54,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   return (
     <div className={`flex mt-2.5 ${isOwn ? 'justify-end pr-2' : 'justify-start'}`}>
+      {senderName && (
+        <div className="flex-shrink-0 mr-3">
+          <OptimizedImage
+            src={avatarUrl || ''}
+            alt={senderName || 'User'}
+            className="h-[30px] w-[30px] rounded-full object-cover"
+            fallbackInitial={senderName?.charAt(0)?.toUpperCase() || 'A'}
+          />
+        </div>
+      )}
       <div className="relative max-w-[85%]">
         {error && (
           <div className="absolute -top-8 left-0 right-0 flex items-center justify-center">
@@ -66,8 +81,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               : 'message-bubble-other'
           }`}
         >
+          {senderName && (
+            <div className="text-xs font-medium opacity-75 mb-5">
+              {senderName}
+            </div>
+          )}
           <p className="text-sm break-words">{paragraphs}</p>
-          <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center justify-between mt-5">
             <p className="text-xs opacity-75">
               {formatDateTime(createdAt)}
             </p>

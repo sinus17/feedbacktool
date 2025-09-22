@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { User, Users, Upload, Loader, AlertCircle, Download } from 'lucide-react';
+import { User, Users, Upload, Loader, AlertCircle, Download, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/UserManagement';
 import { ProfileSettings } from '../components/ProfileSettings';
 import { ImportSubmissions } from '../components/ImportSubmissions';
 import { DatabaseBackup } from '../components/DatabaseBackup';
+import { TimeBreakdown } from '../components/TimeBreakdown';
 
 export const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'users' | 'import' | 'backup'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'users' | 'import' | 'backup' | 'time'>('profile');
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +44,10 @@ export const Settings: React.FC = () => {
     );
   }
 
+  // Check if current user is admin or management
+  const isAdmin = currentUser?.user_metadata?.team === 'admin' || 
+                 currentUser?.user_metadata?.team === 'management';
+
   return (
     <div className="space-y-6">
       <div className="border-b border-gray-200">
@@ -73,6 +78,21 @@ export const Settings: React.FC = () => {
               <span>User Management</span>
             </div>
           </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('time')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'time'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                <span>Time Breakdown</span>
+              </div>
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('import')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -107,6 +127,8 @@ export const Settings: React.FC = () => {
           <ProfileSettings user={currentUser} />
         ) : activeTab === 'users' ? (
           <UserManagement />
+        ) : activeTab === 'time' ? (
+          <TimeBreakdown />
         ) : activeTab === 'import' ? (
           <ImportSubmissions />
         ) : (

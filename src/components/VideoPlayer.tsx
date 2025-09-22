@@ -9,7 +9,7 @@ interface VideoPlayerProps {
   isDesktop: boolean;
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, isDesktop }) => {
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0.1);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -188,6 +188,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, isDesktop }) => {
         className="w-full h-full object-contain"
         playsInline
         controls={false}
+        preload="auto"
         onTimeUpdate={() => videoRef.current && setCurrentTime(videoRef.current.currentTime)}
         onLoadedMetadata={handleLoadedMetadata}
         onPlaying={() => {
@@ -237,7 +238,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, isDesktop }) => {
             isFullscreen={isFullscreen}
             showSafeZone={showSafeZone}
             error={error}
-            onPlayPause={togglePlayPause}
+            onPlayPause={() => togglePlayPause({ preventDefault: () => {}, stopPropagation: () => {} } as React.MouseEvent)}
             onVolumeChange={handleVolumeChange}
             onFullscreen={toggleFullscreen}
             onToggleSafeZone={() => setShowSafeZone(!showSafeZone)}

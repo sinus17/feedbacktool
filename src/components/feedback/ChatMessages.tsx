@@ -8,7 +8,9 @@ interface ChatMessagesProps {
   isArtistView: boolean;
   hoveredMessageId: string | null;
   onMessageHover: (id: string | null) => void;
-  onDeleteMessage: (id: string) => void;
+  onDeleteMessage: (id: string) => Promise<void>;
+  artistAvatar?: string;
+  profiles?: Array<{id: string; name: string; avatar_url?: string}>;
 }
 
 export const ChatMessages: React.FC<ChatMessagesProps> = ({
@@ -17,9 +19,46 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   hoveredMessageId,
   onMessageHover,
   onDeleteMessage,
+  artistAvatar,
+  profiles = [],
 }) => {
   const isOwnMessage = (isAdminMessage: boolean) => {
     return (isArtistView && !isAdminMessage) || (!isArtistView && isAdminMessage);
+  };
+
+  const getMessageSenderInfo = (message: Message) => {
+    console.log('Debug - Message:', message);
+    console.log('Debug - Profiles:', profiles);
+    console.log('Debug - Looking for userId:', message.userId);
+    
+    if (message.isAdmin && message.userId) {
+      // Find the specific admin user who sent this message
+      const adminProfile = profiles.find(p => p.id === message.userId);
+      console.log('Debug - Found profile:', adminProfile);
+      
+      if (adminProfile) {
+        console.log('Debug - adminProfile.name:', adminProfile.name);
+        console.log('Debug - adminProfile.avatar_url:', adminProfile.avatar_url);
+        const result = {
+          name: adminProfile.name,
+          avatarUrl: adminProfile.avatar_url?.startsWith('http') 
+            ? adminProfile.avatar_url 
+            : adminProfile.avatar_url || '/avatars/philipp.png'
+        };
+        console.log('Debug - Final result:', result);
+        return result;
+      }
+    }
+    
+    // Fallback to generic names and avatars
+    const fallback = {
+      name: message.isAdmin ? 'Admin' : 'Artist',
+      avatarUrl: message.isAdmin 
+        ? '/avatars/philipp.png' // default admin avatar
+        : artistAvatar
+    };
+    console.log('Debug - Using fallback:', fallback);
+    return fallback;
   };
 
   // Sort messages by creation date (oldest first)
@@ -63,33 +102,38 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
 
   return (
     <AnimatePresence>
-      {sortedMessages.map((message, index) => (
-        <motion.div
-          key={message.id}
-          custom={index}
-          variants={messageVariants}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-          onMouseEnter={() => onMessageHover(message.id)}
-          onMouseLeave={() => onMessageHover(null)}
-          layout
-        >
-          <MessageBubble
-            text={message.text}
-            createdAt={message.createdAt}
-            isOwn={isOwnMessage(message.isAdmin)}
-            readAt={message.readAt}
-            isAdmin={message.isAdmin}
-            onDelete={
-              !isArtistView && message.isAdmin && hoveredMessageId === message.id
-                ? () => onDeleteMessage(message.id)
-                : undefined
-            }
-            showDeleteButton={!isArtistView && message.isAdmin && hoveredMessageId === message.id}
-          />
-        </motion.div>
-      ))}
+      {sortedMessages.map((message, index) => {
+        const senderInfo = getMessageSenderInfo(message);
+        return (
+          <motion.div
+            key={message.id}
+            custom={index}
+            variants={messageVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onMouseEnter={() => onMessageHover(message.id.toString())}
+            onMouseLeave={() => onMessageHover(null)}
+            layout
+          >
+            <MessageBubble
+              text={message.text}
+              createdAt={message.createdAt}
+              isOwn={isOwnMessage(message.isAdmin)}
+              readAt={message.readAt}
+              isAdmin={message.isAdmin}
+              senderName={senderInfo.name}
+              avatarUrl={senderInfo.avatarUrl}
+              onDelete={
+                !isArtistView && message.isAdmin && hoveredMessageId === message.id.toString()
+                  ? () => onDeleteMessage(message.id.toString())
+                  : undefined
+              }
+              showDeleteButton={!isArtistView && message.isAdmin && hoveredMessageId === message.id.toString()}
+            />
+          </motion.div>
+        );
+      })}
     </AnimatePresence>
   );
 };

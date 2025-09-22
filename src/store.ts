@@ -65,21 +65,10 @@ interface StoreState {
   updateSubmission: (id: string, updates: Partial<VideoSubmission>, skipNotification?: boolean, isArtistUpdate?: boolean) => Promise<{ success: boolean; error?: Error }>;
   deleteSubmission: (id: string) => Promise<void>;
   
-  addArtist: (artist: Omit<Artist, 'id' | 'submissions' | 'lastSubmission'>) => Promise<void>;
-  updateArtist: (id: string | number, updates: Partial<Artist>) => Promise<{ error?: Error }>;
-  deleteArtist: (id: string) => Promise<void>;
+  addMessage: (submissionId: string, message: string, isAdmin?: boolean) => Promise<{ success: boolean; error?: Error }>;
+  deleteMessage: (submissionId: string, messageId: string) => Promise<{ success: boolean; error?: Error }>;
+  markMessagesAsRead: (submissionId: string) => Promise<void>;
   
-  updateFeedback: (submissionId: string | number, message: string, isAdmin: boolean) => Promise<{ success: boolean; error?: Error }>;
-  deleteMessage: (submissionId: string | number, messageId: string | number) => Promise<{ success: boolean; error?: Error }>;
-  markMessagesAsRead: (submissionId: string | number) => Promise<void>;
-  
-  addAdCreatives: (creatives: any[]) => Promise<AdCreative[] | undefined>;
-  updateAdCreativeStatus: (id: string, status: string, rejectionReason?: string) => Promise<void>;
-  deleteAdCreative: (id: string) => Promise<void>;
-  archiveAdCreative: (id: string) => Promise<void>;
-  handleMoveToAdCreatives: (submission: VideoSubmission) => Promise<void>;
-  
-  // UI Actions
   toggleSidebar: () => void;
   setSubmissionsPage: (page: number) => void;
   setAdCreativesPage: (page: number) => void;
@@ -129,6 +118,7 @@ const useStore = create<StoreState>((set, get) => ({
             id,
             text,
             is_admin,
+            user_id,
             video_url,
             created_at,
             read_at,
@@ -166,15 +156,18 @@ const useStore = create<StoreState>((set, get) => ({
         notes: sub.notes,
         createdAt: sub.created_at,
         updatedAt: sub.updated_at,
-        messages: (sub.messages || []).map((msg: any) => ({
-          id: msg.id,
-          text: msg.text,
-          isAdmin: msg.is_admin,
-          videoUrl: msg.video_url,
-          createdAt: msg.created_at,
-          readAt: msg.read_at,
-          updatedAt: msg.updated_at
-        }))
+        messages: (sub.messages || [])
+          .filter((msg: any) => msg.user_id) // Only include messages with valid user_id
+          .map((msg: any) => ({
+            id: msg.id,
+            text: msg.text,
+            isAdmin: msg.is_admin,
+            userId: msg.user_id,
+            videoUrl: msg.video_url,
+            createdAt: msg.created_at,
+            readAt: msg.read_at,
+            updatedAt: msg.updated_at
+          }))
       }));
 
       // Update pagination info
@@ -301,19 +294,19 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Add submission
-  addSubmission: async (submissionData) => {
+  addSubmission: async (submission: Omit<VideoSubmission, 'id' | 'messages' | 'createdAt' | 'updatedAt'>) => {
     try {
       set({ loading: true, error: null });
 
       const { data, error } = await supabase
         .from('submissions')
         .insert({
-          project_name: submissionData.projectName,
-          video_url: submissionData.videoUrl,
-          artist_id: submissionData.artistId,
-          type: submissionData.type,
-          status: submissionData.status,
-          notes: submissionData.notes,
+          project_name: submission.projectName,
+          video_url: submission.videoUrl,
+          artist_id: submission.artistId,
+          type: submission.type,
+          status: submission.status,
+          notes: submission.notes,
         } as any)
         .select(`
           id,
@@ -365,7 +358,7 @@ const useStore = create<StoreState>((set, get) => ({
 
       // Send WhatsApp notification
       try {
-        const artist = get().artists.find(a => a.id === submissionData.artistId);
+        const artist = get().artists.find(a => a.id === submission.artistId);
         if (artist) {
           // WhatsApp notifications would be sent here
           console.log('Would send WhatsApp notification for submission update:', transformedSubmission.id);
@@ -383,7 +376,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Update submission
-  updateSubmission: async (id, updates, skipNotification = false, isArtistUpdate = false) => {
+  updateSubmission: async (id: string, updates: Partial<VideoSubmission>, skipNotification = false, isArtistUpdate = false) => {
     try {
       set({ loading: true, error: null });
 
@@ -414,6 +407,7 @@ const useStore = create<StoreState>((set, get) => ({
             id,
             text,
             is_admin,
+            user_id,
             video_url,
             created_at,
             read_at,
@@ -563,7 +557,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Delete submission
-  deleteSubmission: async (id) => {
+  deleteSubmission: async (id: string) => {
     try {
       set({ loading: true, error: null });
 
@@ -600,7 +594,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Add artist
-  addArtist: async (artistData) => {
+  addArtist: async (artistData: { name: string; whatsappGroupId: string; avatarUrl?: string; archived?: boolean }) => {
     try {
       set({ loading: true, error: null });
 
@@ -654,7 +648,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Update artist
-  updateArtist: async (id, updates) => {
+  updateArtist: async (id: string, updates: Partial<Artist>) => {
     try {
       const { data, error } = await supabase
         .from('artists')
@@ -700,7 +694,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Delete artist
-  deleteArtist: async (id) => {
+  deleteArtist: async (id: string) => {
     try {
       set({ loading: true, error: null });
 
@@ -725,20 +719,36 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Update feedback
-  updateFeedback: async (submissionId, message, isAdmin) => {
+  addMessage: async (submissionId: string, message: string, isAdmin = false) => {
     try {
+      // Get current user ID from auth context
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('Current authenticated user:', user);
+      console.log('User ID from auth:', user?.id);
+      
+      // Always use the authenticated user's ID
+      const userId = user?.id;
+      
+      if (!userId) {
+        throw new Error('User must be authenticated to send messages');
+      }
+      
+      console.log('Final userId for message:', userId);
+      
       const { data, error } = await supabase
         .from('messages')
         .insert({
           submission_id: submissionId,
           text: message,
           is_admin: isAdmin,
+          user_id: userId,
           updated_at: new Date().toISOString()
         } as any)
         .select(`
           id,
           text,
           is_admin,
+          user_id,
           video_url,
           created_at,
           read_at,
@@ -749,15 +759,27 @@ const useStore = create<StoreState>((set, get) => ({
       if (error) throw error;
       if (!data) throw new Error('No data returned from message creation');
 
+      console.log('Debug - Raw data from database:', data);
+      console.log('Debug - user_id from database:', (data as any).user_id);
+
       const transformedMessage = {
         id: (data as any).id,
         text: (data as any).text,
         isAdmin: (data as any).is_admin,
+        userId: (data as any).user_id,
         videoUrl: (data as any).video_url,
         createdAt: (data as any).created_at,
         readAt: (data as any).read_at,
         updatedAt: (data as any).updated_at
       };
+
+      // Ensure userId is properly set
+      if (!transformedMessage.userId) {
+        console.error('Warning: Message created without userId!');
+        transformedMessage.userId = userId;
+      }
+
+      console.log('Debug - Transformed message:', transformedMessage);
 
       set(state => ({
         submissions: state.submissions.map(sub => 
@@ -799,7 +821,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Delete message
-  deleteMessage: async (submissionId, messageId) => {
+  deleteMessage: async (submissionId: string, messageId: string) => {
     try {
       const { error } = await supabase
         .from('messages')
@@ -828,7 +850,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Mark messages as read
-  markMessagesAsRead: async (submissionId) => {
+  markMessagesAsRead: async (submissionId: string) => {
     try {
       const { error } = await supabase
         .from('messages')
@@ -857,7 +879,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Add ad creatives
-  addAdCreatives: async (creatives) => {
+  setAdCreatives: async (creatives: AdCreative[]) => {
     try {
       set({ loading: true, error: null });
 
@@ -918,7 +940,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Update ad creative status
-  updateAdCreativeStatus: async (id, status, rejectionReason) => {
+  updateAdCreativeStatus: async (id: string, status: string, rejectionReason: string | null = null) => {
     try {
       const updateData: any = { 
         status, 
@@ -969,7 +991,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Delete ad creative
-  deleteAdCreative: async (id) => {
+  deleteAdCreative: async (id: string) => {
     try {
       set({ loading: true, error: null });
 
@@ -994,7 +1016,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Archive/unarchive ad creative
-  archiveAdCreative: async (id) => {
+  archiveAdCreative: async (id: string) => {
     try {
       const creative = get().adCreatives.find(c => c.id === id);
       const newStatus = creative?.status === 'archived' ? 'pending' : 'archived';
@@ -1027,7 +1049,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Move video to ad creatives
-  handleMoveToAdCreatives: async (submission) => {
+  handleMoveToAdCreatives: async (submission: VideoSubmission) => {
     try {
       const { data, error } = await supabase
         .from('ad_creatives')

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Loader, AlertCircle, ShieldAlert } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Loader, ShieldAlert, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { AdminUser, Team } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { OptimizedImage } from './OptimizedImage';
+import type { AdminUser, Team } from '../types';
 import { AddUserModal } from './AddUserModal';
 import { EditUserModal } from './EditUserModal';
 import { ConfirmationModal } from './ConfirmationModal';
-import { useAuth } from '../contexts/AuthContext';
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -168,19 +169,12 @@ export const UserManagement: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="h-10 w-10 flex-shrink-0">
-                        {user.avatarUrl ? (
-                          <img
-                            className="h-10 w-10 rounded-full object-cover"
-                            src={user.avatarUrl}
-                            alt={user.name}
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900/50 flex items-center justify-center">
-                            <span className="text-primary-600 dark:text-primary-400 font-medium">
-                              {user.name?.charAt(0)?.toUpperCase() || 'U'}
-                            </span>
-                          </div>
-                        )}
+                        <OptimizedImage
+                          src={user.avatarUrl || ''}
+                          alt={user.name}
+                          className="h-10 w-10 rounded-full object-cover"
+                          fallbackInitial={user.name?.charAt(0)?.toUpperCase() || 'U'}
+                        />
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">

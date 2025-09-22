@@ -18,8 +18,10 @@ interface MobileLayoutProps {
   onNotesChange?: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onMessageHover: (id: string | null) => void;
-  onDeleteMessage: (id: string) => void;
+  onDeleteMessage: (id: string) => Promise<void>;
   onMarkAsReady?: () => void;
+  artistAvatar?: string;
+  profiles?: Array<{id: string; name: string; avatar_url?: string}>;
 }
 
 export const MobileLayout: React.FC<MobileLayoutProps> = ({
@@ -36,7 +38,9 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
   onSubmit,
   onMessageHover,
   onDeleteMessage,
-  onMarkAsReady
+  onMarkAsReady,
+  artistAvatar,
+  profiles = []
 }) => {
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -55,11 +59,13 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
       <div className="flex-1 overflow-y-auto px-4">
         <div ref={chatRef} className="py-4 space-y-4">
           <ChatMessages
-            messages={submission.messages || []}
+            messages={submission.messages}
             isArtistView={isArtistView}
             hoveredMessageId={hoveredMessageId}
             onMessageHover={onMessageHover}
             onDeleteMessage={onDeleteMessage}
+            artistAvatar={artistAvatar}
+            profiles={profiles}
           />
         </div>
       </div>

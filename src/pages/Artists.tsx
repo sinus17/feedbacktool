@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, ExternalLink, Copy, Check, Eye, Loader, Edit, Archive, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Copy, Check, Eye, Loader, Edit, Archive, AlertCircle, Search, Filter } from 'lucide-react';
 import { useStore } from '../store';
 import { AddArtistModal } from '../components/AddArtistModal';
 import { EditArtistModal } from '../components/EditArtistModal';
@@ -11,6 +11,9 @@ export const Artists: React.FC = () => {
   const [editingArtist, setEditingArtist] = useState<any>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'videos' | 'recent'>('name');
+  const [showArchived, setShowArchived] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     artistId: string | null;
@@ -21,7 +24,7 @@ export const Artists: React.FC = () => {
     artistName: '',
   });
 
-  const { artists, fetchArtists, deleteArtist, loading, error } = useStore();
+  const { artists, fetchArtists, loading, error } = useStore();
 
   useEffect(() => {
     fetchArtists().catch(console.error);
@@ -50,7 +53,8 @@ export const Artists: React.FC = () => {
   const handleDeleteArtist = async () => {
     if (deleteConfirmation.artistId) {
       try {
-        await deleteArtist(deleteConfirmation.artistId);
+        // TODO: Implement delete functionality in store
+        console.log('Delete artist:', deleteConfirmation.artistId);
       } catch (error) {
         console.error('Failed to delete artist:', error);
       }
@@ -62,8 +66,25 @@ export const Artists: React.FC = () => {
     });
   };
 
-  // Filter out archived artists
-  const activeArtists = artists.filter(artist => artist.archived !== true);
+  // Filter and sort artists
+  const filteredArtists = artists
+    .filter(artist => showArchived || artist.archived !== true)
+    .filter(artist => 
+      searchTerm === '' || 
+      artist.name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'videos':
+          return (b.submissions || 0) - (a.submissions || 0);
+        case 'recent':
+          // Sort by most recent submission (if available)
+          return 0; // TODO: Add last_submission_date to artist data
+        case 'name':
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
 
   if (loading) {
     return (
@@ -87,6 +108,53 @@ export const Artists: React.FC = () => {
           <Plus className="h-5 w-5 mr-2" />
           Add Artist
         </button>
+      </div>
+
+      {/* Search and Filter Controls */}
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Search Bar */}
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                placeholder="Search artists..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Sort Dropdown */}
+          <div className="flex items-center gap-2">
+            <Filter className="text-gray-400 h-5 w-5" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'name' | 'videos' | 'recent')}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="name">Sort by Name</option>
+              <option value="videos">Sort by Videos</option>
+              <option value="recent">Sort by Recent</option>
+            </select>
+          </div>
+
+          {/* Show Archived Toggle */}
+          <div className="flex items-center gap-2">
+            <Archive className="text-gray-400 h-5 w-5" />
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Show Archived</span>
+            </label>
+          </div>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -129,14 +197,14 @@ export const Artists: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {activeArtists.length === 0 ? (
+              {filteredArtists.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                     No artists found
                   </td>
                 </tr>
               ) : (
-                activeArtists.map((artist) => (
+                filteredArtists.map((artist: any) => (
                   <tr key={artist.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -165,18 +233,18 @@ export const Artists: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => openPreview(artist.id)}
+                          onClick={() => openPreview(artist.id.toString())}
                           className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300"
                           title="Preview Artist View"
                         >
                           <Eye className="h-5 w-5" />
                         </button>
                         <button
-                          onClick={() => copyPublicUrl(artist.id)}
+                          onClick={() => copyPublicUrl(artist.id.toString())}
                           className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300"
-                          title={copiedId === artist.id ? 'Copied!' : 'Copy URL'}
+                          title={copiedId === artist.id.toString() ? 'Copied!' : 'Copy URL'}
                         >
-                          {copiedId === artist.id ? (
+                          {copiedId === artist.id.toString() ? (
                             <Check className="h-5 w-5" />
                           ) : (
                             <Copy className="h-5 w-5" />
@@ -194,7 +262,7 @@ export const Artists: React.FC = () => {
                           <Edit className="h-5 w-5" />
                         </button>
                         <button
-                          onClick={() => confirmDelete(artist.id, artist.name)}
+                          onClick={() => confirmDelete(artist.id.toString(), artist.name)}
                           className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                           title="Delete Artist"
                         >

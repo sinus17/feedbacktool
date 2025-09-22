@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AlertCircle, Loader, RefreshCw } from 'lucide-react';
-import { checkSupabaseConnection, startConnectionMonitoring } from './lib/supabase';
+import { checkSupabaseConnection } from './lib/supabase';
 import { Sidebar } from './components/Sidebar';
 import { Home } from './pages/Home';
 import { Artists } from './pages/Artists';
@@ -37,14 +37,8 @@ function App() {
     const initializeApp = async () => {
       try {
         setInitError(null);
-        // Check Supabase connection first
-        const isConnected = await checkSupabaseConnection();
-        if (!isConnected) {
-          setConnectionError(true);
-          return;
-        }
-
-        // If connected, fetch data
+        
+        // Fetch data directly without redundant connection checks
         await Promise.all([
           fetchArtists(),
           fetchSubmissions()
@@ -54,20 +48,11 @@ function App() {
       } catch (error) {
         console.error('Error initializing app:', error);
         setInitError(error instanceof Error ? error.message : 'Failed to initialize app');
+        setConnectionError(true);
       }
     };
 
-    // Start connection monitoring
-    const cleanup = startConnectionMonitoring((connected) => {
-      setConnectionError(!connected);
-      if (connected && connectionError) {
-        // Auto-retry data fetch when connection is restored
-        initializeApp();
-      }
-    });
-
     initializeApp();
-    return cleanup;
   }, [fetchArtists, fetchSubmissions]);
 
   // Show loading screen while app initializes

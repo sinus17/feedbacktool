@@ -18,8 +18,10 @@ interface DesktopLayoutProps {
   onNotesChange?: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onMessageHover: (id: string | null) => void;
-  onDeleteMessage: (id: string) => void;
+  onDeleteMessage: (id: string) => Promise<void>;
   onMarkAsReady?: () => void;
+  artistAvatar?: string;
+  profiles?: Array<{id: string; name: string; avatar_url?: string}>;
 }
 
 export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
@@ -36,7 +38,9 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
   onSubmit,
   onMessageHover,
   onDeleteMessage,
-  onMarkAsReady
+  onMarkAsReady,
+  artistAvatar,
+  profiles = []
 }) => {
   return (
     <div className="flex gap-4 h-full">
@@ -54,11 +58,13 @@ export const DesktopLayout: React.FC<DesktopLayoutProps> = ({
           className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2 scrollbar-thin"
         >
           <ChatMessages
-            messages={submission.messages || []}
+            messages={submission.messages}
             isArtistView={isArtistView}
             hoveredMessageId={hoveredMessageId}
             onMessageHover={onMessageHover}
             onDeleteMessage={onDeleteMessage}
+            artistAvatar={artistAvatar}
+            profiles={profiles}
           />
         </div>
 

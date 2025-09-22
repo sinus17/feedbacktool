@@ -22,7 +22,8 @@ export const Home: React.FC = () => {
   const { currentUser } = useAuth();
 
   const isAdmin = currentUser?.email === 'admin@videofeedback.com' || 
-                 currentUser?.user_metadata?.team === 'management';
+                 currentUser?.user_metadata?.team === 'management' ||
+                 currentUser?.user_metadata?.team === 'admin';
 
   // Fetch data when component mounts
   useEffect(() => {

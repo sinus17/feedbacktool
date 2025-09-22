@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useStore } from '../store';
+import { supabase } from '../lib/supabase';
 import { ConfirmationModal } from './ConfirmationModal';
 import { formatFeedbackMessage } from '../utils/feedback';
 import { MobileLayout } from './feedback/MobileLayout';
@@ -27,8 +28,43 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
   });
   const [confirmReady, setConfirmReady] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
-  const { updateSubmission, updateFeedback, deleteMessage, markMessagesAsRead, submissions, artists } = useStore();
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+  const { updateSubmission, addMessage, deleteMessage, markMessagesAsRead, submissions, artists } = useStore();
   const [currentSubmission, setCurrentSubmission] = useState(initialSubmission);
+  
+  // Get artist avatar for chat messages
+  const artist = artists.find(a => a.id === currentSubmission.artistId);
+  const artistAvatar = artist?.avatarUrl;
+  
+  // Get profiles for admin user identification
+  const [profiles, setProfiles] = useState<Array<{id: string; name: string; avatar_url?: string}>>([]);
+
+  // Fetch profiles on mount (only once)
+  useEffect(() => {
+    if (profiles.length === 0) {
+      const fetchProfiles = async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, name, avatar_url');
+        
+        if (!error && data) {
+          console.log('Debug - Fetched profiles in FeedbackModal:', data);
+          setProfiles(data as any);
+        } else {
+          console.error('Debug - Error fetching profiles:', error);
+        }
+      };
+      
+      fetchProfiles();
+    }
+  }, [profiles.length]);
   const isArtistView = window.location.pathname.startsWith('/artist/');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
@@ -58,7 +94,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
 
   useEffect(() => {
     if (isArtistView && currentSubmission.messages?.some(m => m.isAdmin && !m.readAt)) {
-      markMessagesAsRead(currentSubmission.id).catch(console.error);
+      markMessagesAsRead(currentSubmission.id.toString()).catch(console.error);
     }
   }, [isArtistView, currentSubmission.id, currentSubmission.messages, markMessagesAsRead]);
 
@@ -145,8 +181,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
         
         console.log('🔔 Feedback: Sending artist feedback message:', feedbackMessage.substring(0, 100) + (feedbackMessage.length > 100 ? '...' : ''));
         
-        const { success: feedbackSuccess, error: feedbackError } = await updateFeedback(
-          currentSubmission.id,
+        const { success: feedbackSuccess, error: feedbackError } = await addMessage(
+          currentSubmission.id.toString(),
           feedbackMessage,
           false
         );
@@ -172,31 +208,14 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
           console.log('✅ Feedback: Artist feedback message sent successfully');
         }
         
-        // Update the local submission status to reflect the change triggered by the database trigger
-        // This ensures the UI updates immediately without requiring a page refresh
-        setCurrentSubmission(prev => {
-          // Create a new message object to add to the messages array
-          const newMessageObj = {
-            id: Date.now().toString(), // Temporary ID until refresh
-            text: feedbackMessage,
-            isAdmin: false,
-            createdAt: new Date().toISOString(),
-            readAt: null
-          };
-          
-          return {
-            ...prev,
-            status: 'feedback-needed',
-            messages: [...prev.messages, newMessageObj]
-          };
-        });
+        // No temporary message creation - rely on store update from addMessage
       } else {
         console.log('🔔 Feedback: Admin view submission');
         const formattedMessage = formatFeedbackMessage(newMessage);
         console.log('🔔 Feedback: Sending admin feedback message:', formattedMessage.substring(0, 100) + (formattedMessage.length > 100 ? '...' : ''));
         
-        const { success: feedbackSuccess, error: feedbackError } = await updateFeedback(
-          currentSubmission.id,
+        const { success: feedbackSuccess, error: feedbackError } = await addMessage(
+          currentSubmission.id.toString(),
           formattedMessage,
           true
         );
@@ -221,24 +240,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
           console.log('✅ Feedback: Admin feedback message sent successfully');
         }
         
-        // Update the local submission status to reflect the change triggered by the database trigger
-        // This ensures the UI updates immediately without requiring a page refresh
-        setCurrentSubmission(prev => {
-          // Create a new message object to add to the messages array
-          const newMessageObj = {
-            id: Date.now().toString(), // Temporary ID until refresh
-            text: formattedMessage,
-            isAdmin: true,
-            createdAt: new Date().toISOString(),
-            readAt: null
-          };
-          
-          return {
-            ...prev,
-            status: 'correction-needed',
-            messages: [...prev.messages, newMessageObj]
-          };
-        });
+        // No temporary message creation - rely on store update from addMessage
       }
 
       setNewMessage('');
@@ -251,19 +253,14 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
           // Create a new message object
           const newMessageObj = {
             id: Date.now().toString(), // Temporary ID until refresh
-            text: isArtistView 
-              ? (newMessage.trim() 
-                ? 'I\'ve updated the video with a new version.' + (notes ? '\n\nNotes: ' + notes : '') 
-                : notes) 
-              : newMessage,
+            text: newMessage,
             isAdmin: !isArtistView,
-            createdAt: new Date().toISOString(),
-            readAt: null
+            createdAt: new Date().toISOString()
           };
           
           return {
             ...sub,
-            status: isArtistView ? 'feedback-needed' : 'correction-needed',
+            status: isArtistView ? 'feedback-needed' as const : 'correction-needed' as const,
             messages: [...sub.messages, newMessageObj]
           };
         }
@@ -351,7 +348,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
       setError(null);
       setConfirmDelete({ isOpen: false, messageId: null });
 
-      const { success, error: deleteError } = await deleteMessage(currentSubmission.id, messageId);
+      const { success, error: deleteError } = await deleteMessage(currentSubmission.id.toString(), messageId);
       if (!success || deleteError) {
         throw deleteError || new Error('Failed to delete message');
       }
@@ -376,8 +373,10 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
     onNotesChange: setNotes,
     onSubmit: handleSubmit,
     onMessageHover: setHoveredMessageId,
-    onDeleteMessage: (id: string) => setConfirmDelete({ isOpen: true, messageId: id }),
-    onMarkAsReady: () => setConfirmReady(true)
+    onDeleteMessage: async (id: string) => setConfirmDelete({ isOpen: true, messageId: id }),
+    onMarkAsReady: () => setConfirmReady(true),
+    artistAvatar: artistAvatar || undefined,
+    profiles
   };
 
   return (
