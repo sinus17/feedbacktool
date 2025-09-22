@@ -55,10 +55,19 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
           .select('id, name, avatar_url');
         
         if (!error && data) {
-          console.log('Debug - Fetched profiles in FeedbackModal:', data);
+          console.log('=== PROFILES LOADED ===');
+          console.log('Fetched profiles:', data);
+          console.log('Profile count:', data.length);
+          console.log('=== ALL PROFILES ===');
+          data.forEach((p: any) => console.log(`Profile: ${p.name} (ID: ${p.id}) - Avatar: ${p.avatar_url || 'NONE'}`));
+          console.log('=== YOUR CURRENT USER ID ===');
+          supabase.auth.getUser().then(({ data: { user } }) => {
+            console.log('Your current user ID:', user?.id);
+            console.log('Your profile match:', data.find((p: any) => p.id === user?.id));
+          });
           setProfiles(data as any);
         } else {
-          console.error('Debug - Error fetching profiles:', error);
+          console.error('Error fetching profiles:', error);
         }
       };
       

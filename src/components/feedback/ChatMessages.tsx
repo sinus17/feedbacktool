@@ -27,26 +27,37 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   };
 
   const getMessageSenderInfo = (message: Message) => {
-    console.log('Debug - Message:', message);
-    console.log('Debug - Profiles:', profiles);
-    console.log('Debug - Looking for userId:', message.userId);
+    console.log('=== AVATAR DEBUG ===');
+    console.log('Message userId:', message.userId);
+    console.log('Message isAdmin:', message.isAdmin);
+    console.log('Available profiles:', profiles.map(p => ({ id: p.id, name: p.name, avatar_url: p.avatar_url })));
     
     if (message.isAdmin && message.userId) {
       // Find the specific admin user who sent this message
       const adminProfile = profiles.find(p => p.id === message.userId);
-      console.log('Debug - Found profile:', adminProfile);
+      console.log('Found matching profile:', adminProfile);
       
       if (adminProfile) {
-        console.log('Debug - adminProfile.name:', adminProfile.name);
-        console.log('Debug - adminProfile.avatar_url:', adminProfile.avatar_url);
-        const result = {
-          name: adminProfile.name,
-          avatarUrl: adminProfile.avatar_url?.startsWith('http') 
-            ? adminProfile.avatar_url 
-            : adminProfile.avatar_url || '/avatars/philipp.png'
+        // Map admin names to their specific avatars based on their actual profile name
+        const adminAvatarMap: Record<string, string> = {
+          'philipp lützenburger': '/avatars/philipp.png',
+          'philipp': '/avatars/philipp.png',
+          'lukas': '/avatars/lukas.png', 
+          'martijn': '/avatars/martijn.png'
         };
-        console.log('Debug - Final result:', result);
+        
+        // Use the profile's actual name and map to corresponding avatar
+        const nameKey = adminProfile.name.toLowerCase().trim();
+        const avatarUrl = adminProfile.avatar_url || adminAvatarMap[nameKey] || '/avatars/philipp.png';
+        
+        const result = {
+          name: adminProfile.name, // Use actual profile name
+          avatarUrl: avatarUrl
+        };
+        console.log('Using profile-specific avatar:', result);
         return result;
+      } else {
+        console.log('No profile found for userId:', message.userId);
       }
     }
     
