@@ -481,6 +481,111 @@ class WhatsAppServiceImpl implements IWhatsAppService {
     }
   }
 
+  async sendLoginCredentials(params: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    isPasswordReset?: boolean;
+  }): Promise<void> {
+    // Always run in background with fire-and-forget approach
+    setTimeout(() => this.sendLoginCredentialsInternal(params), 0);
+  }
+  
+  private async sendLoginCredentialsInternal(params: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    isPasswordReset?: boolean;
+  }): Promise<void> {
+    try {
+      console.log('🔔 WhatsApp: sendLoginCredentials called for', params.name);
+      console.log('🔔 WhatsApp: Using token:', WHATSAPP_CONFIG.TOKEN ? 'Available (hidden)' : 'Not available');
+      
+      // Clean and validate the phone number for WhatsApp
+      const cleanPhone = params.phone.replace(/\D/g, '').trim();
+      console.log('🔔 WhatsApp: Phone number:', params.phone, 'Cleaned:', cleanPhone);
+      
+      if (!cleanPhone || cleanPhone.length < 10) {
+        console.error('❌ WhatsApp: Invalid phone number for login credentials');
+        await this.logNotification(
+          'notification',
+          'error',
+          `Failed to send login credentials to ${params.name} - Invalid phone number`,
+          `Phone number invalid: ${params.phone}, cleaned: ${cleanPhone}`,
+          params
+        );
+        return;
+      }
+
+      const actionType = params.isPasswordReset ? 'Password Reset' : 'Account Created';
+      const welcomeText = params.isPasswordReset 
+        ? 'Your password has been reset.'
+        : 'Welcome to the Feedback Tool!';
+
+      const message = `🔐 *${actionType}*\n\n` +
+        `Hello ${params.name},\n\n` +
+        `${welcomeText}\n\n` +
+        `**Login Credentials:**\n` +
+        `Email: ${params.email}\n` +
+        `Password: ${params.password}\n\n` +
+        `🔗 Login at: http://localhost:3000/login\n\n` +
+        `Please change your password after your first login for security.`;
+
+      console.log('🔔 WhatsApp: Sending login credentials to phone (fire and forget):', cleanPhone);
+      
+      // Send to individual phone number (not group)
+      fetch(`${WHATSAPP_CONFIG.API_URL}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${WHATSAPP_CONFIG.TOKEN}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          to: `${cleanPhone}@c.us`, // Individual contact format
+          body: message,
+          preview_url: true
+        })
+      }).then(response => {
+        if (response.ok) {
+          console.log('✅ WhatsApp: Login credentials sent successfully (fire and forget)');
+        } else {
+          console.log('❌ WhatsApp: Login credentials send failed (fire and forget):', response.status);
+        }
+      }).catch(error => {
+        console.log('❌ WhatsApp: Login credentials send error (fire and forget):', error.message);
+      });
+      
+      await this.logNotification(
+        'notification',
+        'info',
+        `Login credentials dispatched via WhatsApp for ${params.name}`,
+        undefined,
+        {
+          ...params,
+          password: '[HIDDEN]' // Don't log the actual password
+        }
+      );
+    } catch (error) {
+      console.error('❌ WhatsApp: Error in sendLoginCredentials:', error);
+      await this.logNotification(
+        'notification',
+        'error',
+        'Failed to send login credentials via WhatsApp',
+        error instanceof Error ? error.message : String(error),
+        {
+          ...params,
+          password: '[HIDDEN]',
+          error: error instanceof Error ? 
+            { message: error.message, stack: error.stack } : 
+            String(error)
+        }
+      );
+    }
+  }
+
   async notifyAdCreativeUpdate(params: {
     artistName: string;
     artistId: string;

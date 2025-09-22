@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Users, 
@@ -59,7 +58,7 @@ export function Sidebar() {
 
   return (
     <motion.aside 
-      className="fixed left-0 top-0 h-full bg-white dark:bg-[#060a11] shadow-lg z-10 flex flex-col"
+      className="h-full bg-white dark:bg-[#060a11] shadow-lg flex flex-col flex-shrink-0"
       animate={sidebarOpen ? 'open' : 'closed'}
       variants={sidebarVariants}
       transition={{ duration: 0.3, ease: 'easeInOut' }}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Phone, Mail, Users, Image as ImageIcon, Loader, AlertCircle } from 'lucide-react';
+import { User, Phone, Mail, Users, Image as ImageIcon, Loader, AlertCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 import { supabase } from '../lib/supabase';
@@ -19,6 +19,18 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ user }) => {
     team: user?.user_metadata?.team || 'support',
     avatarUrl: user?.user_metadata?.avatar_url || null,
   });
+  
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  });
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
@@ -31,6 +43,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ user }) => {
         
         const file = acceptedFiles[0];
         const fileExt = file.name.split('.').pop();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+        
         const fileName = `${Math.random()}.${fileExt}`;
         const filePath = `${user.id}/${fileName}`;
 
@@ -45,6 +60,22 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ user }) => {
           .getPublicUrl(filePath);
 
         setFormData(prev => ({ ...prev, avatarUrl: publicUrl }));
+        
+        // Automatically save avatar URL to database
+        // Update auth metadata
+        await supabase.auth.updateUser({
+          data: {
+            ...user.user_metadata,
+            avatar_url: publicUrl,
+          },
+        });
+
+        // Update profiles table
+        await supabase
+          .from('profiles')
+          .update({ avatar_url: publicUrl } as any)
+          .eq('id' as any, user.id as any);
+        
         setSuccess('Profile picture updated successfully');
       } catch (err) {
         console.error('Error uploading file:', err);
@@ -78,10 +109,65 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ user }) => {
 
       if (updateError) throw updateError;
 
+      // Also update the profiles table
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            team: formData.team,
+            avatar_url: formData.avatarUrl,
+          } as any)
+          .eq('id' as any, user.id as any);
+
+        if (profileError) {
+          console.error('Error updating profile table:', profileError);
+          // Don't throw here, auth update was successful
+        }
+      }
+
       setSuccess('Profile updated successfully');
     } catch (err) {
       console.error('Error updating profile:', err);
       setError(err instanceof Error ? err.message : 'Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      if (passwordData.newPassword !== passwordData.confirmPassword) {
+        throw new Error('New passwords do not match');
+      }
+
+      if (passwordData.newPassword.length < 8) {
+        throw new Error('New password must be at least 8 characters long');
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: passwordData.newPassword,
+      });
+
+      if (updateError) throw updateError;
+
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+      setSuccess('Password updated successfully');
+    } catch (err) {
+      console.error('Error updating password:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update password');
     } finally {
       setLoading(false);
     }
@@ -229,6 +315,106 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ user }) => {
           </button>
         </div>
       </form>
+
+      {/* Password Change Section */}
+      <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-medium mb-4 dark:text-gray-200">Change Password</h3>
+        <form onSubmit={handlePasswordChange} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-200">
+              Current Password <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500" />
+              <input
+                type={showPasswords.current ? 'text' : 'password'}
+                required
+                autoComplete="current-password"
+                className="pl-10 pr-10 w-full rounded-md dark:bg-dark-modal dark:border-dark-700 dark:text-gray-200"
+                value={passwordData.currentPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                placeholder="Enter current password"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+              >
+                {showPasswords.current ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-200">
+              New Password <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500" />
+              <input
+                type={showPasswords.new ? 'text' : 'password'}
+                required
+                autoComplete="new-password"
+                className="pl-10 pr-10 w-full rounded-md dark:bg-dark-modal dark:border-dark-700 dark:text-gray-200"
+                value={passwordData.newPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                placeholder="Enter new password (min 8 characters)"
+                minLength={8}
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+              >
+                {showPasswords.new ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 dark:text-gray-200">
+              Confirm New Password <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500" />
+              <input
+                type={showPasswords.confirm ? 'text' : 'password'}
+                required
+                autoComplete="new-password"
+                className="pl-10 pr-10 w-full rounded-md dark:bg-dark-modal dark:border-dark-700 dark:text-gray-200"
+                value={passwordData.confirmPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                placeholder="Confirm new password"
+                minLength={8}
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+              >
+                {showPasswords.confirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={loading || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+              className="btn disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                  Updating Password...
+                </>
+              ) : (
+                'Change Password'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

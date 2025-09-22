@@ -68,4 +68,4 @@ export interface AdminUser {
   updatedAt: string;
 }
 
-export type Team = 'management' | 'production' | 'marketing' | 'support';
+export type Team = 'admin' | 'management' | 'production' | 'marketing' | 'support';

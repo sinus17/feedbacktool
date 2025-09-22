@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window", "dom"],
+    "strict": true,
+    "types": ["https://deno.land/std@0.168.0/types.d.ts"]
+  }
+}

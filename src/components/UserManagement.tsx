@@ -24,7 +24,7 @@ export const UserManagement: React.FC = () => {
     userName: '',
   });
 
-  const isAdmin = currentUser?.email === 'admin@videofeedback.com' || 
+  const isAdmin = currentUser?.user_metadata?.team === 'admin' || 
                  currentUser?.user_metadata?.team === 'management';
 
   const fetchUsers = async () => {
@@ -40,7 +40,7 @@ export const UserManagement: React.FC = () => {
       if (usersError) throw usersError;
       if (!data) throw new Error('No data received');
 
-      const transformedUsers: AdminUser[] = data.map(profile => ({
+      const transformedUsers: AdminUser[] = data.map((profile: any) => ({
         id: profile.id,
         name: profile.name || '',
         email: profile.email || '',
@@ -177,7 +177,7 @@ export const UserManagement: React.FC = () => {
                         ) : (
                           <div className="h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900/50 flex items-center justify-center">
                             <span className="text-primary-600 dark:text-primary-400 font-medium">
-                              {user.name.charAt(0).toUpperCase()}
+                              {user.name?.charAt(0)?.toUpperCase() || 'U'}
                             </span>
                           </div>
                         )}

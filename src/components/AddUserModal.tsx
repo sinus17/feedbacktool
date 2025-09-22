@@ -28,23 +28,32 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSuccess }
         throw new Error('Please enter a valid German phone number');
       }
 
-      // Generate a random password
-      const password = Math.random().toString(36).slice(-8);
+      // Create the user via edge function
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        throw new Error('You must be logged in to create users');
+      }
 
-      // Create the user
-      const { data: { user }, error: createError } = await supabase.auth.admin.createUser({
-        email: formData.email,
-        password,
-        phone: formData.phone,
-        email_confirm: true,
-        user_metadata: {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           name: formData.name,
+          email: formData.email,
           phone: formData.phone,
           team: formData.team,
-        },
+        }),
       });
 
-      if (createError) throw createError;
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create user');
+      }
 
       onSuccess();
     } catch (err) {
@@ -134,6 +143,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSuccess }
               value={formData.team}
               onChange={(e) => setFormData({ ...formData, team: e.target.value })}
             >
+              <option value="admin">Admin</option>
               <option value="management">Management</option>
               <option value="production">Production</option>
               <option value="marketing">Marketing</option>

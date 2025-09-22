@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AlertCircle, Loader, RefreshCw } from 'lucide-react';
 import { checkSupabaseConnection, startConnectionMonitoring } from './lib/supabase';
@@ -178,9 +178,9 @@ function App() {
                 path="/*"
                 element={
                   <PrivateRoute>
-                    <div className="flex w-full">
+                    <div className="flex w-full h-screen">
                       <Sidebar />
-                      <main className="transition-all duration-300 pl-16 lg:pl-64 w-full min-w-0">
+                      <main className="flex-1 overflow-auto">
                         <div className="w-full p-4 sm:p-6 lg:p-8">
                           <Routes>
                             <Route index element={<Home />} />

@@ -30,20 +30,33 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onS
         throw new Error('Please enter a valid German phone number');
       }
 
-      const { error: updateError } = await supabase.auth.admin.updateUserById(
-        user.id,
-        {
+      // Update user via edge function
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        throw new Error('You must be logged in to update users');
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/update-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          name: formData.name,
           email: formData.email,
           phone: formData.phone,
-          user_metadata: {
-            name: formData.name,
-            phone: formData.phone,
-            team: formData.team,
-          },
-        }
-      );
+          team: formData.team,
+        }),
+      });
 
-      if (updateError) throw updateError;
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update user');
+      }
 
       onSuccess();
     } catch (err) {
@@ -59,11 +72,29 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onS
       setLoading(true);
       setError(null);
 
-      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      // Reset password via edge function
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        throw new Error('You must be logged in to reset passwords');
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/reset-user-password`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+        }),
       });
 
-      if (error) throw error;
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to reset password');
+      }
 
       onSuccess();
     } catch (err) {
@@ -153,6 +184,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onS
               value={formData.team}
               onChange={(e) => setFormData({ ...formData, team: e.target.value })}
             >
+              <option value="admin">Admin</option>
               <option value="management">Management</option>
               <option value="production">Production</option>
               <option value="marketing">Marketing</option>
