@@ -65,9 +65,21 @@ interface StoreState {
   updateSubmission: (id: string, updates: Partial<VideoSubmission>, skipNotification?: boolean, isArtistUpdate?: boolean) => Promise<{ success: boolean; error?: Error }>;
   deleteSubmission: (id: string) => Promise<void>;
   
+  // Artist Actions
+  addArtist: (artistData: { name: string; whatsappGroupId: string; avatarUrl?: string; archived?: boolean }) => Promise<void>;
+  updateArtist: (id: string, updates: Partial<Artist>) => Promise<{ error?: Error }>;
+  deleteArtist: (id: string) => Promise<void>;
+  
   addMessage: (submissionId: string, message: string, isAdmin?: boolean) => Promise<{ success: boolean; error?: Error }>;
   deleteMessage: (submissionId: string, messageId: string) => Promise<{ success: boolean; error?: Error }>;
   markMessagesAsRead: (submissionId: string) => Promise<void>;
+  
+  // Ad Creative Actions
+  deleteAdCreative: (id: string) => Promise<void>;
+  updateAdCreativeStatus: (id: string, status: string, rejectionReason?: string | null) => Promise<void>;
+  archiveAdCreative: (id: string) => Promise<void>;
+  setAdCreatives: (creatives: AdCreative[]) => Promise<AdCreative[] | undefined>;
+  handleMoveToAdCreatives: (submission: VideoSubmission) => Promise<void>;
   
   toggleSidebar: () => void;
   setSubmissionsPage: (page: number) => void;
