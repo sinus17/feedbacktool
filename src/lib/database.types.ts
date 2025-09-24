@@ -289,6 +289,53 @@ export interface Database {
           metadata?: Json | null
         }
       }
+      release_sheets: {
+        Row: {
+          id: string
+          created_at: string
+          updated_at: string
+          title: string
+          artist_id: string
+          release_id: string | null
+          release_title: string | null
+          content: Json
+          status: 'draft' | 'in_progress' | 'completed' | 'archived'
+          tags: string[]
+          cover_image_url: string | null
+          due_date: string | null
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          title: string
+          artist_id: string
+          release_id?: string | null
+          release_title?: string | null
+          content?: Json
+          status?: 'draft' | 'in_progress' | 'completed' | 'archived'
+          tags?: string[]
+          cover_image_url?: string | null
+          due_date?: string | null
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          updated_at?: string
+          title?: string
+          artist_id?: string
+          release_id?: string | null
+          release_title?: string | null
+          content?: Json
+          status?: 'draft' | 'in_progress' | 'completed' | 'archived'
+          tags?: string[]
+          cover_image_url?: string | null
+          due_date?: string | null
+          completed_at?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never

@@ -13,6 +13,8 @@ import { ContentPlan } from './pages/ContentPlan';
 import { PublicArtistView } from './pages/PublicArtistView';
 import { ArtistAdCreatives } from './pages/ArtistAdCreatives';
 import { ArtistContentPlan } from './pages/ArtistContentPlan';
+import { ArtistReleaseSheets } from './pages/ArtistReleaseSheets';
+import { ReleaseSheetEditor } from './pages/ReleaseSheetEditor';
 import { PreviewArtistView } from './pages/PreviewArtistView';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
@@ -154,6 +156,9 @@ function App() {
               <Route path="/artist/:id" element={<PublicArtistView />} />
               <Route path="/artist/:id/ad-creatives" element={<ArtistAdCreatives />} />
               <Route path="/artist/:id/content-plan" element={<ArtistContentPlan />} />
+              <Route path="/artist/:id/release-sheets" element={<ArtistReleaseSheets />} />
+              <Route path="/artist/:id/release-sheets/:sheetId" element={<ReleaseSheetEditor />} />
+              <Route path="/artist/:id/release-sheets/:sheetId/edit" element={<ReleaseSheetEditor />} />
               <Route path="/preview/:id" element={<PreviewArtistView />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />

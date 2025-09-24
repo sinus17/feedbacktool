@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { Video, Plus, Instagram, Calendar } from 'lucide-react';
+import { Video, Plus, Instagram, Calendar, FileText } from 'lucide-react';
 import { useStore } from '../store';
 import { SubmissionForm } from '../components/SubmissionForm';
 import { VideoList } from '../components/VideoList';
@@ -55,44 +55,60 @@ export const PublicArtistView: React.FC = () => {
               <span className="text-xl font-bold">VideoFeedback</span>
             </div>
             
-            <div className="flex space-x-4 border-b border-white/20">
+            <div className="flex justify-between border-b border-white/20">
+              <div className="flex space-x-4">
+                <Link
+                  to={`/artist/${id}`}
+                  className={`pb-2 px-1 ${
+                    !location.pathname.includes('/ad-creatives') && !location.pathname.includes('/content-plan') && !location.pathname.includes('/release-sheets')
+                      ? 'border-b-2 border-white text-white' 
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <Video className="h-4 w-4" />
+                    <span>Videos</span>
+                  </div>
+                </Link>
+                <Link
+                  to={`/artist/${id}/ad-creatives`}
+                  className={`pb-2 px-1 ${
+                    location.pathname.includes('/ad-creatives')
+                      ? 'border-b-2 border-white text-white' 
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <Instagram className="h-4 w-4" />
+                    <span>Ad Creatives</span>
+                  </div>
+                </Link>
+                <Link
+                  to={`/artist/${id}/content-plan`}
+                  className={`pb-2 px-1 ${
+                    location.pathname.includes('/content-plan')
+                      ? 'border-b-2 border-white text-white' 
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4" />
+                    <span>Content Plan</span>
+                  </div>
+                </Link>
+              </div>
+              
               <Link
-                to={`/artist/${id}`}
+                to={`/artist/${id}/release-sheets`}
                 className={`pb-2 px-1 ${
-                  !location.pathname.includes('/ad-creatives') && !location.pathname.includes('/content-plan')
+                  location.pathname.includes('/release-sheets')
                     ? 'border-b-2 border-white text-white' 
                     : 'text-white/70 hover:text-white'
                 }`}
               >
                 <div className="flex items-center space-x-2">
-                  <Video className="h-4 w-4" />
-                  <span>Videos</span>
-                </div>
-              </Link>
-              <Link
-                to={`/artist/${id}/ad-creatives`}
-                className={`pb-2 px-1 ${
-                  location.pathname.includes('/ad-creatives')
-                    ? 'border-b-2 border-white text-white' 
-                    : 'text-white/70 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center space-x-2">
-                  <Instagram className="h-4 w-4" />
-                  <span>Ad Creatives</span>
-                </div>
-              </Link>
-              <Link
-                to={`/artist/${id}/content-plan`}
-                className={`pb-2 px-1 ${
-                  location.pathname.includes('/content-plan')
-                    ? 'border-b-2 border-white text-white' 
-                    : 'text-white/70 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>Content Plan</span>
+                  <FileText className="h-4 w-4" />
+                  <span>Release Sheets</span>
                 </div>
               </Link>
             </div>

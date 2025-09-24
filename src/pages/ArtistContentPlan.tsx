@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Video, Instagram, Calendar } from 'lucide-react';
+import { Video, Instagram, Calendar, FileText } from 'lucide-react';
 import { useStore } from '../store';
 import { useContentPlanStore } from '../store/contentPlanStore';
 import { ContentPlanCalendar } from '../components/ContentPlanCalendar';
@@ -45,32 +45,44 @@ export const ArtistContentPlan: React.FC = () => {
               <span className="text-xl font-bold">Content Plan</span>
             </div>
             
-            <div className="flex space-x-4 border-b border-white/20">
+            <div className="flex justify-between border-b border-white/20">
+              <div className="flex space-x-4">
+                <Link
+                  to={`/artist/${id}`}
+                  className="pb-2 px-1 text-white/70 hover:text-white"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Video className="h-4 w-4" />
+                    <span>Videos</span>
+                  </div>
+                </Link>
+                <Link
+                  to={`/artist/${id}/ad-creatives`}
+                  className="pb-2 px-1 text-white/70 hover:text-white"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Instagram className="h-4 w-4" />
+                    <span>Ad Creatives</span>
+                  </div>
+                </Link>
+                <Link
+                  to={`/artist/${id}/content-plan`}
+                  className="pb-2 px-1 border-b-2 border-white text-white"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4" />
+                    <span>Content Plan</span>
+                  </div>
+                </Link>
+              </div>
+              
               <Link
-                to={`/artist/${id}`}
+                to={`/artist/${id}/release-sheets`}
                 className="pb-2 px-1 text-white/70 hover:text-white"
               >
                 <div className="flex items-center space-x-2">
-                  <Video className="h-4 w-4" />
-                  <span>Videos</span>
-                </div>
-              </Link>
-              <Link
-                to={`/artist/${id}/ad-creatives`}
-                className="pb-2 px-1 text-white/70 hover:text-white"
-              >
-                <div className="flex items-center space-x-2">
-                  <Instagram className="h-4 w-4" />
-                  <span>Ad Creatives</span>
-                </div>
-              </Link>
-              <Link
-                to={`/artist/${id}/content-plan`}
-                className="pb-2 px-1 border-b-2 border-white text-white"
-              >
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>Content Plan</span>
+                  <FileText className="h-4 w-4" />
+                  <span>Release Sheets</span>
                 </div>
               </Link>
             </div>
