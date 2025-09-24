@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { MessageSquare, Trash2, Edit, Download, Archive, MoveRight, Loader } from 'lucide-react';
 import { useStore } from '../store';
 import { FeedbackModal } from './FeedbackModal';
-import { FilterMenu } from './FilterMenu';
 import { EditVideoModal } from './EditVideoModal';
 import { ConfirmationModal } from './ConfirmationModal';
-import { supabase } from '../lib/supabase';
-import { isSupabaseStorageUrl, deleteVideoFromStorage } from '../utils/video/player';
 import { AdTagIcon } from './icons/AdTagIcon';
+import { formatDateToDDMMYY } from '../utils/dateFormat';
 import type { VideoSubmission } from '../types';
 
 interface VideoListProps {
@@ -78,17 +76,7 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
         true // Skip WhatsApp notification
       );
 
-      // Log archive action
-      await supabase.from('archive_logs').insert({
-        entity_type: 'submission',
-        entity_id: submission.id,
-        action: submission.status === 'archived' ? 'unarchive' : 'archive',
-        metadata: {
-          artistId: submission.artistId,
-          projectName: submission.projectName,
-          timestamp: new Date().toISOString()
-        }
-      }).select();
+      // Archive action completed successfully
     } catch (error) {
       console.error('Failed to archive video:', error);
     }
@@ -220,6 +208,7 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
     } catch (error) {
       console.error('Error moving video to ad creatives:', error);
       // Remove from moving state
+      const submissionId = submission.id.toString();
       setMovingVideos(prev => {
         const newSet = new Set(prev);
         newSet.delete(submissionId);
@@ -326,6 +315,12 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
               Status
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              Uploaded At
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              Updated At
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
               Actions
             </th>
           </tr>
@@ -333,7 +328,7 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
           {filteredSubmissions.length === 0 ? (
             <tr>
-              <td colSpan={artistId ? 4 : 5} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+              <td colSpan={artistId ? 6 : 7} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                 No video submissions found
               </td>
             </tr>
@@ -387,6 +382,16 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
                         </button>
                       )
                     )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900 dark:text-gray-100">
+                    {formatDateToDDMMYY(submission.createdAt)}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900 dark:text-gray-100">
+                    {formatDateToDDMMYY(submission.updatedAt)}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
