@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, AlertCircle, Loader } from 'lucide-react';
+import { X, AlertCircle, Loader, Search } from 'lucide-react';
 import { useStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
+import { WhatsAppAPI } from '../services/whatsapp/api';
 
 interface AddArtistModalProps {
   onClose: () => void;
@@ -16,6 +17,8 @@ export const AddArtistModal: React.FC<AddArtistModalProps> = ({ onClose }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchingGroup, setSearchingGroup] = useState(false);
+  const [searchSuccess, setSearchSuccess] = useState<string | null>(null);
 
   // Filter out archived artists for name validation
   const activeArtists = artists.filter(artist => !artist.archived);
@@ -36,12 +39,44 @@ export const AddArtistModal: React.FC<AddArtistModalProps> = ({ onClose }) => {
       return false;
     }
 
-    if (formData.whatsapp_group_id && !/^\d{15,}$/.test(formData.whatsapp_group_id)) {
-      setError('Please enter a valid WhatsApp group ID (at least 15 digits)');
-      return false;
+    if (formData.whatsapp_group_id) {
+      const cleanId = formData.whatsapp_group_id.replace('@g.us', '');
+      if (!/^\d{15,}$/.test(cleanId)) {
+        setError('Please enter a valid WhatsApp group ID (at least 15 digits)');
+        return false;
+      }
     }
 
     return true;
+  };
+
+  const handleSearchGroup = async () => {
+    if (!formData.name.trim()) {
+      setError('Please enter an artist name first');
+      return;
+    }
+
+    setSearchingGroup(true);
+    setError(null);
+    setSearchSuccess(null);
+
+    try {
+      const group = await WhatsAppAPI.searchArtistGroup(formData.name.trim());
+      
+      if (group) {
+        // Clean the group ID by removing @g.us suffix if present
+        const cleanGroupId = group.id.replace('@g.us', '');
+        setFormData({ ...formData, whatsapp_group_id: cleanGroupId });
+        setSearchSuccess(`Found group: ${group.name}`);
+      } else {
+        setError(`No WhatsApp group found for "${formData.name.trim()} x SwipeUp"`);
+      }
+    } catch (err) {
+      console.error('Failed to search for group:', err);
+      setError(err instanceof Error ? err.message : 'Failed to search for WhatsApp group');
+    } finally {
+      setSearchingGroup(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,6 +158,7 @@ export const AddArtistModal: React.FC<AddArtistModalProps> = ({ onClose }) => {
         <AnimatePresence>
           {error && (
             <motion.div 
+              key="error-message"
               className="mb-4 flex items-center gap-2 text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded-md"
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -131,6 +167,19 @@ export const AddArtistModal: React.FC<AddArtistModalProps> = ({ onClose }) => {
             >
               <AlertCircle className="h-5 w-5 flex-shrink-0" />
               <p>{error}</p>
+            </motion.div>
+          )}
+          {searchSuccess && (
+            <motion.div 
+              key="success-message"
+              className="mb-4 flex items-center gap-2 text-green-500 bg-green-50 dark:bg-green-900/20 p-3 rounded-md"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Search className="h-5 w-5 flex-shrink-0" />
+              <p>{searchSuccess}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -162,16 +211,32 @@ export const AddArtistModal: React.FC<AddArtistModalProps> = ({ onClose }) => {
             <label className="block text-sm font-medium mb-1 dark:text-gray-200">
               WhatsApp Group ID
             </label>
-            <input
-              type="text"
-              className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              placeholder="120363298754236172 (at least 15 digits)"
-              value={formData.whatsapp_group_id}
-              onChange={(e) => setFormData({ ...formData, whatsapp_group_id: e.target.value })}
-              disabled={loading}
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                placeholder="120363298754236172 (at least 15 digits)"
+                value={formData.whatsapp_group_id}
+                onChange={(e) => setFormData({ ...formData, whatsapp_group_id: e.target.value })}
+                disabled={loading || searchingGroup}
+              />
+              <motion.button
+                type="button"
+                onClick={handleSearchGroup}
+                disabled={loading || searchingGroup || !formData.name.trim()}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                whileHover={!loading && !searchingGroup && formData.name.trim() ? { scale: 1.05 } : {}}
+                whileTap={!loading && !searchingGroup && formData.name.trim() ? { scale: 0.95 } : {}}
+              >
+                {searchingGroup ? (
+                  <Loader className="animate-spin h-4 w-4" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </motion.button>
+            </div>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Enter the numeric group ID from the WhatsApp group URL
+              Enter the numeric group ID manually or click search to find "{formData.name.trim()} x SwipeUp"
             </p>
           </motion.div>
 

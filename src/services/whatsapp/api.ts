@@ -1,5 +1,5 @@
 import { WHATSAPP_CONFIG } from '../../config/whatsapp';
-import type { WhatsAppMessage, WhatsAppResponse } from './types';
+import type { WhatsAppMessage, WhatsAppResponse, WhatsAppGroup } from './types';
 
 export class WhatsAppAPI {
   private static headers = {
@@ -66,6 +66,86 @@ export class WhatsAppAPI {
       });
 
       throw enhancedError;
+    }
+  }
+
+  static async searchGroups(searchTerm: string): Promise<WhatsAppGroup[]> {
+    // Validate required parameters
+    if (!searchTerm?.trim()) {
+      throw new Error('WhatsApp API Error: search term is required');
+    }
+    if (!WHATSAPP_CONFIG.TOKEN) {
+      throw new Error('WhatsApp API Error: API token is not configured');
+    }
+
+    try {
+      const response = await fetch(`https://gate.whapi.cloud/groups`, {
+        method: 'GET',
+        headers: this.headers
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error?.message || 
+          errorData.message || 
+          `WhatsApp API Error: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      const groups = data.groups || [];
+      
+      // Filter groups by search term (case insensitive)
+      const filteredGroups = groups.filter((group: any) => 
+        group.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+      return filteredGroups.map((group: any) => ({
+        id: group.id,
+        name: group.name,
+        participants: group.participants_count,
+        description: group.description
+      }));
+    } catch (error) {
+      // Add context to error
+      const enhancedError = new Error(
+        error instanceof Error ? error.message : 'Unknown WhatsApp API error'
+      );
+      
+      // Add metadata
+      Object.assign(enhancedError, {
+        context: {
+          searchTerm,
+          hasToken: !!WHATSAPP_CONFIG.TOKEN,
+          originalError: error
+        }
+      });
+
+      throw enhancedError;
+    }
+  }
+
+  static async searchArtistGroup(artistName: string): Promise<WhatsAppGroup | null> {
+    const searchTerm = `${artistName} x SwipeUp`;
+    
+    try {
+      const groups = await this.searchGroups(searchTerm);
+      
+      // Find the most relevant group (exact match preferred)
+      const exactMatch = groups.find(group => 
+        group.name.toLowerCase() === searchTerm.toLowerCase()
+      );
+      
+      if (exactMatch) {
+        return exactMatch;
+      }
+      
+      // If no exact match, return the first group that contains the search term
+      return groups.length > 0 ? groups[0] : null;
+    } catch (error) {
+      console.error('Failed to search for artist group:', error);
+      throw error;
     }
   }
 }

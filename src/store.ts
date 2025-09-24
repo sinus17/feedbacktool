@@ -66,7 +66,7 @@ interface StoreState {
   deleteSubmission: (id: string) => Promise<void>;
   
   // Artist Actions
-  addArtist: (artistData: { name: string; whatsappGroupId: string; avatarUrl?: string; archived?: boolean }) => Promise<void>;
+  addArtist: (artistData: { name: string; whatsappGroupId?: string | null; avatarUrl?: string; archived?: boolean }) => Promise<void>;
   updateArtist: (id: string, updates: Partial<Artist>) => Promise<{ error?: Error }>;
   deleteArtist: (id: string) => Promise<void>;
   
@@ -606,7 +606,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Add artist
-  addArtist: async (artistData: { name: string; whatsappGroupId: string; avatarUrl?: string; archived?: boolean }) => {
+  addArtist: async (artistData: { name: string; whatsappGroupId?: string | null; avatarUrl?: string; archived?: boolean }) => {
     try {
       set({ loading: true, error: null });
 

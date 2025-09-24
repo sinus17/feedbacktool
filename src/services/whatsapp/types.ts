@@ -12,6 +12,13 @@ export interface WhatsAppResponse {
   data?: unknown;
 }
 
+export interface WhatsAppGroup {
+  id: string;
+  name: string;
+  participants?: number;
+  description?: string;
+}
+
 export interface NotificationContext {
   artist: Artist;
   submission: VideoSubmission;

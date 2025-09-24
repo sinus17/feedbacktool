@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, AlertCircle, Loader, Archive } from 'lucide-react';
+import { X, AlertCircle, Loader, Archive, Search } from 'lucide-react';
 import { useStore } from '../store';
-import { supabase } from '../lib/supabase';
 import type { Artist } from '../types';
+import { WhatsAppAPI } from '../services/whatsapp/api';
 
 interface EditArtistModalProps {
   artist: Artist;
@@ -18,6 +18,8 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({ artist, onClos
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [archiveConfirmation, setArchiveConfirmation] = useState(false);
+  const [searchingGroup, setSearchingGroup] = useState(false);
+  const [searchSuccess, setSearchSuccess] = useState<string | null>(null);
 
   const validateForm = () => {
     if (!formData.name.trim()) {
@@ -25,12 +27,44 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({ artist, onClos
       return false;
     }
 
-    if (formData.whatsappGroupId && !/^\d{15,}$/.test(formData.whatsappGroupId)) {
-      setError('Please enter a valid WhatsApp group ID (at least 15 digits)');
-      return false;
+    if (formData.whatsappGroupId) {
+      const cleanId = formData.whatsappGroupId.replace('@g.us', '');
+      if (!/^\d{15,}$/.test(cleanId)) {
+        setError('Please enter a valid WhatsApp group ID (at least 15 digits)');
+        return false;
+      }
     }
 
     return true;
+  };
+
+  const handleSearchGroup = async () => {
+    if (!formData.name.trim()) {
+      setError('Please enter an artist name first');
+      return;
+    }
+
+    setSearchingGroup(true);
+    setError(null);
+    setSearchSuccess(null);
+
+    try {
+      const group = await WhatsAppAPI.searchArtistGroup(formData.name.trim());
+      
+      if (group) {
+        // Clean the group ID by removing @g.us suffix if present
+        const cleanGroupId = group.id.replace('@g.us', '');
+        setFormData({ ...formData, whatsappGroupId: cleanGroupId });
+        setSearchSuccess(`Found group: ${group.name}`);
+      } else {
+        setError(`No WhatsApp group found for "${formData.name.trim()} x SwipeUp"`);
+      }
+    } catch (err) {
+      console.error('Failed to search for group:', err);
+      setError(err instanceof Error ? err.message : 'Failed to search for WhatsApp group');
+    } finally {
+      setSearchingGroup(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,7 +76,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({ artist, onClos
     setError(null);
 
     try {
-      const { error: updateError } = await updateArtist(artist.id, {
+      const { error: updateError } = await updateArtist(String(artist.id), {
         name: formData.name.trim(),
         whatsappGroupId: formData.whatsappGroupId.trim() || null,
       });
@@ -64,7 +98,7 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({ artist, onClos
 
 
     try {
-      const { error: updateError } = await updateArtist(artist.id, {
+      const { error: updateError } = await updateArtist(String(artist.id), {
         archived: !artist.archived
       });
 
@@ -98,6 +132,12 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({ artist, onClos
             <p>{error}</p>
           </div>
         )}
+        {searchSuccess && (
+          <div className="mb-4 flex items-center gap-2 text-green-500 bg-green-50 dark:bg-green-900/20 p-3 rounded-md">
+            <Search className="h-5 w-5 flex-shrink-0" />
+            <p>{searchSuccess}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -118,31 +158,33 @@ export const EditArtistModal: React.FC<EditArtistModalProps> = ({ artist, onClos
             <label className="block text-sm font-medium mb-1 dark:text-gray-200">
               WhatsApp Group ID
             </label>
-            <input
-              type="text"
-              className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              placeholder="120363298754236172 (at least 15 digits)"
-              value={formData.whatsappGroupId}
-              onChange={(e) => setFormData({ ...formData, whatsappGroupId: e.target.value })}
-              disabled={loading} 
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                placeholder="120363298754236172 (at least 15 digits)"
+                value={formData.whatsappGroupId}
+                onChange={(e) => setFormData({ ...formData, whatsappGroupId: e.target.value })}
+                disabled={loading || searchingGroup}
+              />
+              <button
+                type="button"
+                onClick={handleSearchGroup}
+                disabled={loading || searchingGroup || !formData.name.trim()}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              >
+                {searchingGroup ? (
+                  <Loader className="animate-spin h-4 w-4" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Enter the numeric group ID from the WhatsApp group URL
+              Enter the numeric group ID manually or click search to find "{formData.name.trim()} x SwipeUp"
             </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-              Element ID
-            </label>
-            <input
-              type="text"
-              className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              value={formData.elementId}
-              onChange={(e) => setFormData({ ...formData, elementId: e.target.value })}
-              disabled={loading}
-            />
-          </div>
 
           <div className="flex justify-between space-x-2 pt-4">
             <button
