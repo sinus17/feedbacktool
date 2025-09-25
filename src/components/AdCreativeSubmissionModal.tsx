@@ -4,7 +4,8 @@ import { useStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isSupabaseStorageUrl } from '../utils/video/player';
 import { fetchInstagramThumbnail } from '../utils/fetchInstagramThumbnail';
-import { Instagram, Upload, Loader as LoaderIcon, X as XIcon, Image } from 'lucide-react';
+import { Upload, Loader as LoaderIcon, X as XIcon, Image } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { VideoUploader } from './VideoUploader';
 
 interface AdCreativeSubmissionModalProps {
@@ -31,7 +32,7 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { addAdCreatives, artists, adCreatives, submissions, fetchAdCreatives } = useStore();
+  const { artists, adCreatives, submissions, fetchAdCreatives } = useStore();
 
   // Filter out archived artists
   const activeArtists = artists.filter(artist => !artist.archived);
@@ -290,7 +291,17 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
       setLoading(true);
       setError(null);
 
-      const entries = [];
+      type AdCreativeInsert = {
+        artists_id: string;
+        platform: string;
+        content: string;
+        status: 'pending';
+        submission_id?: string | null;
+        video_name?: string | null;
+        thumbnail_url?: string | null;
+      };
+
+      const entries: AdCreativeInsert[] = [];
 
       // Process Social Media URLs (Instagram and TikTok)
       if (socialMediaUrls.trim()) {
@@ -309,7 +320,7 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
                 artists_id: artistId || selectedArtist,
                 platform: 'tiktok',
                 content: url,
-                status: 'pending'
+                status: 'pending' as const
               })));
             } catch (err) {
               console.error('Error validating TikTok code:', err);
@@ -324,7 +335,7 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
                 artists_id: artistId || selectedArtist,
                 platform: 'instagram',
                 content: url,
-                status: 'pending'
+                status: 'pending' as const
               })));
               
               // Try to fetch Instagram thumbnails
@@ -368,7 +379,7 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
             content: url,
             submission_id: matchingSubmission?.id?.toString() || null,
             video_name: matchingSubmission?.projectName || null, 
-            status: 'pending',
+            status: 'pending' as const,
             thumbnail_url: thumbnailUrl || null
           };
         }));
@@ -378,7 +389,23 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
         throw new Error('No valid URLs to submit');
       }
 
-      await addAdCreatives(entries);
+      // Create ad creatives by inserting directly to database
+      const insertData = entries.map(entry => ({
+        artists_id: entry.artists_id,
+        platform: entry.platform,
+        content: entry.content,
+        status: entry.status,
+        thumbnail_url: entry.thumbnail_url,
+        submission_id: entry.submission_id,
+        video_name: entry.video_name
+      }));
+
+      const { error } = await supabase
+        .from('ad_creatives')
+        .insert(insertData as any)
+        .select();
+
+      if (error) throw error;
       
       // Refresh ad creatives to show the new entries
       await fetchAdCreatives();
