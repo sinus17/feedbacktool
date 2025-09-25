@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ExternalLink, ArrowLeft, Undo, Redo } from 'lucide-react';
 import { ReleaseService, ReleaseSheet } from '../services/releaseService';
 import { AudioPlayer } from '../components/AudioPlayer';
@@ -9,6 +9,9 @@ import { supabase } from '../lib/supabase';
 export const ReleaseSheetEditor: React.FC = () => {
   const { id: artistId, sheetId } = useParams<{ id: string; sheetId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromAdmin = (location.state as any)?.fromAdmin === true;
+  const backPath = fromAdmin ? '/release-sheets' : `/artist/${artistId}/release-sheets`;
   
   const [sheet, setSheet] = useState<ReleaseSheet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -262,6 +265,45 @@ export const ReleaseSheetEditor: React.FC = () => {
 
   const redoAction = () => {
     execCommand('redo');
+  };
+
+  const saveAsTemplate = async () => {
+    if (!sheet || !editorRef.current || !artistId) return;
+    
+    const templateName = prompt('Enter template name:', 'Release Sheet Template (DE)');
+    if (!templateName) return;
+    
+    try {
+      // Get current content
+      const currentContent = editorRef.current.innerHTML;
+      
+      // Create template object
+      const template = {
+        name: templateName,
+        description: `Template created from "${sheet.title}"`,
+        language: 'de',
+        content: { html: currentContent },
+        created_by_artist_id: artistId,
+        is_public: false,
+        tags: ['german', 'release-sheet']
+      };
+      
+      // Save to database using raw SQL to avoid type issues
+      const { error } = await supabase.rpc('insert_release_sheet_template', {
+        template_data: template
+      });
+      
+      if (error) {
+        console.error('Error saving template:', error);
+        alert('Failed to save template. Please try again.');
+        return;
+      }
+      
+      alert(`Template "${templateName}" saved successfully!`);
+    } catch (error) {
+      console.error('Error saving template:', error);
+      alert('An error occurred while saving the template.');
+    }
   };
 
   // Audio upload functions
@@ -923,7 +965,7 @@ export const ReleaseSheetEditor: React.FC = () => {
         <div className="mx-auto py-4" style={{ paddingLeft: '10%', paddingRight: '10%' }}>
           <div className="flex items-center space-x-4">
             <Link
-              to={`/artist/${artistId}/release-sheets`}
+              to={backPath}
               className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-md transition-colors"
             >
               <ArrowLeft className="h-6 w-6" />
@@ -1198,6 +1240,21 @@ export const ReleaseSheetEditor: React.FC = () => {
               >
                 <Redo className="h-4 w-4" />
               </button>
+              <div className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">
+                <button 
+                  onClick={saveAsTemplate}
+                  className="p-2 hover:bg-green-100 dark:hover:bg-green-700 rounded transition-colors text-green-600 dark:text-green-400" 
+                  title="Save as Template"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14,2 14,8 20,8"></polyline>
+                    <line x1="16" x2="8" y1="13" y2="13"></line>
+                    <line x1="16" x2="8" y1="17" y2="17"></line>
+                    <polyline points="10,9 9,9 8,9"></polyline>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
           

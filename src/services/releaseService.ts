@@ -125,40 +125,27 @@ export class ReleaseService {
   // Releases sync from reporting database
   static async getReleases(): Promise<Release[]> {
     try {
-      // First, try to get all columns to see what's available
-      const { data, error } = await reportingSupabase
-        .from('releases')
-        .select('*')
-        .limit(1);
+      console.log('Fetching releases from reporting database...');
       
-      if (error) {
-        console.error('Error fetching releases from reporting database:', error);
-        // Return empty array if table doesn't exist or there's an error
-        return [];
-      }
-      
-      // If we got data, let's see what columns are available
-      if (data && data.length > 0) {
-        console.log('Available columns in releases table:', Object.keys(data[0]));
-      }
-      
-      // Now fetch all releases with basic columns that likely exist
+      // Fetch releases from the correct table structure
       const { data: allReleases, error: fetchError } = await reportingSupabase
         .from('releases')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, name, artist, release_date, status')
+        .order('release_date', { ascending: false });
       
       if (fetchError) {
-        console.error('Error fetching all releases:', fetchError);
+        console.error('Error fetching releases:', fetchError);
         return [];
       }
       
+      console.log('Releases fetch successful:', allReleases?.length || 0);
+      
       // Map the data to our expected format
-      return (allReleases || []).map(release => ({
+      return (allReleases || []).map((release: any) => ({
         id: release.id,
-        title: release.name || release.title || release.release_name || 'Unknown Release',
-        artist_name: release.artist_name || release.artist || 'Unknown Artist',
-        release_date: release.release_date || release.created_at,
+        title: release.name || 'Unknown Release',
+        artist_name: release.artist || 'Unknown Artist',
+        release_date: release.release_date,
         status: release.status || 'unknown'
       }));
     } catch (error) {
@@ -171,7 +158,7 @@ export class ReleaseService {
     try {
       const { data, error } = await reportingSupabase
         .from('releases')
-        .select('id, title, artist_name, release_date, status')
+        .select('id, name, artist, release_date, status')
         .eq('id', id)
         .single();
       
@@ -180,7 +167,13 @@ export class ReleaseService {
         return null;
       }
       
-      return data;
+      return {
+        id: data.id,
+        title: data.name || 'Unknown Release',
+        artist_name: data.artist || 'Unknown Artist',
+        release_date: data.release_date,
+        status: data.status || 'unknown'
+      };
     } catch (error) {
       console.error('Error connecting to reporting database:', error);
       return null;

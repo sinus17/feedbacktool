@@ -15,6 +15,7 @@ import { ArtistAdCreatives } from './pages/ArtistAdCreatives';
 import { ArtistContentPlan } from './pages/ArtistContentPlan';
 import { ArtistReleaseSheets } from './pages/ArtistReleaseSheets';
 import { ReleaseSheetEditor } from './pages/ReleaseSheetEditor';
+import { ReleaseSheets } from './pages/ReleaseSheets';
 import { PreviewArtistView } from './pages/PreviewArtistView';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
@@ -176,6 +177,7 @@ function App() {
                             <Route index element={<Home />} />
                             <Route path="ad-creatives" element={<AdCreatives />} />
                             <Route path="content-plan" element={<ContentPlan />} />
+                            <Route path="release-sheets" element={<ReleaseSheets />} />
                             <Route path="artists" element={<Artists />} />
                             <Route path="whatsapp" element={<WhatsAppLogs />} />
                             <Route path="archive" element={<Archive />} />

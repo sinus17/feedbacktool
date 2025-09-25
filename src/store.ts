@@ -738,12 +738,9 @@ const useStore = create<StoreState>((set, get) => ({
       console.log('Current authenticated user:', user);
       console.log('User ID from auth:', user?.id);
       
-      // Always use the authenticated user's ID
-      const userId = user?.id;
-      
-      if (!userId) {
-        throw new Error('User must be authenticated to send messages');
-      }
+      // Always use the authenticated user's ID when available
+      const userId = user?.id || null;
+      // For public artist view (no auth), allow null user_id and continue
       
       console.log('Final userId for message:', userId);
       
@@ -753,7 +750,7 @@ const useStore = create<StoreState>((set, get) => ({
           submission_id: submissionId,
           text: message,
           is_admin: isAdmin,
-          user_id: userId,
+          user_id: userId, // may be null for public artist view
           updated_at: new Date().toISOString()
         } as any)
         .select(`

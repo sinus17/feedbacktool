@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Calendar, FileText, Plus, Edit, Trash2, Eye } from 'lucide-react';
 import { useStore } from '../store';
 import { ReleaseService, ReleaseSheet, Release } from '../services/releaseService';
+import { supabase } from '../lib/supabase';
 
 export const ArtistReleaseSheets: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -296,8 +297,31 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
   const [title, setTitle] = useState('');
   const [releaseId, setReleaseId] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [tags, setTags] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  const [templates, setTemplates] = useState<any[]>([]);
   const [creating, setCreating] = useState(false);
+
+  // Load available templates
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_release_sheet_templates', {
+          artist_id_param: artistId
+        });
+        
+        if (error) {
+          console.error('Error loading templates:', error);
+          return;
+        }
+        
+        setTemplates(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Error loading templates:', error);
+      }
+    };
+
+    loadTemplates();
+  }, [artistId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -307,6 +331,7 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
       setCreating(true);
       
       const selectedRelease = releases.find(r => r.id === releaseId);
+      const selectedTemplate = templates.find(t => t.id === templateId);
       
       // Convert dd/mm/yyyy to yyyy-mm-dd for database
       let formattedDueDate = null;
@@ -322,9 +347,9 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
         artist_id: artistId,
         release_id: releaseId || null,
         release_title: selectedRelease?.title || null,
-        content: { blocks: [] },
+        content: selectedTemplate?.content || { blocks: [] },
         status: 'draft',
-        tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        tags: selectedTemplate?.tags || [],
         cover_image_url: null,
         due_date: formattedDueDate,
         completed_at: null
@@ -401,15 +426,23 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Tags
+                Template
               </label>
-              <input
-                type="text"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="Enter tags separated by commas..."
+              <select
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
+              >
+                <option value="">Start with blank sheet</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                    {template.language && !template.name.includes(`(${template.language.toUpperCase()})`) 
+                      ? ` (${template.language.toUpperCase()})` 
+                      : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex justify-end space-x-3 pt-4">
