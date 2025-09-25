@@ -19,6 +19,8 @@ export const ReleaseSheetEditor: React.FC = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const [lastDragFileTypes, setLastDragFileTypes] = useState<string>('');
+  const [lastDragPosition, setLastDragPosition] = useState<{ x: number; y: number } | null>(null);
   
   const editorRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -44,6 +46,9 @@ export const ReleaseSheetEditor: React.FC = () => {
           
           // Replace social embed placeholders with actual embeds
           renderSocialEmbeds();
+          
+          // Setup image size controls
+          renderImages();
         }
       }, 100);
     } catch (error) {
@@ -70,10 +75,41 @@ export const ReleaseSheetEditor: React.FC = () => {
     scheduleAutoSave();
   };
 
+  const cleanupContent = (html: string): string => {
+    // Remove empty divs with only Tailwind CSS variables
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // Remove empty divs that only contain <br> or whitespace
+    const emptyDivs = tempDiv.querySelectorAll('div');
+    emptyDivs.forEach(div => {
+      const hasOnlyBr = div.innerHTML.trim() === '<br>' || div.innerHTML.trim() === '';
+      const hasOnlyWhitespace = div.textContent?.trim() === '';
+      
+      if (hasOnlyBr || hasOnlyWhitespace) {
+        // Check if this div has Tailwind CSS variables (style attribute with --tw- variables)
+        const style = div.getAttribute('style');
+        if (style && style.includes('--tw-')) {
+          div.remove();
+        }
+      }
+    });
+    
+    return tempDiv.innerHTML;
+  };
+
   const handleContentChange = () => {
     if (!sheet || !editorRef.current) return;
     
-    const htmlContent = editorRef.current.innerHTML;
+    let htmlContent = editorRef.current.innerHTML;
+    
+    // Clean up empty divs with Tailwind variables
+    htmlContent = cleanupContent(htmlContent);
+    
+    // Update the editor content if it was cleaned
+    if (htmlContent !== editorRef.current.innerHTML) {
+      editorRef.current.innerHTML = htmlContent;
+    }
     
     const content = {
       blocks: [{
@@ -289,16 +325,86 @@ export const ReleaseSheetEditor: React.FC = () => {
     }
   };
 
+  // Image upload functions
+  const uploadImageFile = async (file: File): Promise<string | null> => {
+    console.log('📤 UPLOAD IMAGE FILE - Starting upload for:', file.name);
+    
+    try {
+      
+      // Validate file size (10MB limit for images)
+      console.log('📏 Validating file size:', file.size, 'bytes');
+      if (file.size > 10 * 1024 * 1024) {
+        console.log('❌ File too large:', file.size);
+        alert('Image size too large. Maximum size is 10MB.');
+        return null;
+      }
+      
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+      const fileExt = file.name.split('.').pop()?.toLowerCase();
+      
+      console.log('🔍 File validation:', {
+        fileType: file.type,
+        fileExtension: fileExt,
+        validTypes,
+        validExtensions
+      });
+      
+      if (!validTypes.includes(file.type) && !validExtensions.includes(fileExt || '')) {
+        console.log('❌ Invalid file type');
+        alert('Unsupported file type. Please use JPG, PNG, GIF, or WebP files.');
+        return null;
+      }
+      
+      // Generate unique filename
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `release-sheets/${sheetId}/images/${fileName}`;
+      
+      console.log('📁 Generated file path:', filePath);
+
+      // Upload to Supabase Storage (use same bucket as audio files)
+      
+      // Add timeout to prevent hanging
+      const uploadPromise = supabase.storage
+        .from('release-sheet-files')
+        .upload(filePath, file);
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Upload timeout after 30 seconds')), 30000)
+      );
+      
+      const { error } = await Promise.race([uploadPromise, timeoutPromise]) as any;
+
+      if (error) {
+        console.error('❌ Supabase upload error:', error);
+        alert('Failed to upload image file. Please try again.');
+        return null;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('release-sheet-files')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('💥 Upload exception:', error);
+      alert('An unexpected error occurred while uploading. Please try again.');
+      return null;
+    } finally {
+      // Image upload completed
+    }
+  };
+
   const insertAudioPlayer = (audioUrl: string, fileName: string) => {
     const audioId = `audio-${Date.now()}`;
     const audioPlayerHTML = `
-      <div class="audio-player-container" data-audio-url="${audioUrl}" data-file-name="${fileName}" data-audio-id="${audioId}">
-        <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 my-4 border border-gray-200 dark:border-gray-700">
-          <div class="flex items-center space-x-2">
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">🎵 ${fileName}</span>
-          </div>
-          <p class="text-xs text-gray-500 mt-1">Audio player will load when viewing</p>
+      <div class="audio-player-container my-4" data-audio-url="${audioUrl}" data-file-name="${fileName}" data-audio-id="${audioId}">
+        <div class="flex items-center space-x-2 mb-2">
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">🎵 ${fileName}</span>
         </div>
+        <p class="text-xs text-gray-500 mb-2">Audio player will load when viewing</p>
       </div>
     `;
 
@@ -320,9 +426,40 @@ export const ReleaseSheetEditor: React.FC = () => {
     }
   };
 
+  const insertAtPosition = (html: string, position: { x: number; y: number; range: Range | null }) => {
+    if (!position.range) {
+      // Fallback to execCommand if no range available
+      execCommand('insertHTML', html);
+      return;
+    }
+    
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    const frag = document.createDocumentFragment();
+    let node;
+    while ((node = div.firstChild)) {
+      frag.appendChild(node);
+    }
+    position.range.deleteContents();
+    position.range.insertNode(frag);
+    handleContentChange();
+  };
+
+
+
+
+
   const handleFileDrop = async (files: FileList) => {
+    console.log('🚀 HANDLE FILE DROP - Processing', files.length, 'files');
+    
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      console.log(`📄 Processing file ${i + 1}/${files.length}:`, {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: new Date(file.lastModified).toISOString()
+      });
       
       // Check if it's an audio file
       if (file.type.startsWith('audio/') || 
@@ -331,12 +468,78 @@ export const ReleaseSheetEditor: React.FC = () => {
           file.name.toLowerCase().endsWith('.m4a') ||
           file.name.toLowerCase().endsWith('.flac')) {
         
+        console.log('🎵 AUDIO FILE detected:', file.name);
         const audioUrl = await uploadAudioFile(file);
         if (audioUrl) {
+          console.log('✅ Audio uploaded successfully:', audioUrl);
           insertAudioPlayer(audioUrl, file.name);
+        } else {
+          console.log('❌ Audio upload failed');
         }
       }
+      // Check if it's an image file
+      else if (file.type.startsWith('image/') || 
+               file.name.toLowerCase().endsWith('.jpg') || 
+               file.name.toLowerCase().endsWith('.jpeg') ||
+               file.name.toLowerCase().endsWith('.png') ||
+               file.name.toLowerCase().endsWith('.gif') ||
+               file.name.toLowerCase().endsWith('.webp')) {
+        
+        console.log('📸 IMAGE FILE detected:', file.name);
+        console.log('🔄 Starting image upload process...');
+        
+        // Try direct insertion without placeholder for now
+        const imageUrl = await uploadImageFile(file);
+        console.log('📤 Upload result:', imageUrl);
+        
+        if (imageUrl) {
+          console.log('✅ Image uploaded successfully, creating HTML...');
+          
+          // Insert image directly
+          const imageId = `image-${Date.now()}`;
+          const imageHTML = `
+            <div class="image-container group relative block my-4 text-center" data-image-url="${imageUrl}" data-file-name="${file.name}" data-image-id="${imageId}" data-size="M">
+              <img src="${imageUrl}" alt="${file.name}" class="max-w-md h-auto rounded-lg shadow-sm mx-auto" loading="lazy" />
+              <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-md p-1">
+                <div class="flex space-x-1">
+                  <button class="size-btn text-white text-xs px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 cursor-pointer" data-size="S">S</button>
+                  <button class="size-btn text-white text-xs px-2 py-1 rounded bg-blue-500 cursor-pointer" data-size="M">M</button>
+                  <button class="size-btn text-white text-xs px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 cursor-pointer" data-size="L">L</button>
+                  <button class="delete-btn text-white text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-500 cursor-pointer ml-1" title="Delete image">×</button>
+                </div>
+              </div>
+            </div>
+          `;
+          
+          console.log('🎯 Inserting image HTML at position...');
+          
+          // Use the current selection or fall back to execCommand
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const position = { x: 0, y: 0, range };
+            console.log('📍 Using current selection position');
+            insertAtPosition(imageHTML, position);
+          } else {
+            console.log('📍 Using execCommand insertHTML');
+            execCommand('insertHTML', imageHTML);
+          }
+          
+          console.log('🔧 Setting up size controls...');
+          // Setup size controls
+          setTimeout(() => {
+            renderImages();
+            console.log('✅ Image insertion completed');
+          }, 100);
+        } else {
+          console.log('❌ Image upload failed');
+        }
+      } else {
+        console.log('❓ Unknown file type:', file.type, file.name);
+      }
     }
+    
+    console.log('🏁 FILE DROP processing completed');
   };
 
   const getDropPosition = (e: React.DragEvent) => {
@@ -355,18 +558,47 @@ export const ReleaseSheetEditor: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Check if dragging audio files
-    const hasAudioFiles = Array.from(e.dataTransfer.items).some(item => 
-      item.type.startsWith('audio/') || 
-      (item.kind === 'file' && item.type === '' && 
-       ['mp3', 'wav', 'm4a', 'flac'].some(ext => 
+    // Only log once when drag starts or file type changes
+    const items = Array.from(e.dataTransfer.items);
+    const currentFileTypes = items.map(item => item.type).join(',');
+    
+    if (!isDragOver || lastDragFileTypes !== currentFileTypes) {
+      console.log('🔄 DRAG OVER - DataTransfer items:', e.dataTransfer.items.length);
+      items.forEach((item, index) => {
+        console.log(`📄 Item ${index}:`, {
+          kind: item.kind,
+          type: item.type,
+          fileName: item.getAsFile()?.name
+        });
+      });
+      setLastDragFileTypes(currentFileTypes);
+    }
+
+    const hasMediaFiles = items.some(item =>
+      item.type.startsWith('audio/') ||
+      item.type.startsWith('image/') ||
+      (item.kind === 'file' && item.type === '' &&
+       ['mp3', 'wav', 'm4a', 'flac', 'jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext =>
          item.getAsFile()?.name.toLowerCase().endsWith(`.${ext}`)
        ))
     );
-    
-    if (hasAudioFiles) {
+
+    if (!isDragOver && hasMediaFiles) {
+      console.log('🎯 Has media files:', hasMediaFiles);
+    }
+
+    if (hasMediaFiles) {
       setIsDragOver(true);
       const position = getDropPosition(e);
+      
+      // Only log position changes that are significant (more than 5px difference)
+      if (position && (!lastDragPosition || 
+          Math.abs(position.x - lastDragPosition.x) > 5 || 
+          Math.abs(position.y - lastDragPosition.y) > 5)) {
+        console.log('📍 Drop position:', position);
+        setLastDragPosition({ x: position.x, y: position.y });
+      }
+      
       if (position) {
         setDragPosition({ x: position.x, y: position.y });
       }
@@ -381,29 +613,63 @@ export const ReleaseSheetEditor: React.FC = () => {
     if (!editorRef.current?.contains(e.relatedTarget as Node)) {
       setIsDragOver(false);
       setDragPosition(null);
+      setLastDragFileTypes('');
+      setLastDragPosition(null);
+      
+      // Clean up any unwanted elements when drag ends
+      if (editorRef.current) {
+        const htmlContent = cleanupContent(editorRef.current.innerHTML);
+        if (htmlContent !== editorRef.current.innerHTML) {
+          editorRef.current.innerHTML = htmlContent;
+        }
+      }
     }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    console.log('🎯 DROP EVENT - Files dropped:', e.dataTransfer.files.length);
+    
     setIsDragOver(false);
     setDragPosition(null);
     
     // Set cursor position for insertion
     const position = getDropPosition(e);
+    console.log('📍 Final drop position:', position);
+    
     if (position?.range) {
       const selection = window.getSelection();
       if (selection) {
         selection.removeAllRanges();
         selection.addRange(position.range);
+        console.log('✅ Selection set at drop position');
       }
     }
     
     const files = e.dataTransfer.files;
+    console.log('📁 Files to process:', Array.from(files).map(f => ({
+      name: f.name,
+      type: f.type,
+      size: f.size
+    })));
+    
     if (files.length > 0) {
       handleFileDrop(files);
+    } else {
+      console.log('❌ No files to drop');
     }
+    
+    // Clean up any unwanted elements after drop
+    setTimeout(() => {
+      if (editorRef.current) {
+        const htmlContent = cleanupContent(editorRef.current.innerHTML);
+        if (htmlContent !== editorRef.current.innerHTML) {
+          editorRef.current.innerHTML = htmlContent;
+        }
+      }
+    }, 100);
   };
 
   // Social media URL detection
@@ -543,6 +809,59 @@ export const ReleaseSheetEditor: React.FC = () => {
     });
   };
 
+  const renderImages = () => {
+    if (!editorRef.current) return;
+    
+    const imageContainers = editorRef.current.querySelectorAll('.image-container');
+    imageContainers.forEach((container) => {
+      // Handle size buttons
+      const sizeButtons = container.querySelectorAll('.size-btn');
+      sizeButtons.forEach((button) => {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          const newSize = button.getAttribute('data-size') as 'S' | 'M' | 'L';
+          const img = container.querySelector('img');
+          const sizeClasses = {
+            S: 'max-w-xs',
+            M: 'max-w-md', 
+            L: 'max-w-2xl'
+          };
+          
+          if (img) {
+            // Remove old size classes
+            img.classList.remove('max-w-xs', 'max-w-md', 'max-w-2xl');
+            // Add new size class and ensure center alignment
+            img.classList.add(sizeClasses[newSize], 'mx-auto');
+            
+            // Update button states
+            sizeButtons.forEach(btn => {
+              btn.classList.remove('bg-blue-500');
+              btn.classList.add('bg-gray-600', 'hover:bg-gray-500');
+            });
+            button.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+            button.classList.add('bg-blue-500');
+            
+            // Update container data attribute
+            container.setAttribute('data-size', newSize);
+            handleContentChange();
+          }
+        });
+      });
+      
+      // Handle delete button
+      const deleteButton = container.querySelector('.delete-btn');
+      if (deleteButton) {
+        deleteButton.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (confirm('Are you sure you want to delete this image?')) {
+            container.remove();
+            handleContentChange();
+          }
+        });
+      }
+    });
+  };
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -601,7 +920,7 @@ export const ReleaseSheetEditor: React.FC = () => {
       {/* Combined Sticky Header */}
       <div className="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
         {/* Sheet Title */}
-        <div className="max-w-4xl mx-auto px-8 py-4">
+        <div className="mx-auto py-4" style={{ paddingLeft: '10%', paddingRight: '10%' }}>
           <div className="flex items-center space-x-4">
             <Link
               to={`/artist/${artistId}/release-sheets`}
@@ -903,8 +1222,24 @@ export const ReleaseSheetEditor: React.FC = () => {
           </div>
         )}
         {lastSaved && !saving && (
-          <div className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-3 py-1 rounded-full text-sm">
-            Saved {lastSaved.toLocaleTimeString()}
+          <div 
+            className="text-white opacity-50 px-3 py-1 rounded-full text-sm hover:opacity-100 transition-opacity cursor-pointer group relative"
+            title={`Saved ${lastSaved.toLocaleTimeString()}`}
+          >
+            {/* Diskette with checkmark icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline">
+              {/* Diskette outline */}
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17,21 17,13 7,13 7,21"/>
+              <polyline points="7,3 7,8 15,8"/>
+              {/* Checkmark */}
+              <path d="m9 16 2 2 4-4" stroke="currentColor" strokeWidth="1.5"/>
+            </svg>
+            
+            {/* Tooltip on hover */}
+            <div className="absolute right-full top-1/2 transform -translate-y-1/2 mr-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+              Saved {lastSaved.toLocaleTimeString()}
+            </div>
           </div>
         )}
       </div>
@@ -923,8 +1258,8 @@ export const ReleaseSheetEditor: React.FC = () => {
         style={{
           lineHeight: '1.7',
           fontSize: '18px',
-          paddingLeft: '20%',
-          paddingRight: '20%',
+          paddingLeft: '10%',
+          paddingRight: '10%',
         }}
         suppressContentEditableWarning={true}
         data-placeholder="Start writing your release sheet..."
@@ -934,8 +1269,8 @@ export const ReleaseSheetEditor: React.FC = () => {
           <div
             className="absolute pointer-events-none z-10"
             style={{
-              left: '20%',
-              right: '20%',
+              left: '10%',
+              right: '10%',
               top: `${dragPosition.y}px`,
               height: '2px',
               backgroundColor: '#3b82f6',
@@ -957,12 +1292,6 @@ export const ReleaseSheetEditor: React.FC = () => {
           </div>
         )}
         
-        {/* Audio Drop Hint */}
-        {isDragOver && (
-          <div className="absolute top-4 right-4 bg-blue-500 text-white px-3 py-2 rounded-lg shadow-lg text-sm z-20">
-            🎵 Drop audio here
-          </div>
-        )}
       </div>
 
       <style>{`

@@ -8,7 +8,7 @@ import { VideoList } from '../components/VideoList';
 export const PublicArtistView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [showForm, setShowForm] = useState(false);
-  const { artists, fetchArtists, fetchSubmissions, fetchAdCreatives } = useStore();
+  const { artists, submissions, fetchArtists, fetchSubmissions, fetchAdCreatives } = useStore();
   const location = useLocation();
 
   useEffect(() => {
@@ -20,6 +20,12 @@ export const PublicArtistView: React.FC = () => {
   }, [id]);
 
   const artist = artists.find(a => a.id === id);
+  
+  // Filter submissions for this artist
+  const artistSubmissions = submissions.filter(submission => 
+    String(submission.artistId) === String(id)
+  );
+  const videoCount = artistSubmissions.length;
 
   // Show loading state while fetching artist data
   if (!artist && artists.length === 0) {
@@ -127,7 +133,7 @@ export const PublicArtistView: React.FC = () => {
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-2xl font-semibold dark:text-white">
-                {artist?.name || 'Loading...'}'s Videos
+                {artist?.name || 'Loading...'}'s Videos ({videoCount})
               </h2>
               <p className="text-gray-600 dark:text-gray-400">
                 Submit and manage your video feedback

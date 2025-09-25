@@ -264,7 +264,7 @@ export const ArtistAdCreatives: React.FC = () => {
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-2xl font-semibold dark:text-white">
-                {artist.name}'s Ad Creatives
+                {artist.name}'s Ad Creatives ({filteredCreatives.length})
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Manage Instagram Reels and TikTok URLs

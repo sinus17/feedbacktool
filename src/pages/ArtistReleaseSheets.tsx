@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Calendar, FileText, Plus, Search, Filter, Edit, Trash2, Eye } from 'lucide-react';
+import { Calendar, FileText, Plus, Edit, Trash2, Eye } from 'lucide-react';
 import { useStore } from '../store';
 import { ReleaseService, ReleaseSheet, Release } from '../services/releaseService';
 
@@ -11,8 +11,6 @@ export const ArtistReleaseSheets: React.FC = () => {
   const [releaseSheets, setReleaseSheets] = useState<ReleaseSheet[]>([]);
   const [releases, setReleases] = useState<Release[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
@@ -43,12 +41,7 @@ export const ArtistReleaseSheets: React.FC = () => {
 
   const artist = artists.find(a => a.id === id);
 
-  const filteredSheets = releaseSheets.filter(sheet => {
-    const matchesSearch = sheet.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (sheet.release_title?.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesStatus = statusFilter === 'all' || sheet.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredSheets = releaseSheets;
 
 
   const formatDate = (dateString: string) => {
@@ -164,37 +157,6 @@ export const ArtistReleaseSheets: React.FC = () => {
             </button>
           </div>
 
-          {/* Filters */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <input
-                    type="text"
-                    placeholder="Search sheets..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Filter className="h-4 w-4 text-gray-400" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Status</option>
-                  <option value="draft">Draft</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </div>
-            </div>
-          </div>
 
           {/* Release Sheets Grid */}
           {loading ? (
@@ -205,23 +167,18 @@ export const ArtistReleaseSheets: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
               <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                {searchQuery || statusFilter !== 'all' ? 'No sheets match your filters' : 'No release sheets yet'}
+                No release sheets yet
               </h3>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                {searchQuery || statusFilter !== 'all' 
-                  ? 'Try adjusting your search or filter criteria'
-                  : 'Create your first release sheet to get started'
-                }
+                Create your first release sheet to get started
               </p>
-              {!searchQuery && statusFilter === 'all' && (
-                <button 
-                  onClick={() => setShowCreateModal(true)}
-                  className="btn"
-                >
-                  <Plus className="h-5 w-5 mr-2" />
-                  Create Release Sheet
-                </button>
-              )}
+              <button 
+                onClick={() => setShowCreateModal(true)}
+                className="btn"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Create Release Sheet
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -351,6 +308,15 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
       
       const selectedRelease = releases.find(r => r.id === releaseId);
       
+      // Convert dd/mm/yyyy to yyyy-mm-dd for database
+      let formattedDueDate = null;
+      if (dueDate && dueDate.length === 10) {
+        const [day, month, year] = dueDate.split('/');
+        if (day && month && year && year.length === 4) {
+          formattedDueDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+      }
+
       await ReleaseService.createReleaseSheet({
         title: title.trim(),
         artist_id: artistId,
@@ -360,7 +326,7 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
         status: 'draft',
         tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
         cover_image_url: null,
-        due_date: dueDate || null,
+        due_date: formattedDueDate,
         completed_at: null
       });
 
@@ -419,9 +385,16 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
                 Release Date
               </label>
               <input
-                type="date"
+                type="text"
+                placeholder="dd/mm/yyyy"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => {
+                  let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+                  if (value.length >= 2) value = value.slice(0, 2) + '/' + value.slice(2);
+                  if (value.length >= 5) value = value.slice(0, 5) + '/' + value.slice(5, 9);
+                  setDueDate(value);
+                }}
+                maxLength={10}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
             </div>

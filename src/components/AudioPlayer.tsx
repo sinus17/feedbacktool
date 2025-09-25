@@ -22,9 +22,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
     // Initialize WaveSurfer
     wavesurfer.current = WaveSurfer.create({
       container: waveformRef.current,
-      waveColor: '#3b82f6',
-      progressColor: '#1d4ed8',
-      cursorColor: '#1d4ed8',
+      waveColor: '#3B81F6',
+      progressColor: '#3B81F6',
+      cursorColor: '#3B81F6',
       barWidth: 2,
       barRadius: 3,
       height: 60,
@@ -79,14 +79,17 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
   };
 
   return (
-    <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-4 my-4 border border-gray-200 dark:border-gray-700 relative ${
+    <div className={`bg-gray-50 dark:bg-gray-900 rounded-lg p-4 my-4 border border-gray-200 dark:border-gray-700 relative ${
       isLoading ? 'overflow-hidden' : ''
     }`}>
       {/* Loading Overlay */}
       {isLoading && (
-        <div className="absolute inset-0 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg z-10 flex items-center justify-center">
+        <div className="absolute inset-0 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-sm rounded-lg z-10 flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            <div 
+              className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-2"
+              style={{ borderBottomColor: '#3B81F6' }}
+            ></div>
             <div className="text-sm text-gray-600 dark:text-gray-400">Processing audio...</div>
             <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">Generating waveform</div>
           </div>
@@ -131,8 +134,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
             {Array.from({ length: 50 }).map((_, i) => (
               <div
                 key={i}
-                className="bg-blue-300 dark:bg-blue-600 rounded-full animate-pulse"
+                className="rounded-full animate-pulse"
                 style={{
+                  backgroundColor: '#3B81F6',
                   width: '2px',
                   height: `${Math.random() * 40 + 10}px`,
                   animationDelay: `${i * 50}ms`,
@@ -151,7 +155,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
           <button
             onClick={togglePlayPause}
             disabled={isLoading}
-            className="flex items-center justify-center w-8 h-8 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-full transition-colors"
+            className="flex items-center justify-center w-8 h-8 disabled:bg-gray-400 text-white rounded-full transition-colors"
+            style={{ 
+              backgroundColor: isLoading ? undefined : '#3B81F6'
+            }}
+            onMouseEnter={(e) => !isLoading && (e.currentTarget.style.backgroundColor = '#2563EB')}
+            onMouseLeave={(e) => !isLoading && (e.currentTarget.style.backgroundColor = '#3B81F6')}
           >
             {isPlaying ? (
               <Pause className="h-4 w-4" />
