@@ -169,7 +169,6 @@ const useStore = create<StoreState>((set, get) => ({
         createdAt: sub.created_at,
         updatedAt: sub.updated_at,
         messages: (sub.messages || [])
-          .filter((msg: any) => msg.user_id) // Only include messages with valid user_id
           .map((msg: any) => ({
             id: msg.id,
             text: msg.text,
