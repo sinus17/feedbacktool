@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { ExternalLink, ArrowLeft, Undo, Redo } from 'lucide-react';
+import { ArrowLeft, Undo, Redo } from 'lucide-react';
 import { ReleaseService, ReleaseSheet } from '../services/releaseService';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { SocialEmbed } from '../components/SocialEmbed';
+import { ReleaseSheetEditModal } from '../components/ReleaseSheetEditModal';
 import { supabase } from '../lib/supabase';
 
 export const ReleaseSheetEditor: React.FC = () => {
-  const { id: artistId, sheetId } = useParams<{ id: string; sheetId: string }>();
+  const { id: artistId, sheetId, templateId } = useParams<{ id: string; sheetId: string; templateId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const fromAdmin = (location.state as any)?.fromAdmin === true;
-  const backPath = fromAdmin ? '/release-sheets' : `/artist/${artistId}/release-sheets`;
+  const isTemplate = !!templateId; // Check if we're editing a template
+  const itemId = templateId || sheetId; // Use templateId if available, otherwise sheetId
+  const backPath = isTemplate ? '/release-sheets?tab=templates' : (fromAdmin ? '/release-sheets' : `/artist/${artistId}/release-sheets`);
   
   const [sheet, setSheet] = useState<ReleaseSheet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,50 +27,388 @@ export const ReleaseSheetEditor: React.FC = () => {
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [lastDragFileTypes, setLastDragFileTypes] = useState<string>('');
   const [lastDragPosition, setLastDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const [linkedRelease, setLinkedRelease] = useState<any>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [artists, setArtists] = useState<{ id: string; name: string }[]>([]);
+  const [realtimeUpdate, setRealtimeUpdate] = useState(false);
   
   const editorRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedTimestampRef = useRef<string | null>(null);
 
   const loadSheet = useCallback(async () => {
-    if (!sheetId) return;
+    console.log('🔄 loadSheet() called - itemId:', itemId, 'isTemplate:', isTemplate);
+    
+    if (!itemId) return;
     
     try {
       setLoading(true);
-      const sheetData = await ReleaseService.getReleaseSheet(sheetId);
+      let sheetData;
+      
+      if (isTemplate) {
+        // Load from templates table
+        const { data, error } = await (supabase as any)
+          .from('release_sheet_templates')
+          .select('*')
+          .eq('id', itemId)
+          .single();
+        
+        if (error) throw error;
+        const template: any = data;
+        // Map template structure to sheet structure
+        sheetData = {
+          ...template,
+          title: template.name,
+          artist_id: '', // Templates don't have artist_id
+          release_id: null,
+          release_title: null,
+          status: 'draft' as const,
+          tags: [],
+          cover_image_url: null,
+          due_date: null,
+          completed_at: null
+        };
+      } else {
+        sheetData = await ReleaseService.getReleaseSheet(itemId);
+      }
+      
+      console.log('=== LOAD SHEET DATA ===');
+      console.log('Loaded sheet data:', sheetData);
+      console.log('Content blocks:', sheetData?.content?.blocks);
+      console.log('First block content (first 200 chars):', sheetData?.content?.blocks?.[0]?.content?.substring(0, 200));
+      console.log('Is template?', isTemplate);
+      
       setSheet(sheetData);
+      console.log('Sheet state set');
       
       // Initialize editor content after sheet loads
       setTimeout(() => {
+        console.log('=== TIMEOUT FIRED (100ms) ===');
+        console.log('editorRef.current exists?', !!editorRef.current);
+        console.log('sheetData exists?', !!sheetData);
+        console.log('sheetData.content exists?', !!sheetData?.content);
+        
         if (editorRef.current && sheetData && sheetData.content) {
           const htmlContent = sheetData.content.blocks
             ?.map((block: any) => block.content || '')
             .join('<br>') || '';
+          
+          console.log('=== SETTING INNERHTML ===');
+          console.log('HTML content length:', htmlContent.length);
+          console.log('Current innerHTML length before:', editorRef.current.innerHTML.length);
+          
           editorRef.current.innerHTML = htmlContent;
           
+          console.log('Current innerHTML length after:', editorRef.current.innerHTML.length);
+          console.log('=== INNERHTML SET ===');
+          
           // Replace audio player placeholders with actual players
+          console.log('Rendering audio players...');
           renderAudioPlayers();
           
           // Replace social embed placeholders with actual embeds
+          console.log('Rendering social embeds...');
           renderSocialEmbeds();
           
           // Setup image size controls
+          console.log('Rendering images...');
           renderImages();
+          
+          // Render release link icon
+          console.log('Rendering release link icon...');
+          renderReleaseLinkIcon();
+          
+          console.log('=== ALL RENDERING COMPLETE ===');
+        } else {
+          console.log('Skipping innerHTML set - missing requirements');
         }
       }, 100);
     } catch (error) {
       console.error('Error loading release sheet:', error);
       // Redirect back if sheet not found
-      navigate(`/artist/${artistId}/release-sheets`);
+      if (isTemplate) {
+        navigate('/release-sheets?tab=templates');
+      } else {
+        navigate(`/artist/${artistId}/release-sheets`);
+      }
     } finally {
       setLoading(false);
     }
-  }, [sheetId, navigate, artistId]);
+  }, [itemId, navigate, artistId, isTemplate]);
 
   useEffect(() => {
-    if (artistId && sheetId) {
+    if (itemId) {
       loadSheet();
     }
-  }, [artistId, sheetId, loadSheet]);
+  }, [itemId, loadSheet]);
+
+  // Real-time subscription for collaborative editing
+  useEffect(() => {
+    if (!itemId || isTemplate) return; // Only for release sheets, not templates
+    
+    console.log('🔴 Setting up real-time subscription for sheet:', itemId);
+    
+    const channel = supabase
+      .channel(`release-sheet-${itemId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'release_sheets',
+          filter: `id=eq.${itemId}`
+        },
+        (payload) => {
+          console.log('🔴 Real-time update received:', payload);
+          console.log('🔴 Current time:', new Date().toISOString());
+          console.log('🔴 Payload updated_at:', payload.new?.updated_at);
+          console.log('🔴 Last saved timestamp:', lastSavedTimestampRef.current);
+          
+          // Ignore updates that match our last save (this is our own update coming back)
+          if (payload.new?.updated_at === lastSavedTimestampRef.current) {
+            console.log('🔴 Ignoring own update');
+            return;
+          }
+          
+          // Show visual indicator
+          setRealtimeUpdate(true);
+          setTimeout(() => setRealtimeUpdate(false), 1000);
+          
+          if (editorRef.current && payload.new) {
+            const newContent = payload.new.content;
+            
+            if (newContent) {
+              const htmlContent = newContent.blocks
+                ?.map((block: any) => block.content || '')
+                .join('<br>') || '';
+              
+              // Save scroll position
+              const scrollTop = editorRef.current.scrollTop;
+              const scrollLeft = editorRef.current.scrollLeft;
+              
+              // Save cursor position if editor is focused
+              const selection = window.getSelection();
+              let savedRange = null;
+              let cursorOffset = 0;
+              
+              if (document.activeElement === editorRef.current && selection && selection.rangeCount > 0) {
+                savedRange = selection.getRangeAt(0);
+                // Calculate cursor offset from start
+                const preCaretRange = savedRange.cloneRange();
+                preCaretRange.selectNodeContents(editorRef.current);
+                preCaretRange.setEnd(savedRange.endContainer, savedRange.endOffset);
+                cursorOffset = preCaretRange.toString().length;
+                console.log('🔴 Saved cursor position:', cursorOffset);
+              }
+              
+              console.log('🔴 Applying real-time update to editor');
+              editorRef.current.innerHTML = htmlContent;
+              
+              // Restore scroll position immediately
+              editorRef.current.scrollTop = scrollTop;
+              editorRef.current.scrollLeft = scrollLeft;
+              
+              // Re-render special elements
+              renderAudioPlayers();
+              renderSocialEmbeds();
+              renderImages();
+              renderReleaseLinkIcon();
+              
+              // Restore cursor position if it was saved
+              if (savedRange && document.activeElement === editorRef.current) {
+                try {
+                  const newRange = document.createRange();
+                  const sel = window.getSelection();
+                  
+                  // Find the text node and position
+                  const walker = document.createTreeWalker(
+                    editorRef.current,
+                    NodeFilter.SHOW_TEXT,
+                    null
+                  );
+                  
+                  let currentOffset = 0;
+                  let targetNode = null;
+                  let targetOffset = 0;
+                  
+                  while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    const nodeLength = node.textContent?.length || 0;
+                    
+                    if (currentOffset + nodeLength >= cursorOffset) {
+                      targetNode = node;
+                      targetOffset = cursorOffset - currentOffset;
+                      break;
+                    }
+                    currentOffset += nodeLength;
+                  }
+                  
+                  if (targetNode) {
+                    newRange.setStart(targetNode, Math.min(targetOffset, targetNode.textContent?.length || 0));
+                    newRange.collapse(true);
+                    sel?.removeAllRanges();
+                    sel?.addRange(newRange);
+                    console.log('🔴 Restored cursor position');
+                  }
+                } catch (e) {
+                  console.log('🔴 Could not restore cursor position:', e);
+                }
+              }
+              
+              // Update sheet state
+              setSheet(payload.new as ReleaseSheet);
+              setLastSaved(new Date(payload.new.updated_at));
+              
+              // Update linkedRelease state based on the new data
+              if (payload.new.release_id) {
+                setLinkedRelease({ id: payload.new.release_id });
+              } else {
+                setLinkedRelease(null);
+              }
+              
+              // Re-render the link icon to reflect the new state
+              setTimeout(() => renderReleaseLinkIcon(), 100);
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔴 Real-time subscription status:', status);
+      });
+    
+    // Cleanup subscription on unmount
+    return () => {
+      console.log('🔴 Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [itemId, isTemplate]);
+
+  // Load artists for the modal
+  useEffect(() => {
+    const loadArtists = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('artists')
+          .select('id, name')
+          .order('name');
+        
+        if (!error && data) {
+          setArtists(data.map((a: any) => ({ id: a.id.toString(), name: a.name })));
+        }
+      } catch (error) {
+        console.error('Error loading artists:', error);
+      }
+    };
+    
+    loadArtists();
+  }, []);
+
+  // Load linked release data and auto-fill information
+  useEffect(() => {
+    const fetchAndFillReleaseData = async () => {
+      if (sheet?.release_id) {
+        console.log('🔗 Sheet has release_id:', sheet.release_id);
+        setLinkedRelease({ id: sheet.release_id });
+        
+        // Wait a bit for content to be loaded
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Fetch full release data from reporting database
+        try {
+          const releases = await ReleaseService.getReleases();
+          const release = releases.find(r => r.id === sheet.release_id);
+          
+          console.log('🔗 Found release:', release?.title);
+          
+          if (release && editorRef.current) {
+            // Auto-fill release date if found
+            if (release.release_date) {
+              const dateStr = new Date(release.release_date).toLocaleDateString('de-DE', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+              });
+              
+              console.log('📅 Auto-filling release date:', dateStr);
+              
+              // Find and update the Release Date field in the editor
+              let content = editorRef.current.innerHTML;
+              
+              // First, check if the date is already there to avoid duplicates
+              if (content.includes(`📆 Release Date: ${dateStr}`) || 
+                  content.includes(`📆&nbsp;Release Date:&nbsp;${dateStr}`)) {
+                console.log('📅 Release date already present, skipping');
+                return;
+              }
+              
+              // Remove any existing dates after "Release Date:" to clean up duplicates
+              content = content.replace(
+                /(📆[^>]*Release Date:[^<]*<[^>]*>)([^<]*<br[^>]*>[^<]*<br[^>]*>)*/gi,
+                '$1'
+              );
+              
+              // Now add the date once
+              const updatedContent = content.replace(
+                /(📆\s*Release Date:?\s*)(<[^>]*>)*(\s|&nbsp;)*/i,
+                `$1 ${dateStr}<br><br>`
+              );
+              
+              if (content !== updatedContent) {
+                console.log('📅 Updating content with release date');
+                editorRef.current.innerHTML = updatedContent;
+                scheduleAutoSave();
+              } else {
+                console.log('📅 Content already has release date or pattern not found');
+              }
+            }
+          }
+          
+          // Re-render the link icon to show linked state
+          setTimeout(() => renderReleaseLinkIcon(), 300);
+        } catch (error) {
+          console.error('Error fetching release data:', error);
+        }
+      } else {
+        console.log('🔗 No release_id, setting linkedRelease to null');
+        setLinkedRelease(null);
+        // Re-render the link icon to show unlinked state
+        setTimeout(() => renderReleaseLinkIcon(), 300);
+      }
+    };
+    
+    fetchAndFillReleaseData();
+  }, [sheet?.release_id]);
+
+  // Unlink release from sheet
+  const handleUnlink = async () => {
+    if (!sheet) return;
+    
+    if (!confirm('Are you sure you want to unlink this release? This will not delete the release sheet.')) {
+      return;
+    }
+    
+    try {
+      const updated = await ReleaseService.updateReleaseSheet(sheet.id, {
+        release_id: null,
+        release_title: null
+      });
+      
+      // Store the timestamp to ignore this update in real-time
+      if (updated?.updated_at) {
+        lastSavedTimestampRef.current = updated.updated_at;
+        console.log('💾 Unlinked with timestamp:', updated.updated_at);
+      }
+      
+      setSheet(updated);
+      setLinkedRelease(null);
+      
+      // Re-render the link icon to show unlinked state
+      setTimeout(() => renderReleaseLinkIcon(), 100);
+    } catch (error) {
+      console.error('Error unlinking release:', error);
+      alert('Failed to unlink release');
+    }
+  };
 
 
 
@@ -104,16 +445,10 @@ export const ReleaseSheetEditor: React.FC = () => {
   const handleContentChange = () => {
     if (!sheet || !editorRef.current) return;
     
-    let htmlContent = editorRef.current.innerHTML;
+    const htmlContent = editorRef.current.innerHTML;
     
-    // Clean up empty divs with Tailwind variables
-    htmlContent = cleanupContent(htmlContent);
-    
-    // Update the editor content if it was cleaned
-    if (htmlContent !== editorRef.current.innerHTML) {
-      editorRef.current.innerHTML = htmlContent;
-    }
-    
+    // Don't clean up content during typing - only save as-is
+    // Cleanup will happen on load/paste if needed
     const content = {
       blocks: [{
         id: 'main-content',
@@ -132,10 +467,10 @@ export const ReleaseSheetEditor: React.FC = () => {
       clearTimeout(saveTimeoutRef.current);
     }
     
-    // Schedule new save after 5 seconds
+    // Schedule new save after 500ms for faster real-time collaboration
     saveTimeoutRef.current = setTimeout(() => {
       saveSheet();
-    }, 5000);
+    }, 500);
   };
 
   const saveSheet = async () => {
@@ -143,16 +478,37 @@ export const ReleaseSheetEditor: React.FC = () => {
 
     try {
       setSaving(true);
-      await ReleaseService.updateReleaseSheet(sheet.id, {
-        title: sheet.title,
-        content: sheet.content,
-        status: sheet.status,
-        due_date: sheet.due_date,
-        tags: sheet.tags
-      });
+      
+      if (isTemplate) {
+        // Save to templates table
+        await (supabase as any)
+          .from('release_sheet_templates')
+          .update({
+            name: sheet.title,
+            content: sheet.content,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sheet.id);
+      } else {
+        // Save to release sheets table
+        const updated = await ReleaseService.updateReleaseSheet(sheet.id, {
+          title: sheet.title,
+          content: sheet.content,
+          status: sheet.status,
+          due_date: sheet.due_date,
+          tags: sheet.tags
+        });
+        
+        // Store the timestamp of this save to ignore it in real-time updates
+        if (updated?.updated_at) {
+          lastSavedTimestampRef.current = updated.updated_at;
+          console.log('💾 Saved with timestamp:', updated.updated_at);
+        }
+      }
+      
       setLastSaved(new Date());
     } catch (error) {
-      console.error('Error saving release sheet:', error);
+      console.error('Error saving:', error);
     } finally {
       setSaving(false);
     }
@@ -851,6 +1207,71 @@ export const ReleaseSheetEditor: React.FC = () => {
     });
   };
 
+  const renderReleaseLinkIcon = () => {
+    if (!editorRef.current || isTemplate) return;
+    
+    console.log('🔗 renderReleaseLinkIcon called');
+    console.log('🔗 linkedRelease state:', linkedRelease);
+    console.log('🔗 sheet.release_id:', sheet?.release_id);
+    
+    // Remove any existing link icons first
+    const existingIcons = editorRef.current.querySelectorAll('.release-link-icon');
+    console.log('🔗 Removing', existingIcons.length, 'existing icons');
+    existingIcons.forEach(icon => icon.remove());
+    
+    // Find the song name line (look for text containing "Songname:" or "🎵")
+    const walker = document.createTreeWalker(
+      editorRef.current,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      const text = node.textContent || '';
+      // Look for patterns like "🎵 Songname:" or "Songname:"
+      if (text.match(/🎵.*Songname:|Songname:/i)) {
+        console.log('🔗 Found songname pattern, linkedRelease:', linkedRelease);
+        // Find the parent element
+        let parent = node.parentElement;
+        if (parent) {
+          // Create the icon element
+          const iconSpan = document.createElement('span');
+          iconSpan.className = 'release-link-icon inline-flex items-center ml-2';
+          iconSpan.contentEditable = 'false';
+          iconSpan.style.cursor = 'pointer';
+          iconSpan.style.verticalAlign = 'middle';
+          
+          const svgIcon = linkedRelease 
+            ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline" style="color: #16a34a;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`
+            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline" style="color: #9ca3af;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
+          
+          console.log('🔗 Rendering icon with color:', linkedRelease ? 'green' : 'gray');
+          
+          iconSpan.innerHTML = svgIcon;
+          iconSpan.title = linkedRelease 
+            ? `Linked to Release ID: ${linkedRelease.id} (Click to unlink)` 
+            : 'Click to link release';
+          
+          // Add click handler
+          iconSpan.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (linkedRelease) {
+              handleUnlink();
+            } else {
+              setShowEditModal(true);
+            }
+          });
+          
+          // Insert after the parent element's last child
+          parent.appendChild(iconSpan);
+          break; // Only add one icon
+        }
+      }
+    }
+  };
+
   const renderImages = () => {
     if (!editorRef.current) return;
     
@@ -959,12 +1380,35 @@ export const ReleaseSheetEditor: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
+      {/* Custom styles for editor links */}
+      <style>{`
+        .editor-links a {
+          color: #3b82f6 !important;
+          text-decoration: underline !important;
+          text-decoration-style: solid !important;
+          text-decoration-thickness: 1px !important;
+          text-underline-offset: 2px !important;
+          cursor: pointer !important;
+          word-break: break-all !important;
+        }
+        .editor-links a:hover {
+          color: #2563eb !important;
+          text-decoration-thickness: 2px !important;
+        }
+        .dark .editor-links a {
+          color: #60a5fa !important;
+        }
+        .dark .editor-links a:hover {
+          color: #93c5fd !important;
+        }
+      `}</style>
+      
       {/* Combined Sticky Header */}
       <div className="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
         {/* Sheet Title */}
         <div className="mx-auto py-4" style={{ paddingLeft: '10%', paddingRight: '10%' }}>
           <div className="flex items-center space-x-4">
-            <Link
+            <Link 
               to={backPath}
               className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-md transition-colors"
             >
@@ -1052,6 +1496,17 @@ export const ReleaseSheetEditor: React.FC = () => {
                   <path d="M12 18V6"></path>
                   <path d="M17.5 10.5c1.7-1 3.5 0 3.5 1.5a2 2 0 0 1-2 2"></path>
                   <path d="M17 17.5c2 1.5 4 .3 4-1.5a2 2 0 0 0-2-2"></path>
+                </svg>
+              </button>
+              <button 
+                onClick={() => formatBlock('p')}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" 
+                title="Paragraph"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pilcrow h-4 w-4">
+                  <path d="M13 4v16"></path>
+                  <path d="M17 4v16"></path>
+                  <path d="M19 4H9.5a4.5 4.5 0 0 0 0 9H13"></path>
                 </svg>
               </button>
             </div>
@@ -1240,45 +1695,48 @@ export const ReleaseSheetEditor: React.FC = () => {
               >
                 <Redo className="h-4 w-4" />
               </button>
-              <div className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">
-                <button 
-                  onClick={saveAsTemplate}
-                  className="p-2 hover:bg-green-100 dark:hover:bg-green-700 rounded transition-colors text-green-600 dark:text-green-400" 
-                  title="Save as Template"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14,2 14,8 20,8"></polyline>
-                    <line x1="16" x2="8" y1="13" y2="13"></line>
-                    <line x1="16" x2="8" y1="17" y2="17"></line>
-                    <polyline points="10,9 9,9 8,9"></polyline>
-                  </svg>
-                </button>
-              </div>
+              {fromAdmin && (
+                <div className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">
+                  <button 
+                    onClick={saveAsTemplate}
+                    className="p-2 hover:bg-green-100 dark:hover:bg-green-700 rounded transition-colors text-green-600 dark:text-green-400" 
+                    title="Save as Template"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14,2 14,8 20,8"></polyline>
+                      <line x1="16" x2="8" y1="13" y2="13"></line>
+                      <line x1="16" x2="8" y1="17" y2="17"></line>
+                      <polyline points="10,9 9,9 8,9"></polyline>
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-          
-          {/* Release Info */}
-          {sheet.release_title && (
-            <div className="flex items-center space-x-2 mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <ExternalLink className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-sm text-blue-800 dark:text-blue-300">
-                Related to release: <strong>{sheet.release_title}</strong>
-              </span>
-            </div>
-          )}
         </div>
       </div>
 
       {/* Save Status */}
       <div className="fixed top-4 right-4 z-50">
+        {realtimeUpdate && (
+          <div className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-3 py-1 rounded-full text-sm flex items-center space-x-2 mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="17 1 21 5 17 9"></polyline>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+              <polyline points="7 23 3 19 7 15"></polyline>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+            </svg>
+            <span>Synced</span>
+          </div>
+        )}
         {saving && (
           <div className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm flex items-center space-x-2">
             <div className="animate-spin rounded-full h-3 w-3 border border-blue-600 border-t-transparent"></div>
             <span>Saving...</span>
           </div>
         )}
-        {lastSaved && !saving && (
+        {lastSaved && !saving && !realtimeUpdate && (
           <div 
             className="text-white opacity-50 px-3 py-1 rounded-full text-sm hover:opacity-100 transition-opacity cursor-pointer group relative"
             title={`Saved ${lastSaved.toLocaleTimeString()}`}
@@ -1302,25 +1760,39 @@ export const ReleaseSheetEditor: React.FC = () => {
       </div>
 
       {/* Editor Content */}
-      <div
-        ref={editorRef}
-        contentEditable
-        onInput={handleContentChange}
-        onBlur={handleEditorBlur}
-        onPaste={handlePaste}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className="mx-auto py-12 min-h-[calc(100vh-200px)] outline-none text-gray-900 dark:text-white prose prose-lg max-w-none dark:prose-invert relative"
-        style={{
-          lineHeight: '1.7',
-          fontSize: '18px',
-          paddingLeft: '10%',
-          paddingRight: '10%',
-        }}
-        suppressContentEditableWarning={true}
-        data-placeholder="Start writing your release sheet..."
-      >
+      <div className="mx-auto max-w-5xl px-8" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
+        <div
+          ref={editorRef}
+          contentEditable
+          onInput={handleContentChange}
+          onBlur={handleEditorBlur}
+          onPaste={handlePaste}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={(e) => {
+            // Make links clickable
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'A') {
+              e.preventDefault();
+              const href = target.getAttribute('href');
+              if (href) {
+                window.open(href, '_blank', 'noopener,noreferrer');
+              }
+            }
+          }}
+          className="min-h-[600px] focus:outline-none prose prose-lg dark:prose-invert max-w-none text-gray-900 dark:text-white relative editor-links"
+          style={{
+            lineHeight: '1.7',
+            fontSize: '18px',
+            wordWrap: 'break-word',
+            overflowWrap: 'break-word'
+          }}
+          suppressContentEditableWarning={true}
+          data-placeholder="Start writing your release sheet..."
+        >
+        </div>
+        
         {/* Drop Line Indicator */}
         {isDragOver && dragPosition && (
           <div
@@ -1348,7 +1820,6 @@ export const ReleaseSheetEditor: React.FC = () => {
             </div>
           </div>
         )}
-        
       </div>
 
       <style>{`
@@ -1438,6 +1909,35 @@ export const ReleaseSheetEditor: React.FC = () => {
         }
       `}</style>
 
+      {/* Edit Modal for linking release */}
+      {showEditModal && sheet && (
+        <ReleaseSheetEditModal
+          sheet={sheet}
+          artists={artists}
+          loadReleases={async () => {
+            // Load all releases - filtering will be added when artist_id is available in Release interface
+            return await ReleaseService.getReleases();
+          }}
+          onClose={() => setShowEditModal(false)}
+          onSaved={(updated) => {
+            // Store the timestamp to ignore this update in real-time
+            if (updated?.updated_at) {
+              lastSavedTimestampRef.current = updated.updated_at;
+              console.log('💾 Linked with timestamp:', updated.updated_at);
+            }
+            
+            setSheet(updated);
+            setShowEditModal(false);
+            // Reload sheet to get updated data
+            loadSheet();
+            // Re-render the link icon to show linked state
+            setTimeout(() => renderReleaseLinkIcon(), 200);
+          }}
+          onUpdate={async (id, updates) => {
+            return await ReleaseService.updateReleaseSheet(id, updates);
+          }}
+        />
+      )}
     </div>
   );
 };

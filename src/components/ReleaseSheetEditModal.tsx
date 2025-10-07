@@ -26,6 +26,8 @@ export const ReleaseSheetEditModal: React.FC<Props> = ({ sheet, artists, loadRel
       try {
         setLoadingReleases(true);
         const list = await loadReleases();
+        console.log('📀 Loaded releases for dropdown:', list.length, 'releases');
+        console.log('📀 First few releases:', list.slice(0, 3));
         setReleases(list);
       } finally {
         setLoadingReleases(false);
@@ -38,6 +40,14 @@ export const ReleaseSheetEditModal: React.FC<Props> = ({ sheet, artists, loadRel
     setReleaseId(id);
     const rel = releases.find(r => r.id === id);
     setReleaseTitle(rel?.title || '');
+    
+    // Auto-fill release date from the selected release
+    if (rel?.release_date) {
+      const date = new Date(rel.release_date);
+      const formattedDate = date.toISOString().substring(0, 10);
+      setDueDate(formattedDate);
+      console.log('📅 Auto-filled release date:', formattedDate, 'from release:', rel.title);
+    }
   };
 
   const handleSave = async () => {
@@ -116,7 +126,9 @@ export const ReleaseSheetEditModal: React.FC<Props> = ({ sheet, artists, loadRel
               >
                 <option value="">— Not linked —</option>
                 {releases.map(r => (
-                  <option key={r.id} value={r.id}>{r.title} {r.artist_name ? `— ${r.artist_name}` : ''}</option>
+                  <option key={r.id} value={r.id}>
+                    {r.title} {r.artist_name ? `— ${r.artist_name}` : ''} {r.release_date ? `(${new Date(r.release_date).toLocaleDateString()})` : ''}
+                  </option>
                 ))}
               </select>
             </div>

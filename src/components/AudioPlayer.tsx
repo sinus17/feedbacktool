@@ -8,6 +8,69 @@ interface AudioPlayerProps {
   onDelete?: () => void;
 }
 
+// Waveform cache using IndexedDB
+const WAVEFORM_CACHE_DB = 'waveformCache';
+const WAVEFORM_STORE = 'waveforms';
+
+const openWaveformDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(WAVEFORM_CACHE_DB, 1);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(WAVEFORM_STORE)) {
+        db.createObjectStore(WAVEFORM_STORE);
+      }
+    };
+  });
+};
+
+const getCachedWaveform = async (audioUrl: string): Promise<Float32Array | null> => {
+  try {
+    const db = await openWaveformDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([WAVEFORM_STORE], 'readonly');
+      const store = transaction.objectStore(WAVEFORM_STORE);
+      const request = store.get(audioUrl);
+      
+      request.onsuccess = () => {
+        if (request.result) {
+          console.log('🎵 Using cached waveform for:', audioUrl);
+          resolve(new Float32Array(request.result));
+        } else {
+          resolve(null);
+        }
+      };
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.error('Error getting cached waveform:', error);
+    return null;
+  }
+};
+
+const cacheWaveform = async (audioUrl: string, peaks: Float32Array): Promise<void> => {
+  try {
+    const db = await openWaveformDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([WAVEFORM_STORE], 'readwrite');
+      const store = transaction.objectStore(WAVEFORM_STORE);
+      const request = store.put(Array.from(peaks), audioUrl);
+      
+      request.onsuccess = () => {
+        console.log('🎵 Cached waveform for:', audioUrl);
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.error('Error caching waveform:', error);
+  }
+};
+
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, onDelete }) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const wavesurfer = useRef<WaveSurfer | null>(null);
@@ -19,38 +82,58 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
   useEffect(() => {
     if (!waveformRef.current) return;
 
-    // Initialize WaveSurfer
-    wavesurfer.current = WaveSurfer.create({
-      container: waveformRef.current,
-      waveColor: '#3B81F6',
-      progressColor: '#3B81F6',
-      cursorColor: '#3B81F6',
-      barWidth: 2,
-      barRadius: 3,
-      height: 60,
-      normalize: true,
-      mediaControls: false,
-    });
+    const initializeWaveSurfer = async () => {
+      // Initialize WaveSurfer
+      wavesurfer.current = WaveSurfer.create({
+        container: waveformRef.current!,
+        waveColor: '#3B81F6',
+        progressColor: '#3B81F6',
+        cursorColor: '#3B81F6',
+        barWidth: 2,
+        barRadius: 3,
+        height: 60,
+        normalize: true,
+        mediaControls: false,
+      });
 
-    // Load audio
-    wavesurfer.current.load(audioUrl);
+      // Check for cached waveform
+      const cachedPeaks = await getCachedWaveform(audioUrl);
+      
+      if (cachedPeaks) {
+        // Load audio with cached peaks for instant display
+        wavesurfer.current.load(audioUrl, [cachedPeaks]);
+      } else {
+        // Load audio normally and cache the peaks
+        wavesurfer.current.load(audioUrl);
+        
+        // Cache peaks after they're generated
+        wavesurfer.current.on('ready', () => {
+          const peaks = wavesurfer.current?.getDecodedData()?.getChannelData(0);
+          if (peaks) {
+            cacheWaveform(audioUrl, peaks);
+          }
+        });
+      }
 
-    // Event listeners
-    wavesurfer.current.on('ready', () => {
-      setIsLoading(false);
-      setDuration(wavesurfer.current?.getDuration() || 0);
-    });
+      // Event listeners
+      wavesurfer.current.on('ready', () => {
+        setIsLoading(false);
+        setDuration(wavesurfer.current?.getDuration() || 0);
+      });
 
-    wavesurfer.current.on('play', () => setIsPlaying(true));
-    wavesurfer.current.on('pause', () => setIsPlaying(false));
-    
-    wavesurfer.current.on('audioprocess', () => {
-      setCurrentTime(wavesurfer.current?.getCurrentTime() || 0);
-    });
+      wavesurfer.current.on('play', () => setIsPlaying(true));
+      wavesurfer.current.on('pause', () => setIsPlaying(false));
+      
+      wavesurfer.current.on('audioprocess', () => {
+        setCurrentTime(wavesurfer.current?.getCurrentTime() || 0);
+      });
 
-    wavesurfer.current.on('interaction', () => {
-      setCurrentTime(wavesurfer.current?.getCurrentTime() || 0);
-    });
+      wavesurfer.current.on('interaction', () => {
+        setCurrentTime(wavesurfer.current?.getCurrentTime() || 0);
+      });
+    };
+
+    initializeWaveSurfer();
 
     return () => {
       wavesurfer.current?.destroy();

@@ -255,6 +255,9 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
       setNewMessage('');
       setNotes('');
       
+      // Get current user ID for the temporary message
+      const { data: { user } } = await supabase.auth.getUser();
+      
       // Update the submissions array in the store to reflect the status change
       // This ensures other components using the same data are also updated
       const updatedSubmissions = submissions.map(sub => {
@@ -264,6 +267,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
             id: Date.now().toString(), // Temporary ID until refresh
             text: newMessage,
             isAdmin: !isArtistView,
+            userId: user?.id || null, // Include userId so sender name displays correctly
             createdAt: new Date().toISOString()
           };
           

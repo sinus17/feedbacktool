@@ -160,6 +160,7 @@ function App() {
               <Route path="/artist/:id/release-sheets" element={<ArtistReleaseSheets />} />
               <Route path="/artist/:id/release-sheets/:sheetId" element={<ReleaseSheetEditor />} />
               <Route path="/artist/:id/release-sheets/:sheetId/edit" element={<ReleaseSheetEditor />} />
+              <Route path="/release-sheets/templates/:templateId/edit" element={<ReleaseSheetEditor />} />
               <Route path="/preview/:id" element={<PreviewArtistView />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />

@@ -16,6 +16,7 @@ const reportingSupabase = createClient(
 export interface Release {
   id: string;
   title: string;
+  artist_id?: string;
   artist_name?: string;
   release_date?: string;
   status?: string;

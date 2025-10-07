@@ -44,6 +44,12 @@ export const ArtistReleaseSheets: React.FC = () => {
 
   const filteredSheets = releaseSheets;
 
+  // Filter releases to only show those for the current artist
+  const filteredReleases = releases.filter(release => {
+    if (!artist) return false;
+    return release.artist_name?.toLowerCase() === artist.name.toLowerCase();
+  });
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -268,7 +274,7 @@ export const ArtistReleaseSheets: React.FC = () => {
         {showCreateModal && (
           <CreateSheetModal
             artistId={id!}
-            releases={releases}
+            releases={filteredReleases}
             onClose={() => setShowCreateModal(false)}
             onSuccess={() => {
               setShowCreateModal(false);
@@ -314,7 +320,17 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
           return;
         }
         
-        setTemplates(Array.isArray(data) ? data : []);
+        const templateList = Array.isArray(data) ? data : [];
+        setTemplates(templateList);
+        
+        // Auto-select "Release Sheet Template (DE)" if available
+        const deTemplate = templateList.find(t => 
+          t.name?.includes('Release Sheet Template') && 
+          (t.name?.includes('(DE)') || t.language === 'de')
+        );
+        if (deTemplate) {
+          setTemplateId(deTemplate.id);
+        }
       } catch (error) {
         console.error('Error loading templates:', error);
       }
@@ -349,7 +365,7 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
         release_title: selectedRelease?.title || null,
         content: selectedTemplate?.content || { blocks: [] },
         status: 'draft',
-        tags: selectedTemplate?.tags || [],
+        tags: [],
         cover_image_url: null,
         due_date: formattedDueDate,
         completed_at: null
@@ -393,7 +409,30 @@ const CreateSheetModal: React.FC<CreateSheetModalProps> = ({
               </label>
               <select
                 value={releaseId}
-                onChange={(e) => setReleaseId(e.target.value)}
+                onChange={(e) => {
+                  const selectedId = e.target.value;
+                  setReleaseId(selectedId);
+                  
+                  if (selectedId) {
+                    const selectedRelease = releases.find(r => r.id === selectedId);
+                    if (selectedRelease) {
+                      // Auto-fill title with release name if title is empty
+                      if (!title.trim()) {
+                        setTitle(selectedRelease.title);
+                      }
+                      
+                      // Auto-fill release date if date is empty and release has a date
+                      if (!dueDate.trim() && selectedRelease.release_date) {
+                        // Convert yyyy-mm-dd to dd/mm/yyyy
+                        const date = new Date(selectedRelease.release_date);
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const year = date.getFullYear();
+                        setDueDate(`${day}/${month}/${year}`);
+                      }
+                    }
+                  }
+                }}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="">Select a release (optional)</option>

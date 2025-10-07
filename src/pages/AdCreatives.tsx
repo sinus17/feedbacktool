@@ -45,6 +45,17 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
     isOpen: false,
     creativeId: null,
   });
+  const [selectedCreatives, setSelectedCreatives] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirmation, setBulkDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    count: number;
+  }>({
+    isOpen: false,
+    count: 0,
+  });
+  const [bulkDeleteInput, setBulkDeleteInput] = useState('');
+  const [isHoveringTable, setIsHoveringTable] = useState(false);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
   const { 
     adCreatives, 
@@ -187,6 +198,66 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
     setDeleteConfirmation({ isOpen: false, creativeId: null });
   };
 
+  const handleBulkDelete = async () => {
+    if (parseInt(bulkDeleteInput) !== selectedCreatives.size) {
+      return;
+    }
+
+    try {
+      // Delete all selected creatives
+      await Promise.all(
+        Array.from(selectedCreatives).map(id => deleteAdCreative(id))
+      );
+      
+      // Clear selection and close modal
+      setSelectedCreatives(new Set());
+      setBulkDeleteConfirmation({ isOpen: false, count: 0 });
+      setBulkDeleteInput('');
+    } catch (error: any) {
+      console.error('Error deleting ad creatives:', error);
+    }
+  };
+
+  const toggleSelectCreative = (id: string, index: number, shiftKey: boolean = false) => {
+    const newSelected = new Set(selectedCreatives);
+    
+    if (shiftKey && lastSelectedIndex !== null) {
+      // Shift-click: select range
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      
+      for (let i = start; i <= end; i++) {
+        newSelected.add(filteredCreatives[i].id);
+      }
+    } else {
+      // Normal click: toggle single item
+      if (newSelected.has(id)) {
+        newSelected.delete(id);
+      } else {
+        newSelected.add(id);
+      }
+    }
+    
+    setSelectedCreatives(newSelected);
+    setLastSelectedIndex(index);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedCreatives.size === filteredCreatives.length) {
+      setSelectedCreatives(new Set());
+    } else {
+      setSelectedCreatives(new Set(filteredCreatives.map(c => c.id)));
+    }
+  };
+
+  const handleBulkDeleteClick = () => {
+    setBulkDeleteConfirmation({
+      isOpen: true,
+      count: selectedCreatives.size,
+    });
+    setBulkDeleteInput('');
+  };
+
   const handleArchive = async (creative: { id: string; status: string }) => {
     try {
       await archiveAdCreative(creative.id);
@@ -287,6 +358,9 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
   // Determine if we're in artist view
   const isArtistView = !!artistId;
 
+  // Check if any filter is active (required for bulk selection)
+  const hasActiveFilter = !!(selectedArtist || selectedPlatform || selectedStatus);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -317,10 +391,43 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
       )}
 
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Bulk actions bar */}
+        {!isArtistView && hasActiveFilter && selectedCreatives.size > 0 && (
+          <div className="bg-primary-50 dark:bg-primary-900/20 border-b border-primary-200 dark:border-primary-800 px-6 py-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-primary-900 dark:text-primary-100">
+              {selectedCreatives.size} ad creative{selectedCreatives.size !== 1 ? 's' : ''} selected
+            </span>
+            <button
+              onClick={handleBulkDeleteClick}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors text-sm font-medium"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Selected
+            </button>
+          </div>
+        )}
+        <div 
+          className="overflow-x-auto"
+          onMouseEnter={() => setIsHoveringTable(true)}
+          onMouseLeave={() => setIsHoveringTable(false)}
+        >
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
+                {!isArtistView && hasActiveFilter && (
+                  <th className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider transition-all duration-200 ${
+                    isHoveringTable || selectedCreatives.size > 0 ? 'w-12 opacity-100' : 'w-0 opacity-0 px-0'
+                  }`}>
+                    {(isHoveringTable || selectedCreatives.size > 0) && (
+                      <input
+                        type="checkbox"
+                        checked={selectedCreatives.size === filteredCreatives.length && filteredCreatives.length > 0}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+                      />
+                    )}
+                  </th>
+                )}
                 {!isArtistView && (
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Artist
@@ -346,13 +453,13 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan={isArtistView ? 5 : 6} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={isArtistView ? 5 : (hasActiveFilter ? 7 : 6)} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                     Loading...
                   </td>
                 </tr>
               ) : filteredCreatives.length === 0 ? (
                 <tr>
-                  <td colSpan={isArtistView ? 5 : 6} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={isArtistView ? 5 : (hasActiveFilter ? 7 : 6)} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                     {(selectedArtist || selectedPlatform || selectedStatus) ? 'No ad creatives match the selected filters' : 'No ad creatives found'}
                   </td>
                 </tr>
@@ -364,9 +471,32 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                       (creative.platform === 'dropbox' || creative.platform === 'direct_upload') 
                         ? 'cursor-pointer' 
                         : ''
+                    } ${
+                      selectedCreatives.has(creative.id) ? 'bg-primary-50 dark:bg-primary-900/10' : ''
                     }`}
                     onClick={(e) => handleRowClick(creative, e)}
                   >
+                    {!isArtistView && hasActiveFilter && (
+                      <td 
+                        className={`px-6 py-4 whitespace-nowrap transition-all duration-200 ${
+                          isHoveringTable || selectedCreatives.size > 0 ? 'w-12 opacity-100' : 'w-0 opacity-0 px-0'
+                        }`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {(isHoveringTable || selectedCreatives.size > 0) && (
+                          <input
+                            type="checkbox"
+                            checked={selectedCreatives.has(creative.id)}
+                            onChange={() => {}}
+                            onClick={(e) => {
+                              const index = filteredCreatives.findIndex(c => c.id === creative.id);
+                              toggleSelectCreative(creative.id, index, e.shiftKey);
+                            }}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+                          />
+                        )}
+                      </td>
+                    )}
                     {!isArtistView && (
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900 dark:text-gray-100">
@@ -750,6 +880,49 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirmation({ isOpen: false, creativeId: null })}
       />
+
+      {/* Bulk delete confirmation modal */}
+      {bulkDeleteConfirmation.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Delete Multiple Ad Creatives
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              You are about to delete <strong>{bulkDeleteConfirmation.count}</strong> ad creative{bulkDeleteConfirmation.count !== 1 ? 's' : ''}. This action cannot be undone.
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              To confirm, please enter the number of ad creatives you want to delete:
+            </p>
+            <input
+              type="number"
+              value={bulkDeleteInput}
+              onChange={(e) => setBulkDeleteInput(e.target.value)}
+              placeholder={`Enter ${bulkDeleteConfirmation.count}`}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white mb-4"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setBulkDeleteConfirmation({ isOpen: false, count: 0 });
+                  setBulkDeleteInput('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={parseInt(bulkDeleteInput) !== bulkDeleteConfirmation.count}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Delete {bulkDeleteConfirmation.count} Ad Creative{bulkDeleteConfirmation.count !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <VideoPreviewModal
         isOpen={previewModal.isOpen}
