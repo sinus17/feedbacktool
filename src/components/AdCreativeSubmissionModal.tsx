@@ -410,6 +410,41 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
       // Refresh ad creatives to show the new entries
       await fetchAdCreatives();
       
+      // Send WhatsApp notification to ad creative group
+      try {
+        const selectedArtistId = artistId || selectedArtist;
+        const artist = artists.find(a => a.id === selectedArtistId);
+        
+        if (artist) {
+          // Count creatives by platform
+          const platformCounts = new Map<string, number>();
+          entries.forEach(entry => {
+            platformCounts.set(entry.platform, (platformCounts.get(entry.platform) || 0) + 1);
+          });
+          
+          const platforms = Array.from(platformCounts.entries()).map(([platform, count]) => ({
+            platform,
+            count
+          }));
+          
+          // Import WhatsAppService dynamically
+          const { WhatsAppService } = await import('../services/whatsapp');
+          
+          // Send notification
+          await WhatsAppService.notifyAdCreativeSubmission({
+            artistName: artist.name,
+            artistId: selectedArtistId,
+            platforms,
+            totalCount: entries.length
+          });
+          
+          console.log('✅ WhatsApp notification sent for new ad creative submission');
+        }
+      } catch (notifyError) {
+        console.error('❌ Error sending WhatsApp notification:', notifyError);
+        // Don't fail the submission if notification fails
+      }
+      
       onClose();
     } catch (err) {
       console.error('Error submitting URLs:', err);

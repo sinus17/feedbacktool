@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 
 class WhatsAppServiceImpl implements IWhatsAppService {
   private readonly TEAM_GROUP_ID = import.meta.env.VITE_TEAM_GROUP_ID || '120363291976373833';
+  private readonly AD_CREATIVE_GROUP_ID = import.meta.env.VITE_AD_CREATIVE_GROUP_ID || '120363376937486419';
   // Notification configuration
   private readonly NOTIFICATION_RULES = {
     ADMIN_FEEDBACK_TO_ARTIST_ONLY: true,  // When admin sends feedback, only notify artist
@@ -742,6 +743,93 @@ class WhatsAppServiceImpl implements IWhatsAppService {
         'ad_creative_submission',
         'error',
         'Failed to send ad creative update notification',
+        error instanceof Error ? error.message : String(error),
+        {
+          ...params,
+          error: error instanceof Error ? 
+            { message: error.message, stack: error.stack } : 
+            String(error)
+        }
+      );
+    }
+  }
+
+  async notifyAdCreativeSubmission(params: {
+    artistName: string;
+    artistId: string;
+    platforms: { platform: string; count: number }[];
+    totalCount: number;
+  }): Promise<void> {
+    // Always run in background with fire-and-forget approach
+    setTimeout(() => this.notifyAdCreativeSubmissionInternal(params), 0);
+  }
+  
+  private async notifyAdCreativeSubmissionInternal(params: {
+    artistName: string;
+    artistId: string;
+    platforms: { platform: string; count: number }[];
+    totalCount: number;
+  }): Promise<void> {
+    try {
+      console.log('🔔 WhatsApp: notifyAdCreativeSubmission called for', params.artistName);
+      console.log('🔔 WhatsApp: Using token:', WHATSAPP_CONFIG.TOKEN ? 'Available (hidden)' : 'Not available');
+      
+      const adCreativeGroupId = this.AD_CREATIVE_GROUP_ID;
+      const cleanGroupId = adCreativeGroupId ? adCreativeGroupId.replace(/[^0-9]/g, '').trim() : '';
+      
+      console.log('🔔 WhatsApp: Ad Creative group ID:', adCreativeGroupId, 'Cleaned:', cleanGroupId);
+      
+      if (!cleanGroupId || cleanGroupId.length < 15) {
+        console.error('❌ WhatsApp: Invalid ad creative group ID');
+        await this.logNotification(
+          'ad_creative_submission',
+          'error',
+          'Failed to send ad creative submission notification - Invalid group ID',
+          `Ad creative group ID invalid: ${adCreativeGroupId}, cleaned: ${cleanGroupId}`,
+          params
+        );
+        return;
+      }
+
+      // Build platform summary
+      const platformSummary = params.platforms
+        .map(p => {
+          const platformName = p.platform === 'instagram' ? '📸 Instagram' :
+                              p.platform === 'tiktok' ? '🎵 TikTok' :
+                              p.platform === 'dropbox' ? '📦 Dropbox' :
+                              p.platform === 'direct_upload' ? '⬆️ Direct Upload' :
+                              p.platform;
+          return `${platformName}: ${p.count}`;
+        })
+        .join('\n');
+
+      const message = `🎬 *New Ad Creatives Submitted*\n\n` +
+        `Artist: ${params.artistName}\n` +
+        `Total: ${params.totalCount} ad creative${params.totalCount !== 1 ? 's' : ''}\n\n` +
+        `${platformSummary}\n\n` +
+        `🔗 View details: https://tool.swipeup-marketing.com/ad-creatives`;
+
+      console.log('🔔 WhatsApp: Sending ad creative submission notification (fire and forget)');
+      this.sendMessageFireAndForget({
+        groupId: cleanGroupId,
+        text: message
+      });
+      
+      console.log('✅ WhatsApp: Ad creative submission notification dispatched');
+      
+      await this.logNotification(
+        'ad_creative_submission',
+        'info',
+        `Ad creative submission notification dispatched for ${params.artistName}`,
+        undefined,
+        params
+      );
+    } catch (error) {
+      console.error('❌ WhatsApp: Error in notifyAdCreativeSubmission:', error);
+      await this.logNotification(
+        'ad_creative_submission',
+        'error',
+        'Failed to send ad creative submission notification',
         error instanceof Error ? error.message : String(error),
         {
           ...params,

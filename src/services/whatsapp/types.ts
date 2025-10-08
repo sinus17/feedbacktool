@@ -42,4 +42,10 @@ export interface WhatsAppService {
    previousContent?: string;
     videoName?: string;
   }) => Promise<void>;
+  notifyAdCreativeSubmission: (params: {
+    artistName: string;
+    artistId: string;
+    platforms: { platform: string; count: number }[];
+    totalCount: number;
+  }) => Promise<void>;
 }

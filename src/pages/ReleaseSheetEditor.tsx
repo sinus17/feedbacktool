@@ -12,9 +12,10 @@ export const ReleaseSheetEditor: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const fromAdmin = (location.state as any)?.fromAdmin === true;
-  const isTemplate = !!templateId; // Check if we're editing a template
+  const isTemplateFromState = (location.state as any)?.isTemplate === true;
+  const isTemplate = !!templateId || (artistId === 'template' || isTemplateFromState); // Check if we're editing a template
   const itemId = templateId || sheetId; // Use templateId if available, otherwise sheetId
-  const backPath = isTemplate ? '/release-sheets?tab=templates' : (fromAdmin ? '/release-sheets' : `/artist/${artistId}/release-sheets`);
+  const backPath = fromAdmin ? '/release-sheets' : (artistId === 'template' ? '/release-sheets' : `/artist/${artistId}/release-sheets`);
   
   const [sheet, setSheet] = useState<ReleaseSheet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,9 +90,33 @@ export const ReleaseSheetEditor: React.FC = () => {
         console.log('sheetData.content exists?', !!sheetData?.content);
         
         if (editorRef.current && sheetData && sheetData.content) {
-          const htmlContent = sheetData.content.blocks
+          let htmlContent = sheetData.content.blocks
             ?.map((block: any) => block.content || '')
             .join('<br>') || '';
+          
+          // Create a temporary div to parse and clean the HTML
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = htmlContent;
+          
+          // Remove ALL inline styles from all elements to ensure clean rendering
+          const allElements = tempDiv.querySelectorAll('*');
+          allElements.forEach((el: any) => {
+            // Completely remove the style attribute
+            el.removeAttribute('style');
+          });
+          
+          // Remove image-container wrapper divs that have dark backgrounds
+          const imageContainers = tempDiv.querySelectorAll('.image-container');
+          imageContainers.forEach((container: any) => {
+            // Get the inner content (the actual content inside the wrapper)
+            const innerContent = container.innerHTML;
+            // Replace the container with just its content
+            const fragment = document.createElement('div');
+            fragment.innerHTML = innerContent;
+            container.replaceWith(...Array.from(fragment.childNodes));
+          });
+          
+          htmlContent = tempDiv.innerHTML;
           
           console.log('=== SETTING INNERHTML ===');
           console.log('HTML content length:', htmlContent.length);
@@ -1696,20 +1721,26 @@ export const ReleaseSheetEditor: React.FC = () => {
                 <Redo className="h-4 w-4" />
               </button>
               {fromAdmin && (
-                <div className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">
-                  <button 
-                    onClick={saveAsTemplate}
-                    className="p-2 hover:bg-green-100 dark:hover:bg-green-700 rounded transition-colors text-green-600 dark:text-green-400" 
-                    title="Save as Template"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14,2 14,8 20,8"></polyline>
-                      <line x1="16" x2="8" y1="13" y2="13"></line>
-                      <line x1="16" x2="8" y1="17" y2="17"></line>
-                      <polyline points="10,9 9,9 8,9"></polyline>
-                    </svg>
-                  </button>
+                <div className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2 flex items-center gap-2">
+                  {isTemplate ? (
+                    <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs font-medium rounded">
+                      Template
+                    </span>
+                  ) : (
+                    <button 
+                      onClick={saveAsTemplate}
+                      className="p-2 hover:bg-green-100 dark:hover:bg-green-700 rounded transition-colors text-green-600 dark:text-green-400" 
+                      title="Save as Template"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14,2 14,8 20,8"></polyline>
+                        <line x1="16" x2="8" y1="13" y2="13"></line>
+                        <line x1="16" x2="8" y1="17" y2="17"></line>
+                        <polyline points="10,9 9,9 8,9"></polyline>
+                      </svg>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1827,6 +1858,21 @@ export const ReleaseSheetEditor: React.FC = () => {
           content: attr(data-placeholder);
           color: #9ca3af;
           pointer-events: none;
+        }
+        
+        [contenteditable] {
+          opacity: 1 !important;
+          visibility: visible !important;
+          display: block !important;
+        }
+        
+        [contenteditable] * {
+          opacity: 1 !important;
+          visibility: visible !important;
+        }
+        
+        [contenteditable]:focus {
+          outline: none;
         }
         
         [contenteditable] h1 {
