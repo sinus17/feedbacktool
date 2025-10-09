@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Loader, TrendingUp, Grid3x3, List } from 'lucide-react';
+import { Plus, Search, Loader, TrendingUp, Grid3x3, List, Play } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { cache } from '../lib/cache';
 import { AddVideoModal } from '../components/library/AddVideoModal';
 import { VideoCard } from '../components/library/VideoCard';
 import { VideoDetailModal } from '../components/library/VideoDetailModal';
+import { FeedView } from '../components/library/FeedView';
 import type { LibraryVideo } from '../types';
 
 const CACHE_KEY = 'library_videos_v3'; // Updated for German-first analysis
@@ -12,6 +14,7 @@ const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 export const Library: React.FC = () => {
   console.log('📚 Library component mounted');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [videos, setVideos] = useState<LibraryVideo[]>([]);
   const [filteredVideos, setFilteredVideos] = useState<LibraryVideo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,9 +24,10 @@ export const Library: React.FC = () => {
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [userTeam, setUserTeam] = useState<string>('');
   const [processingVideos, setProcessingVideos] = useState<Set<string>>(new Set());
+  
+  const activeTab = searchParams.get('tab') || 'grid';
 
   useEffect(() => {
     console.log('🔄 Library useEffect triggered - starting data load');
@@ -243,6 +247,11 @@ export const Library: React.FC = () => {
   const genres = Array.from(new Set(videos.flatMap((v) => v.genre || []).filter(Boolean)));
   const canEdit = userTeam === 'admin' || userTeam === 'management';
 
+  // If feed mode, show FeedView
+  if (activeTab === 'feed') {
+    return <FeedView videos={filteredVideos} />;
+  }
+
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: '#111111' }}>
       {/* Hero Section */}
@@ -319,22 +328,39 @@ export const Library: React.FC = () => {
             </button>
 
             {/* View Mode Toggle */}
-            <div className="flex gap-1 bg-dark-700 rounded-lg p-1">
+            <div className="flex gap-2">
               <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded ${
-                  viewMode === 'grid' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:text-white'
+                onClick={() => setSearchParams({ tab: 'grid' })}
+                className={`p-2 rounded-lg transition-colors ${
+                  activeTab === 'grid'
+                    ? 'bg-primary-500 text-white'
+                    : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
                 }`}
+                title="Grid View"
               >
-                <Grid3x3 className="h-4 w-4" />
+                <Grid3x3 className="h-5 w-5" />
               </button>
               <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded ${
-                  viewMode === 'list' ? 'bg-primary-500 text-white' : 'text-gray-400 hover:text-white'
+                onClick={() => setSearchParams({ tab: 'list' })}
+                className={`p-2 rounded-lg transition-colors ${
+                  activeTab === 'list'
+                    ? 'bg-primary-500 text-white'
+                    : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
                 }`}
+                title="List View"
               >
-                <List className="h-4 w-4" />
+                <List className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => setSearchParams({ tab: 'feed' })}
+                className={`p-2 rounded-lg transition-colors ${
+                  activeTab === 'feed'
+                    ? 'bg-primary-500 text-white'
+                    : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
+                }`}
+                title="Feed View (TikTok Style)"
+              >
+                <Play className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -368,9 +394,9 @@ export const Library: React.FC = () => {
         ) : (
           <div
             className={
-              viewMode === 'grid'
-                ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4'
-                : 'space-y-4'
+              activeTab === 'list'
+                ? 'space-y-4'
+                : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4'
             }
           >
             {filteredVideos.map((video) => (
