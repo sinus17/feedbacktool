@@ -1,3 +1,4 @@
+// @ts-nocheck - This file runs in Deno runtime, not Node.js
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 Deno.serve(async (req) => {

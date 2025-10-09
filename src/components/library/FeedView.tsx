@@ -1,85 +1,348 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Play, Pause } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Share2, Play, Volume2, VolumeX, X, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import type { LibraryVideo } from '../../types';
 
 interface FeedViewProps {
   videos: LibraryVideo[];
 }
 
+// Shuffle array using Fisher-Yates algorithm
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
 export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  // Randomize videos when they first load
+  const [shuffledVideos, setShuffledVideos] = useState<LibraryVideo[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const prevIndexRef = useRef(0); // Track previous index to determine direction
+  const hasShuffledRef = useRef(false); // Track if we've already shuffled
+  const isNavigatingRef = useRef(false); // Prevent multiple navigations at once
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [isLiked, setIsLiked] = useState(false);
+  const [showHeartAnimation, setShowHeartAnimation] = useState(false);
+  const [showFullCaption, setShowFullCaption] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastTapRef = useRef<number>(0);
 
-  const currentVideo = videos[currentIndex];
+  // Shuffle videos when they load (only once)
+  useEffect(() => {
+    if (videos.length > 0 && !hasShuffledRef.current) {
+      console.log('🔀 Shuffling videos:', videos.length);
+      setShuffledVideos(shuffleArray(videos));
+      hasShuffledRef.current = true;
+    }
+  }, [videos]);
+
+  const currentVideo = shuffledVideos[currentIndex];
+  const prevVideo = currentIndex > 0 ? shuffledVideos[currentIndex - 1] : null;
+  const nextVideo = currentIndex < shuffledVideos.length - 1 ? shuffledVideos[currentIndex + 1] : null;
+
+  // Determine animation direction based on index change
+  const animationDirection = currentIndex > prevIndexRef.current ? 'down' : 'up';
+  
+  // Log video state on index change (only when videos exist)
+  useEffect(() => {
+    if (shuffledVideos.length > 0) {
+      console.log('📹 Video State:', {
+        index: `${currentIndex}/${shuffledVideos.length - 1}`,
+        direction: animationDirection,
+        current: currentVideo?.id,
+        prev: prevVideo?.id || 'none',
+        next: nextVideo?.id || 'none'
+      });
+    }
+  }, [currentIndex]);
+
+  const handleBack = () => {
+    // Try to go back in history, or fallback to /library
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/library');
+    }
+  };
 
   // Auto-play current video
   useEffect(() => {
-    if (videoRef.current && isPlaying) {
-      videoRef.current.play().catch(err => console.error('Autoplay failed:', err));
-    } else if (videoRef.current && !isPlaying) {
-      videoRef.current.pause();
-    }
-  }, [currentIndex, isPlaying]);
+    const playVideo = async () => {
+      if (videoRef.current) {
+        // Reset playing state
+        setIsPlaying(true);
+        
+        try {
+          // Try to play with sound first
+          await videoRef.current.play();
+          console.log('✅ Video playing with sound');
+        } catch (err) {
+          console.warn('⚠️ Autoplay with sound failed, trying muted:', err);
+          // If autoplay fails, try muted
+          if (videoRef.current) {
+            videoRef.current.muted = true;
+            setIsMuted(true);
+            try {
+              await videoRef.current.play();
+              console.log('✅ Video playing muted');
+            } catch (e) {
+              console.error('❌ Muted autoplay also failed:', e);
+            }
+          }
+        }
+      }
+    };
+
+    // Small delay to ensure video is loaded
+    const timer = setTimeout(playVideo, 150);
+    return () => clearTimeout(timer);
+  }, [currentIndex]);
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't navigate if analysis modal is open
+      if (showAnalysis) return;
+      
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        navigateToPrevious();
+        navigateToPrevious(); // Up arrow = previous video (scroll up)
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        navigateToNext();
+        navigateToNext(); // Down arrow = next video (scroll down)
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, videos.length]);
+  }, [currentIndex, shuffledVideos.length, showAnalysis]);
 
-  // Scroll navigation
+  // Scroll navigation - instant trigger with 100ms block
   useEffect(() => {
+    let isBlocked = false;
+
     const handleWheel = (e: WheelEvent) => {
+      // Don't navigate if analysis modal is open or blocked
+      if (showAnalysis || isBlocked) {
+        e.preventDefault();
+        return;
+      }
+      
       e.preventDefault();
-      if (e.deltaY > 0) {
-        navigateToNext();
-      } else if (e.deltaY < 0) {
-        navigateToPrevious();
+      
+      // Threshold: need significant scroll to trigger navigation
+      if (Math.abs(e.deltaY) > 10) {
+        isBlocked = true;
+        
+        // Trigger navigation immediately
+        if (e.deltaY > 0) {
+          navigateToNext(); // Scroll down = next video
+        } else {
+          navigateToPrevious(); // Scroll up = previous video
+        }
+        
+        // Unblock after 100ms
+        setTimeout(() => {
+          isBlocked = false;
+        }, 100);
       }
     };
 
     const container = containerRef.current;
     if (container) {
       container.addEventListener('wheel', handleWheel, { passive: false });
-      return () => container.removeEventListener('wheel', handleWheel);
+      return () => {
+        container.removeEventListener('wheel', handleWheel);
+      };
     }
-  }, [currentIndex, videos.length]);
+  }, [currentIndex, shuffledVideos.length, showAnalysis]);
 
   const navigateToNext = () => {
-    if (currentIndex < videos.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+    // Prevent rapid navigation
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    
+    if (currentIndex < shuffledVideos.length - 1) {
       setShowAnalysis(false);
+      console.log('⬇️ FORWARD: Next video from bottom, current exits to top');
+      // Update ref BEFORE changing index so direction calculation is correct
+      prevIndexRef.current = currentIndex;
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      // Reached the end - reshuffle and start over
+      console.log('🔄 End of feed - reshuffling videos');
+      setShowAnalysis(false);
+      const newShuffle = shuffleArray(shuffledVideos);
+      setShuffledVideos(newShuffle);
+      prevIndexRef.current = 0;
+      setCurrentIndex(0);
     }
+    
+    // Allow next navigation after animation completes
+    setTimeout(() => {
+      isNavigatingRef.current = false;
+    }, 500);
   };
 
   const navigateToPrevious = () => {
+    // Prevent rapid navigation
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    
     if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
       setShowAnalysis(false);
+      console.log('⬆️ BACK: Previous video from top, current exits to bottom');
+      // Update ref BEFORE changing index so direction calculation is correct
+      prevIndexRef.current = currentIndex;
+      setCurrentIndex(currentIndex - 1);
+    }
+    
+    // Allow next navigation after animation completes
+    setTimeout(() => {
+      isNavigatingRef.current = false;
+    }, 500);
+  };
+
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
     }
   };
 
-  const togglePlayPause = () => {
-    setIsPlaying(!isPlaying);
+  const handleStatsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowAnalysis(true);
   };
 
-  const handleVideoClick = () => {
-    setShowAnalysis(!showAnalysis);
+  // Format large numbers (1.7M, 269K, etc.)
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    }
+    return num.toString();
   };
+
+  // Check if video is liked
+  useEffect(() => {
+    const checkLikeStatus = async () => {
+      if (!currentUser || !currentVideo) return;
+      
+      const { data, error } = await (supabase as any)
+        .from('video_likes')
+        .select('id')
+        .eq('video_id', currentVideo.id)
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+      
+      setIsLiked(!!data && !error);
+    };
+    
+    checkLikeStatus();
+  }, [currentVideo?.id, currentUser]);
+
+  // Handle video tap - single tap = pause/play, double tap = like
+  const handleVideoTap = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300; // ms
+    
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY && lastTapRef.current !== 0) {
+      // Double tap detected - like the video!
+      console.log('❤️ Double tap - Like!');
+      toggleLike();
+      lastTapRef.current = 0; // Reset to prevent triple-tap issues
+    } else {
+      // Potential single tap - wait to confirm
+      console.log('👆 Single tap detected - waiting...');
+      const tapTime = now;
+      lastTapRef.current = tapTime;
+      
+      // Wait to see if it's a double tap
+      setTimeout(() => {
+        if (lastTapRef.current === tapTime) {
+          // Find the video element - use ref or query selector as fallback
+          const videoElement = videoRef.current || (e.target as HTMLElement).querySelector('video') || document.querySelector('video');
+          
+          // Still a single tap after delay - toggle play/pause
+          console.log('⏯️ Confirmed single tap - Toggle play/pause', { 
+            isPlaying, 
+            hasVideoElement: !!videoElement,
+            videoPaused: videoElement?.paused 
+          });
+          
+          if (videoElement) {
+            if (videoElement.paused) {
+              console.log('▶️ Playing video');
+              videoElement.play().catch(err => console.error('Play error:', err));
+              setIsPlaying(true);
+            } else {
+              console.log('⏸️ Pausing video');
+              videoElement.pause();
+              setIsPlaying(false);
+            }
+          } else {
+            console.error('❌ videoElement is null!');
+          }
+          lastTapRef.current = 0; // Reset after handling
+        }
+      }, DOUBLE_TAP_DELAY);
+    }
+  };
+
+  // Toggle like status
+  const toggleLike = async () => {
+    if (!currentUser || !currentVideo) return;
+    
+    if (isLiked) {
+      // Unlike
+      await (supabase as any)
+        .from('video_likes')
+        .delete()
+        .eq('video_id', currentVideo.id)
+        .eq('user_id', currentUser.id);
+      
+      setIsLiked(false);
+    } else {
+      // Like
+      await (supabase as any)
+        .from('video_likes')
+        .insert({
+          video_id: currentVideo.id,
+          user_id: currentUser.id
+        });
+      
+      setIsLiked(true);
+      setShowHeartAnimation(true);
+      setTimeout(() => setShowHeartAnimation(false), 1000);
+    }
+  };
+
+  if (shuffledVideos.length === 0) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-black text-white">
+        <div className="text-center">
+          <p className="text-xl mb-2">Loading videos...</p>
+          <p className="text-gray-400 text-sm">Please wait</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentVideo) {
     return (
@@ -95,18 +358,85 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 bg-black overflow-hidden"
+      className="fixed inset-0 bg-black overflow-hidden flex items-center justify-center"
       style={{ height: '100vh', width: '100vw' }}
     >
-      {/* Video */}
-      <video
-        ref={videoRef}
-        src={currentVideo.videoUrl}
-        className="absolute inset-0 w-full h-full object-contain"
-        loop
-        playsInline
-        onClick={handleVideoClick}
-      />
+      {/* 9:16 Container */}
+      <div className="relative bg-black overflow-hidden" style={{ 
+        width: '100%',
+        maxWidth: 'calc(100vh * 9 / 16)',
+        height: '100vh',
+        aspectRatio: '9/16'
+      }}>
+        {/* Top gradient overlay */}
+        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/50 to-transparent z-30 pointer-events-none" />
+        
+        {/* Bottom gradient overlay */}
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/50 to-transparent z-30 pointer-events-none" />
+        
+        {/* Seamless scroll container with pre-loaded videos */}
+        <div className="relative w-full h-full overflow-hidden">
+          <AnimatePresence initial={false}>
+            <motion.div
+              key={currentIndex}
+              initial={{ y: animationDirection === 'down' ? '100%' : '-100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: animationDirection === 'down' ? '-100%' : '100%' }}
+              transition={{ 
+                type: 'spring',
+                stiffness: 400,
+                damping: 40,
+                mass: 1,
+                restDelta: 0.01
+              }}
+              className="absolute inset-0"
+              onClick={handleVideoTap}
+              onTouchEnd={handleVideoTap}
+            >
+              <video
+                ref={videoRef}
+                src={currentVideo.videoUrl}
+                className="w-full h-full object-cover"
+                loop
+                playsInline
+                autoPlay
+                muted={isMuted}
+                poster={currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl}
+              />
+              
+              {/* Heart Animation on Double Tap */}
+              <AnimatePresence>
+                {showHeartAnimation && (
+                  <motion.div
+                    initial={{ scale: 0, opacity: 1 }}
+                    animate={{ scale: 1.5, opacity: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 1 }}
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                  >
+                    <Heart className="w-32 h-32 text-red-500 fill-red-500" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Preload adjacent videos */}
+          {prevVideo && (
+            <video
+              src={prevVideo.videoUrl}
+              className="hidden"
+              preload="auto"
+            />
+          )}
+          {nextVideo && (
+            <video
+              src={nextVideo.videoUrl}
+              className="hidden"
+              preload="auto"
+            />
+          )}
+        </div>
 
       {/* Darkened overlay when analysis is shown */}
       <AnimatePresence>
@@ -122,90 +452,153 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
       </AnimatePresence>
 
       {/* Left side: Author info and caption */}
-      <div className="absolute bottom-0 left-0 p-6 pb-20 max-w-2xl z-10">
+      <div className="absolute bottom-0 left-0 p-6 pb-20 pr-24 max-w-2xl z-10">
         <div className="flex items-center gap-3 mb-3">
           {/* Author profile picture */}
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
-            {(currentVideo as any).author_name?.charAt(0).toUpperCase() || 'U'}
-          </div>
+          {currentVideo.creatorAvatarUrl || currentVideo.creatorAvatarStorageUrl ? (
+            <img
+              src={currentVideo.creatorAvatarStorageUrl || currentVideo.creatorAvatarUrl}
+              alt={currentVideo.accountName || currentVideo.accountUsername || 'Author'}
+              className="w-12 h-12 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
+              {(currentVideo.accountName || currentVideo.accountUsername || 'U').charAt(0).toUpperCase()}
+            </div>
+          )}
           <div>
             <p className="text-white font-semibold">
-              {(currentVideo as any).author_name || 'Unknown Author'}
+              {currentVideo.accountName || currentVideo.accountUsername || 'Unknown Author'}
             </p>
             <p className="text-gray-300 text-sm">
-              {(currentVideo as any).author_follower_count?.toLocaleString() || '0'} followers
+              {formatNumber(currentVideo.followerCount || 0)} followers
             </p>
           </div>
         </div>
 
         {/* Caption */}
-        <p className="text-white text-sm leading-relaxed">
-          {(currentVideo as any).caption || currentVideo.title || 'No caption'}
-        </p>
+        <div className="text-white text-sm leading-relaxed">
+          <p className={showFullCaption ? '' : 'line-clamp-3'}>
+            {currentVideo.description || currentVideo.title || 'No caption'}
+          </p>
+          {(currentVideo.description || currentVideo.title || '').length > 100 && (
+            <button
+              onClick={() => setShowFullCaption(!showFullCaption)}
+              className="text-gray-400 text-sm mt-1 hover:text-white transition-colors"
+            >
+              {showFullCaption ? 'less' : 'more'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Right side: Stats */}
-      <div className="absolute right-4 bottom-20 flex flex-col gap-6 z-10">
-        {/* Like */}
-        <div className="flex flex-col items-center gap-1">
-          <button className="w-12 h-12 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors">
-            <Heart className="w-6 h-6 text-white" />
+      <div className="absolute right-4 bottom-5 flex flex-col gap-5 z-10 items-end">
+        {/* Views/Plays */}
+        <div className="flex flex-col items-center gap-0.5" onClick={handleStatsClick}>
+          <button className="p-2 transition-opacity hover:opacity-70">
+            <Play className="w-5 h-5 text-white drop-shadow-lg" />
           </button>
-          <span className="text-white text-xs font-semibold">
-            {currentVideo.likesCount?.toLocaleString() || '0'}
+          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+            {formatNumber(currentVideo.viewsCount || 0)}
+          </span>
+        </div>
+
+        {/* Like */}
+        <div className="flex flex-col items-center gap-0.5" onClick={toggleLike}>
+          <button className="p-2 transition-opacity hover:opacity-70">
+            <Heart 
+              className={`w-5 h-5 drop-shadow-lg transition-colors ${
+                isLiked ? 'text-red-500 fill-red-500' : 'text-white'
+              }`} 
+            />
+          </button>
+          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+            {formatNumber(currentVideo.likesCount || 0)}
           </span>
         </div>
 
         {/* Comment */}
-        <div className="flex flex-col items-center gap-1">
-          <button className="w-12 h-12 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors">
-            <MessageCircle className="w-6 h-6 text-white" />
+        <div className="flex flex-col items-center gap-0.5" onClick={handleStatsClick}>
+          <button className="p-2 transition-opacity hover:opacity-70">
+            <MessageCircle className="w-5 h-5 text-white drop-shadow-lg" />
           </button>
-          <span className="text-white text-xs font-semibold">
-            {currentVideo.commentsCount?.toLocaleString() || '0'}
+          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+            {formatNumber(currentVideo.commentsCount || 0)}
           </span>
         </div>
 
         {/* Save */}
-        <div className="flex flex-col items-center gap-1">
-          <button className="w-12 h-12 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors">
-            <Bookmark className="w-6 h-6 text-white" />
+        <div className="flex flex-col items-center gap-0.5" onClick={handleStatsClick}>
+          <button className="p-2 transition-opacity hover:opacity-70">
+            <Bookmark className="w-5 h-5 text-white drop-shadow-lg" />
           </button>
-          <span className="text-white text-xs font-semibold">
-            {(currentVideo as any).saves_count?.toLocaleString() || '0'}
+          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+            {formatNumber(currentVideo.collectCount || 0)}
           </span>
         </div>
 
         {/* Share */}
-        <div className="flex flex-col items-center gap-1">
-          <button className="w-12 h-12 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors">
-            <Share2 className="w-6 h-6 text-white" />
+        <div className="flex flex-col items-center gap-0.5" onClick={handleStatsClick}>
+          <button className="p-2 transition-opacity hover:opacity-70">
+            <Share2 className="w-5 h-5 text-white drop-shadow-lg" />
           </button>
-          <span className="text-white text-xs font-semibold">
-            {currentVideo.sharesCount?.toLocaleString() || '0'}
+          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+            {formatNumber(currentVideo.sharesCount || 0)}
           </span>
         </div>
 
-        {/* Views */}
-        <div className="flex flex-col items-center gap-1 mt-2">
-          <span className="text-white text-xs font-semibold">
-            {currentVideo.viewsCount?.toLocaleString() || '0'}
-          </span>
-          <span className="text-gray-400 text-xs">views</span>
+        {/* Rotating Album Artwork with Sound Name */}
+        <div className="flex items-center gap-2 justify-end">
+          {/* Sound Name - Scrolling if too long */}
+          <div className="max-w-[100px] overflow-hidden text-right">
+            {(() => {
+              const soundName = currentVideo.musicTitle 
+                ? `${currentVideo.musicTitle}${currentVideo.musicAuthor ? ' - ' + currentVideo.musicAuthor : ''}`
+                : (currentVideo.isOriginalSound ? 'Original Sound' : (currentVideo.title || 'Original Sound'));
+              
+              return soundName.length > 12 ? (
+                <motion.div
+                  animate={{ x: ['0%', '-50%'] }}
+                  transition={{
+                    duration: 8,
+                    repeat: Infinity,
+                    ease: "linear"
+                  }}
+                  className="whitespace-nowrap"
+                >
+                  <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+                    {soundName} • {soundName}
+                  </span>
+                </motion.div>
+              ) : (
+                <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+                  {soundName}
+                </span>
+              );
+            })()}
+          </div>
+          
+          {/* Rotating CD */}
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+            className="w-10 h-10 flex-shrink-0"
+          >
+            {currentVideo.musicCoverThumb || currentVideo.musicCoverMedium || currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl ? (
+              <img
+                src={currentVideo.musicCoverThumb || currentVideo.musicCoverMedium || currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl}
+                alt="Sound"
+                className="w-full h-full rounded-full object-cover border-2 border-white"
+              />
+            ) : (
+              <div className="w-full h-full rounded-full bg-gradient-to-br from-pink-500 to-purple-500 border-2 border-white flex items-center justify-center">
+                <Play className="w-4 h-4 text-white" />
+              </div>
+            )}
+          </motion.div>
         </div>
       </div>
-
-      {/* Play/Pause button */}
-      <button
-        onClick={togglePlayPause}
-        className="absolute top-4 right-4 w-12 h-12 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors z-10"
-      >
-        {isPlaying ? (
-          <Pause className="w-6 h-6 text-white" />
-        ) : (
-          <Play className="w-6 h-6 text-white ml-1" />
-        )}
-      </button>
 
       {/* Gemini Analysis Overlay */}
       <AnimatePresence>
@@ -214,10 +607,18 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="absolute inset-x-4 top-20 bottom-20 bg-dark-800/95 backdrop-blur-md rounded-2xl p-6 overflow-y-auto z-20"
+            className="absolute left-[7.5%] right-[7.5%] top-20 max-h-[calc(100vh-10rem)] bg-dark-800/95 backdrop-blur-md rounded-2xl p-6 overflow-y-auto z-20 scrollbar-hide"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="space-y-6">
+            {/* Close button */}
+            <button
+              onClick={() => setShowAnalysis(false)}
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors z-10"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+
+            <div className="space-y-4 pr-12">
               <div>
                 <h3 className="text-xl font-bold text-white mb-2">🎯 Hook</h3>
                 <p className="text-gray-300">{analysis.hook || 'No hook analysis available'}</p>
@@ -236,7 +637,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
               {analysis.shotlist && analysis.shotlist.length > 0 && (
                 <div>
                   <h3 className="text-xl font-bold text-white mb-2">🎬 Shotlist</h3>
-                  <ul className="space-y-2">
+                  <ul className="space-y-1.5">
                     {analysis.shotlist.map((shot: any, i: number) => (
                       <li key={i} className="text-gray-300 text-sm pl-4 border-l-2 border-purple-500">
                         {typeof shot === 'string' ? shot : shot.description || `${shot.scene || ''} ${shot.action || ''}`.trim()}
@@ -249,7 +650,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
               {analysis.engagement_factors && analysis.engagement_factors.length > 0 && (
                 <div>
                   <h3 className="text-xl font-bold text-white mb-2">🔥 Engagement Factors</h3>
-                  <ul className="space-y-2">
+                  <ul className="space-y-1.5">
                     {analysis.engagement_factors.map((factor: string, i: number) => (
                       <li key={i} className="text-gray-300 text-sm pl-4 border-l-2 border-pink-500">
                         {factor}
@@ -258,21 +659,30 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
                   </ul>
                 </div>
               )}
-
-              <button
-                onClick={() => setShowAnalysis(false)}
-                className="w-full py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-semibold transition-colors"
-              >
-                Close Analysis
-              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Video counter */}
-      <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full text-white text-sm z-10">
-        {currentIndex + 1} / {videos.length}
+      {/* Back button */}
+      <button
+        onClick={handleBack}
+        className="absolute top-4 left-4 p-3 transition-opacity hover:opacity-70 z-10"
+      >
+        <ArrowLeft className="w-6 h-6 text-white drop-shadow-lg" />
+      </button>
+
+      {/* Volume control */}
+      <button
+        onClick={toggleMute}
+        className="absolute top-4 right-4 p-3 transition-opacity hover:opacity-70 z-10"
+      >
+        {isMuted ? (
+          <VolumeX className="w-6 h-6 text-white drop-shadow-lg" />
+        ) : (
+          <Volume2 className="w-6 h-6 text-white drop-shadow-lg" />
+        )}
+      </button>
       </div>
     </div>
   );

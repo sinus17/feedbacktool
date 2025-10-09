@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Loader, TrendingUp, Grid3x3, List, Play } from 'lucide-react';
+import { Plus, Search, Loader, Grid3x3, List, Play } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { cache } from '../lib/cache';
@@ -276,9 +276,9 @@ export const Library: React.FC = () => {
           </div>
 
           {/* Filters */}
-          <div className="flex flex-wrap gap-4 items-center">
-            {/* Search */}
-            <div className="flex-1 min-w-[300px] relative">
+          <div className="flex flex-col gap-4">
+            {/* Search - Full Width */}
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="text"
@@ -289,49 +289,48 @@ export const Library: React.FC = () => {
               />
             </div>
 
-            {/* Genre Filter */}
-            <select
-              value={selectedGenre}
-              onChange={(e) => setSelectedGenre(e.target.value)}
-              className="px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="all">All Genres</option>
-              {genres.map((genre) => (
-                <option key={genre} value={genre}>
-                  {genre}
-                </option>
-              ))}
-            </select>
+            {/* Filters Grid - 2 columns on mobile, flex row on desktop */}
+            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-4">
+              {/* Genre Filter */}
+              <select
+                value={selectedGenre}
+                onChange={(e) => setSelectedGenre(e.target.value)}
+                className="px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="all">All Genres</option>
+                {genres.map((genre) => (
+                  <option key={genre} value={genre}>
+                    {genre}
+                  </option>
+                ))}
+              </select>
 
-            {/* Platform Filter */}
-            <select
-              value={selectedPlatform}
-              onChange={(e) => setSelectedPlatform(e.target.value)}
-              className="px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="all">All Platforms</option>
-              <option value="tiktok">TikTok</option>
-              <option value="instagram">Instagram</option>
-            </select>
+              {/* Type Filter */}
+              <select
+                value={selectedPlatform}
+                onChange={(e) => setSelectedPlatform(e.target.value)}
+                className="px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="all">All Types</option>
+                <option value="tiktok">TikTok</option>
+                <option value="instagram">Instagram</option>
+              </select>
 
-            {/* Featured Toggle */}
-            <button
-              onClick={() => setShowFeaturedOnly(!showFeaturedOnly)}
-              className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                showFeaturedOnly
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
-              }`}
-            >
-              <TrendingUp className="h-4 w-4" />
-              Featured
-            </button>
+              {/* Category Filter */}
+              <select
+                value={showFeaturedOnly ? 'featured' : 'all'}
+                onChange={(e) => setShowFeaturedOnly(e.target.value === 'featured')}
+                className="px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="all">All Categories</option>
+                <option value="featured">Featured</option>
+              </select>
 
-            {/* View Mode Toggle */}
-            <div className="flex gap-2">
-              <button
+              {/* View Mode Toggle - Fits perfectly next to Category on mobile */}
+              <div className="flex gap-2 w-full">
+                <button
                 onClick={() => setSearchParams({ tab: 'grid' })}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`flex-1 p-2 rounded-lg transition-colors flex items-center justify-center ${
                   activeTab === 'grid'
                     ? 'bg-primary-500 text-white'
                     : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
@@ -342,7 +341,7 @@ export const Library: React.FC = () => {
               </button>
               <button
                 onClick={() => setSearchParams({ tab: 'list' })}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`flex-1 p-2 rounded-lg transition-colors flex items-center justify-center ${
                   activeTab === 'list'
                     ? 'bg-primary-500 text-white'
                     : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
@@ -353,7 +352,7 @@ export const Library: React.FC = () => {
               </button>
               <button
                 onClick={() => setSearchParams({ tab: 'feed' })}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`flex-1 p-2 rounded-lg transition-colors flex items-center justify-center ${
                   activeTab === 'feed'
                     ? 'bg-primary-500 text-white'
                     : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
@@ -362,6 +361,7 @@ export const Library: React.FC = () => {
               >
                 <Play className="h-5 w-5" />
               </button>
+              </div>
             </div>
           </div>
 

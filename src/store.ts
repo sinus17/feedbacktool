@@ -94,7 +94,7 @@ const useStore = create<StoreState>((set, get) => ({
   adCreatives: [],
   loading: false,
   error: null,
-  sidebarOpen: true,
+  sidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 768 : true, // Collapsed on mobile by default
   
   submissionsPagination: {
     currentPage: 1,
