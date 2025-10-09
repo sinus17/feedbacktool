@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from './lib/supabase';
+import { cache } from './lib/cache';
 import type { VideoSubmission, Artist, AdCreative } from './types';
 
 // Utility functions
@@ -114,6 +115,20 @@ const useStore = create<StoreState>((set, get) => ({
     try {
       set({ loading: true, error: null });
 
+      // Create cache key based on filters
+      const cacheKey = `submissions_${page}_${limit}_${JSON.stringify(filters)}`;
+      const cached = cache.get<any>(cacheKey);
+      
+      if (cached) {
+        set({
+          submissions: cached.submissions,
+          submissionsPagination: cached.pagination,
+          loading: false
+        });
+        return;
+      }
+
+      // Optimized query - only select necessary fields
       let query = supabase
         .from('submissions')
         .select(`
@@ -125,17 +140,7 @@ const useStore = create<StoreState>((set, get) => ({
           status,
           notes,
           created_at,
-          updated_at,
-          messages (
-            id,
-            text,
-            is_admin,
-            user_id,
-            video_url,
-            created_at,
-            read_at,
-            updated_at
-          )
+          updated_at
         `, { count: 'exact' });
 
       // Apply filters
@@ -168,31 +173,29 @@ const useStore = create<StoreState>((set, get) => ({
         notes: sub.notes,
         createdAt: sub.created_at,
         updatedAt: sub.updated_at,
-        messages: (sub.messages || [])
-          .map((msg: any) => ({
-            id: msg.id,
-            text: msg.text,
-            isAdmin: msg.is_admin,
-            userId: msg.user_id,
-            videoUrl: msg.video_url,
-            createdAt: msg.created_at,
-            readAt: msg.read_at,
-            updatedAt: msg.updated_at
-          }))
+        messages: [] // Messages will be loaded separately when needed
       }));
 
       // Update pagination info
       const totalCount = count || 0;
       const totalPages = Math.ceil(totalCount / limit);
 
+      const paginationData = {
+        currentPage: page,
+        pageSize: limit,
+        totalPages,
+        totalCount
+      };
+
+      // Cache the result for 1 minute
+      cache.set(cacheKey, {
+        submissions: transformedSubmissions,
+        pagination: paginationData
+      }, 60 * 1000);
+
       set({
         submissions: transformedSubmissions,
-        submissionsPagination: {
-          currentPage: page,
-          totalPages,
-          totalCount,
-          pageSize: limit,
-        },
+        submissionsPagination: paginationData,
         loading: false
       });
     } catch (error) {

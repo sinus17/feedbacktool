@@ -231,3 +231,32 @@
     }
   }
 }
+
+/* Gemini Scanning Animation */
+@keyframes scan {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    top: 100%;
+    opacity: 1;
+  }
+  60% {
+    opacity: 0;
+  }
+  61% {
+    top: 100%;
+    opacity: 0;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    top: 0%;
+    opacity: 1;
+  }
+}

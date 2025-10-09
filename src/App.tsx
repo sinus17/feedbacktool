@@ -17,12 +17,12 @@ import { ArtistReleaseSheets } from './pages/ArtistReleaseSheets';
 import { ReleaseSheetEditor } from './pages/ReleaseSheetEditor';
 import { ReleaseSheets } from './pages/ReleaseSheets';
 import { PreviewArtistView } from './pages/PreviewArtistView';
+import { Library } from './pages/Library';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
-import { useStore } from './store';
 import { useDarkMode } from './hooks/useDarkMode';
 import { SnowEffect } from './components/SnowEffect';
 import './styles/snow.css';
@@ -31,61 +31,21 @@ function App() {
   const [appInitialized, setAppInitialized] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
-  const [initError, setInitError] = useState<string | null>(null);
   useDarkMode();
 
-  const { fetchArtists, fetchSubmissions } = useStore();
-
   useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        setInitError(null);
-        
-        // Fetch data directly without redundant connection checks
-        await Promise.all([
-          fetchArtists(),
-          fetchSubmissions()
-        ]);
-        
-        setAppInitialized(true);
-      } catch (error) {
-        console.error('Error initializing app:', error);
-        setInitError(error instanceof Error ? error.message : 'Failed to initialize app');
-        setConnectionError(true);
-      }
-    };
-
-    initializeApp();
-  }, [fetchArtists, fetchSubmissions]);
+    // Skip global data fetching - let each component load its own data
+    console.log('🚀 App initialization - skipping global data fetch');
+    setAppInitialized(true);
+  }, []);
 
   // Show loading screen while app initializes
-  if (!appInitialized && !connectionError && !initError) {
+  if (!appInitialized && !connectionError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
           <Loader className="h-12 w-12 animate-spin text-primary-500 mx-auto mb-4" />
           <p className="text-white text-lg">Loading VideoFeedback...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show initialization error
-  if (initError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
-        <div className="bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full">
-          <div className="flex items-center gap-3 text-red-400 mb-4">
-            <AlertCircle className="h-6 w-6" />
-            <h1 className="text-xl font-bold">Initialization Error</h1>
-          </div>
-          <p className="text-gray-300 mb-6">{initError}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors"
-          >
-            Reload Application
-          </button>
         </div>
       </div>
     );
@@ -97,11 +57,8 @@ function App() {
     try {
       const isConnected = await checkSupabaseConnection();
       if (isConnected) {
-        await Promise.all([
-          fetchArtists(),
-          fetchSubmissions()
-        ]);
         setConnectionError(false);
+        setAppInitialized(true);
       }
     } catch (error) {
       console.error('Retry failed:', error);
@@ -172,13 +129,14 @@ function App() {
                   <PrivateRoute>
                     <div className="flex w-full h-screen">
                       <Sidebar />
-                      <main className="flex-1 overflow-auto">
-                        <div className="w-full p-4 sm:p-6 lg:p-8">
+                      <main className="flex-1 overflow-auto" style={{ backgroundColor: '#111111' }}>
+                        <div className="w-full">
                           <Routes>
                             <Route index element={<Home />} />
                             <Route path="ad-creatives" element={<AdCreatives />} />
                             <Route path="content-plan" element={<ContentPlan />} />
                             <Route path="release-sheets" element={<ReleaseSheets />} />
+                            <Route path="library" element={<Library />} />
                             <Route path="artists" element={<Artists />} />
                             <Route path="whatsapp" element={<WhatsAppLogs />} />
                             <Route path="archive" element={<Archive />} />

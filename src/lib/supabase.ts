@@ -9,9 +9,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Configure retry options
-const RETRY_COUNT = 3;
-const RETRY_DELAY = 1000; // 1 second
-const REQUEST_TIMEOUT = 60000; // 60 seconds
+const RETRY_COUNT = 2;
+const RETRY_DELAY = 500; // 0.5 seconds
+const REQUEST_TIMEOUT = 10000; // 10 seconds
 
 // Add retry wrapper with exponential backoff
 async function withRetry<T>(
@@ -33,13 +33,13 @@ async function withRetry<T>(
       }
       
       // Don't retry on authentication errors
-      if (error?.message?.includes('JWT')) {
+      if ((error as any)?.message?.includes('JWT')) {
         throw error;
       }
 
       // Only retry on network errors or 5xx server errors
       const shouldRetry = error instanceof TypeError || 
-                         (error?.status >= 500 && error?.status < 600);
+                         ((error as any)?.status >= 500 && (error as any)?.status < 600);
       
       if (!shouldRetry || i === maxRetries - 1) {
         throw error;
@@ -76,15 +76,16 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     }
   },
   // Add request timeout and retry logic with proper CORS handling
-  fetch: (url, options = {}) => {
+  // @ts-ignore - fetch option exists in runtime but not in SupabaseClientOptions types
+  fetch: (url: string, options: any = {}) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
     const fetchOptions = {
       ...options,
       signal: controller.signal,
-      mode: 'cors',
-      credentials: 'omit', // Fixed CORS issue by omitting credentials
+      mode: 'cors' as RequestMode,
+      credentials: 'omit' as RequestCredentials, // Fixed CORS issue by omitting credentials
       headers: {
         ...options.headers,
         'Cache-Control': 'no-cache'
@@ -148,7 +149,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 // Add health check function with retry and better error handling
 export async function checkSupabaseConnection(): Promise<boolean> {
   try {
-    const { data, error } = await supabase.from('artists').select('id').limit(1).single();
+    const { error } = await supabase.from('artists').select('id').limit(1).single();
     if (error) {
       if (error.code === 'PGRST116') {
         // No data found is still a successful connection

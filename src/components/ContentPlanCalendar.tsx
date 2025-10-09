@@ -414,7 +414,7 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
             onEventDrop={handleEventDrop}
             eventPropGetter={eventStyleGetter}
             views={['month']}
-            view="month"
+            defaultView="month"
             date={currentDate}
             onNavigate={(date: Date) => setCurrentDate(date)}
             popup

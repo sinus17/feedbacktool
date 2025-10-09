@@ -1,13 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
-import { Database } from '../lib/database.types';
+import { supabase as feedbackSupabase } from '../lib/supabase';
 
-// Feedback tool database (current project)
-const feedbackSupabase = createClient<Database>(
-  'https://wrlgoxbzlngdtomjhvnz.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndybGdveGJ6bG5nZHRvbWpodm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI0OTA3NzcsImV4cCI6MjA0ODA2Njc3N30.ZCAreV5YsR26maw8QrulmTq7GSXvfpYuKXP-ocTfhtk'
-);
-
-// Reporting database (for releases sync)
+// Reporting database (for releases sync) - only create ONE additional client
 const reportingSupabase = createClient(
   'https://uydhsjvwrgupgfjevqsz.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5ZGhzanZ3cmd1cGdmamV2cXN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI1NDAzNjcsImV4cCI6MjA0ODExNjM2N30.xfCQFURkzjvBrVnF5ap5OAytCmo3cWqM7PmIcBTVZLk'

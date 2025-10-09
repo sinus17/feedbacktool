@@ -78,6 +78,7 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
   }, [artistId]);
 
   useEffect(() => {
+    console.log('🎨 AdCreatives page - loading data');
     // Build filters object
     const filters = {
       artistId: artistId || selectedArtist || undefined,
@@ -85,21 +86,27 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
       status: selectedStatus || undefined
     };
     
+    console.log('📊 Fetching ad creatives and artists...');
     // Fetch ad creatives with pagination and filters
     fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize, filters);
     fetchArtists();
-    setIsInitialized(true);
-    setModalInitialized(true);
+    console.log('✅ AdCreatives data fetch initiated');
     
-    // Remove the specific problematic ad creative
-    removeSpecificAdCreative().then(result => {
-      if (result.success) {
-        console.log('Removed problematic ad creative');
-        // Refresh the list after removal
-        fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize, filters);
-      }
-    });
-  }, [fetchAdCreatives, fetchArtists, adCreativesPagination.currentPage, adCreativesPagination.pageSize, artistId, selectedArtist, selectedPlatform, selectedStatus]);
+    // Only run cleanup once on mount
+    if (!isInitialized) {
+      setIsInitialized(true);
+      setModalInitialized(true);
+      
+      // Remove the specific problematic ad creative
+      removeSpecificAdCreative().then(result => {
+        if (result.success) {
+          console.log('Removed problematic ad creative');
+          // Refresh the list after removal
+          fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize, filters);
+        }
+      });
+    }
+  }, [adCreativesPagination.currentPage, adCreativesPagination.pageSize, artistId, selectedArtist, selectedPlatform, selectedStatus]);
 
   const getArtistName = (artistId: string) => {
     const artist = artists.find(a => a.id === artistId);

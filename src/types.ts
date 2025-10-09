@@ -72,3 +72,74 @@ export interface AdminUser {
 }
 
 export type Team = 'admin' | 'management' | 'production' | 'marketing' | 'support';
+
+export interface LibraryVideo {
+  id: string;
+  platform: 'tiktok' | 'instagram';
+  sourceUrl: string;
+  videoId: string;
+  accountUsername?: string;
+  accountName?: string;
+  followerCount?: number;
+  title?: string;
+  description?: string;
+  uploadDate?: string;
+  duration?: number;
+  viewsCount?: number;
+  likesCount?: number;
+  commentsCount?: number;
+  sharesCount?: number;
+  collectCount?: number;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  thumbnailStorageUrl?: string;
+  creatorAvatarUrl?: string;
+  creatorAvatarStorageUrl?: string;
+  textLanguage?: string;
+  diversificationLabels?: string[];
+  diversification_labels?: string[];
+  suggestedWords?: string[];
+  suggested_words?: string[];
+  location_name?: string;
+  hashtags?: string[];
+  musicTitle?: string;
+  musicAuthor?: string;
+  musicAlbum?: string;
+  musicCoverLarge?: string;
+  musicCoverMedium?: string;
+  musicCoverThumb?: string;
+  musicIsCopyrighted?: boolean;
+  musicVideoCount?: number;
+  isOriginalSound?: boolean;
+  spotifyId?: string;
+  appleMusicId?: string;
+  genre?: string | string[];
+  category?: string | string[];
+  type?: 'song-specific' | 'off-topic';
+  actor?: 'solo' | 'multiple';
+  tags?: string[];
+  contentDescription?: string;
+  whyItWorks?: string;
+  artistRecommendation?: string;
+  processingStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  processingError?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  isPublished: boolean;
+  featured: boolean;
+}
+
+export interface LibraryQueueItem {
+  id: string;
+  platform: 'tiktok' | 'instagram';
+  sourceUrl: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  errorMessage?: string;
+  retryCount: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  processedAt?: string;
+  videoLibraryId?: string;
+}
