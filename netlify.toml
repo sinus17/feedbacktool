@@ -1,6 +1,12 @@
 [build]
   command = "npm run build"
   publish = "dist"
+
+[build.processing]
+  skip_processing = false
+
+[build.processing.images]
+  compress = true
   
 # Redirect from old domain to new domain
 [[redirects]]
@@ -21,7 +27,7 @@
     Cache-Control = "public, max-age=0, must-revalidate"
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "20"
   SITE_NAME = "serene-faloodeh-c87125"
   SITE_ID = "c87125-serene-faloodeh"
   VITE_SUPABASE_URL = "https://wrlgoxbzlngdtomjhvnz.supabase.co"
