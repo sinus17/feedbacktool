@@ -124,7 +124,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         // Reset playing state
         setIsPlaying(true);
         
-        // Use current mute preference (don't force mute after first interaction)
+        // Always sync video element with user preference at start
         videoRef.current.muted = isMuted;
         
         try {
@@ -134,13 +134,13 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
           hasUserInteractedRef.current = true; // Mark as interacted
         } catch (err) {
           console.error('❌ Autoplay failed:', err);
-          // If unmuted autoplay fails, try muted
+          // If unmuted autoplay fails, try muted WITHOUT changing user preference
           if (!isMuted) {
             try {
               videoRef.current.muted = true;
-              setIsMuted(true);
+              // Don't update isMuted state or localStorage - keep user preference
               await videoRef.current.play();
-              console.log('✅ Video autoplaying (muted fallback)');
+              console.log('✅ Video autoplaying (temporarily muted for this video only)');
               setShowPlayOverlay(false);
               hasUserInteractedRef.current = true; // Mark as interacted
             } catch (err2) {
@@ -692,7 +692,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
       </AnimatePresence>
 
       {/* Left side: Author info and caption */}
-      <div className="absolute bottom-0 left-0 p-6 pb-16 md:pb-28 pr-24 max-w-2xl z-10">
+      <div className="absolute bottom-0 left-0 p-6 pb-16 md:pb-28 pr-24 max-w-2xl z-10 scale-[0.8] md:scale-100 origin-bottom-left">
         <div 
           className="flex items-center gap-3 mb-3 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={(e) => {
