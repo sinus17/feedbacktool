@@ -5,6 +5,7 @@ import { ReleaseService, ReleaseSheet } from '../services/releaseService';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { SocialEmbed } from '../components/SocialEmbed';
 import { ReleaseSheetEditModal } from '../components/ReleaseSheetEditModal';
+import { VersionHistoryDropdown } from '../components/VersionHistoryDropdown';
 import { supabase } from '../lib/supabase';
 
 export const ReleaseSheetEditor: React.FC = () => {
@@ -81,6 +82,11 @@ export const ReleaseSheetEditor: React.FC = () => {
       
       setSheet(sheetData);
       console.log('Sheet state set');
+      
+      // Set lastSaved to the sheet's updated_at timestamp
+      if (sheetData?.updated_at) {
+        setLastSaved(new Date(sheetData.updated_at));
+      }
       
       // Initialize editor content after sheet loads
       setTimeout(() => {
@@ -1704,7 +1710,7 @@ export const ReleaseSheetEditor: React.FC = () => {
             </div>
             </div>
             
-            {/* Undo/Redo Buttons */}
+            {/* Undo/Redo and Version History Buttons */}
             <div className="flex items-center gap-1">
               <button 
                 onClick={undoAction}
@@ -1768,24 +1774,34 @@ export const ReleaseSheetEditor: React.FC = () => {
           </div>
         )}
         {lastSaved && !saving && !realtimeUpdate && (
-          <div 
-            className="text-white opacity-50 px-3 py-1 rounded-full text-sm hover:opacity-100 transition-opacity cursor-pointer group relative"
-            title={`Saved ${lastSaved.toLocaleTimeString()}`}
-          >
-            {/* Diskette with checkmark icon */}
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline">
-              {/* Diskette outline */}
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-              <polyline points="17,21 17,13 7,13 7,21"/>
-              <polyline points="7,3 7,8 15,8"/>
-              {/* Checkmark */}
-              <path d="m9 16 2 2 4-4" stroke="currentColor" strokeWidth="1.5"/>
-            </svg>
-            
-            {/* Tooltip on hover */}
-            <div className="absolute right-full top-1/2 transform -translate-y-1/2 mr-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-              Saved {lastSaved.toLocaleTimeString()}
+          <div className="flex items-center gap-2">
+            <div 
+              className="text-white opacity-50 px-3 py-1 rounded-full text-sm hover:opacity-100 transition-opacity cursor-pointer group relative"
+              title={`Saved ${lastSaved.toLocaleTimeString()}`}
+            >
+              {/* Diskette with checkmark icon */}
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline">
+                {/* Diskette outline */}
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17,21 17,13 7,13 7,21"/>
+                <polyline points="7,3 7,8 15,8"/>
+                {/* Checkmark */}
+                <path d="m9 16 2 2 4-4" stroke="currentColor" strokeWidth="1.5"/>
+              </svg>
+              
+              {/* Tooltip on hover */}
+              <div className="absolute right-full top-1/2 transform -translate-y-1/2 mr-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                Saved {lastSaved.toLocaleTimeString()}
+              </div>
             </div>
+            
+            {/* Version History Dropdown */}
+            {!isTemplate && itemId && (
+              <VersionHistoryDropdown 
+                releaseSheetId={itemId} 
+                onRestore={loadSheet}
+              />
+            )}
           </div>
         )}
       </div>
