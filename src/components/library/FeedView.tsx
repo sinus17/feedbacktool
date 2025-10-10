@@ -9,6 +9,7 @@ import { PhotoSlideshow } from './PhotoSlideshow';
 
 interface FeedViewProps {
   videos: LibraryVideo[];
+  isPublicMode?: boolean;
 }
 
 // Shuffle array using Fisher-Yates algorithm
@@ -21,7 +22,7 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return shuffled;
 };
 
-export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
+export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   // Randomize videos when they first load
@@ -42,11 +43,40 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
   const touchStartY = useRef<number>(0);
   const touchEndY = useRef<number>(0);
 
-  // Shuffle videos when they load (only once)
+  // Shuffle videos when they load (only once) and handle direct video link
   useEffect(() => {
     if (videos.length > 0 && !hasShuffledRef.current) {
       console.log('🔀 Shuffling videos:', videos.length);
-      setShuffledVideos(shuffleArray(videos));
+      
+      // Check if there's a specific video ID in the URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const videoId = urlParams.get('video');
+      
+      if (videoId) {
+        // Find the video in the list
+        const videoIndex = videos.findIndex(v => v.id === videoId);
+        
+        if (videoIndex !== -1) {
+          // Put the requested video first, then shuffle the rest
+          const requestedVideo = videos[videoIndex];
+          const otherVideos = videos.filter((_, i) => i !== videoIndex);
+          const shuffledOthers = shuffleArray(otherVideos);
+          setShuffledVideos([requestedVideo, ...shuffledOthers]);
+          console.log('📍 Direct link: Starting with video', videoId);
+        } else {
+          // Video not found, just shuffle normally
+          setShuffledVideos(shuffleArray(videos));
+        }
+        
+        // Clean up the URL parameter
+        urlParams.delete('video');
+        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+        window.history.replaceState({}, '', newUrl);
+      } else {
+        // Normal shuffle
+        setShuffledVideos(shuffleArray(videos));
+      }
+      
       hasShuffledRef.current = true;
     }
   }, [videos]);
@@ -273,6 +303,32 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
     setShowAnalysis(true);
   };
 
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Create the direct link to this video in feed mode with public parameter
+    const baseUrl = window.location.origin;
+    const shareUrl = `${baseUrl}/library?tab=feed&public=true&video=${currentVideo.id}`;
+    
+    try {
+      // Try to use the Clipboard API
+      await navigator.clipboard.writeText(shareUrl);
+      console.log('✅ Link copied to clipboard:', shareUrl);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+      
+      // Fallback: Create a temporary input element
+      const input = document.createElement('input');
+      input.value = shareUrl;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      
+      console.log('✅ Link copied to clipboard (fallback):', shareUrl);
+    }
+  };
+
   // Format large numbers (1.7M, 269K, etc.)
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
@@ -450,6 +506,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
                 <PhotoSlideshow 
                   images={currentVideo.imageUrls} 
                   onTap={handleVideoTap}
+                  indicatorPosition="above-caption"
                 />
               ) : (
                 <video
@@ -513,7 +570,59 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
 
       {/* Left side: Author info and caption */}
       <div className="absolute bottom-0 left-0 p-6 pb-20 pr-24 max-w-2xl z-10">
-        <div className="flex items-center gap-3 mb-3">
+        <div 
+          className="flex items-center gap-3 mb-3 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation();
+            // Build profile URL based on platform with deep link support
+            const username = currentVideo.accountUsername;
+            if (username) {
+              let profileUrl = '';
+              
+              if (currentVideo.platform === 'tiktok') {
+                // TikTok deep link format - will open app on mobile, web on desktop
+                // Format: tiktok://user?username=USERNAME (for app)
+                // Fallback to web URL
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                if (isMobile) {
+                  // Try to open in app first
+                  profileUrl = `tiktok://user?username=${username}`;
+                  // Set a timeout to fallback to web if app doesn't open
+                  const fallbackUrl = `https://www.tiktok.com/@${username}`;
+                  window.location.href = profileUrl;
+                  setTimeout(() => {
+                    window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+                  }, 1500);
+                  return;
+                } else {
+                  profileUrl = `https://www.tiktok.com/@${username}`;
+                }
+              } else if (currentVideo.platform === 'instagram') {
+                // Instagram deep link format - will open app on mobile, web on desktop
+                // Format: instagram://user?username=USERNAME (for app)
+                // Fallback to web URL
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                if (isMobile) {
+                  // Try to open in app first
+                  profileUrl = `instagram://user?username=${username}`;
+                  // Set a timeout to fallback to web if app doesn't open
+                  const fallbackUrl = `https://www.instagram.com/${username}`;
+                  window.location.href = profileUrl;
+                  setTimeout(() => {
+                    window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+                  }, 1500);
+                  return;
+                } else {
+                  profileUrl = `https://www.instagram.com/${username}`;
+                }
+              }
+              
+              if (profileUrl) {
+                window.open(profileUrl, '_blank', 'noopener,noreferrer');
+              }
+            }
+          }}
+        >
           {/* Author profile picture */}
           {currentVideo.creatorAvatarUrl || currentVideo.creatorAvatarStorageUrl ? (
             <img
@@ -599,7 +708,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
         </div>
 
         {/* Share */}
-        <div className="flex flex-col items-center gap-0.5" onClick={handleStatsClick}>
+        <div className="flex flex-col items-center gap-0.5" onClick={handleShare}>
           <button className="p-2 transition-opacity hover:opacity-70">
             <Share2 className="w-5 h-5 text-white drop-shadow-lg" />
           </button>
@@ -724,13 +833,15 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
         )}
       </AnimatePresence>
 
-      {/* Back button */}
-      <button
-        onClick={handleBack}
-        className="absolute top-4 left-4 p-3 transition-opacity hover:opacity-70 z-10"
-      >
-        <ArrowLeft className="w-6 h-6 text-white drop-shadow-lg" />
-      </button>
+      {/* Back button - Hidden in public mode */}
+      {!isPublicMode && (
+        <button
+          onClick={handleBack}
+          className="absolute top-4 left-4 p-3 transition-opacity hover:opacity-70 z-10"
+        >
+          <ArrowLeft className="w-6 h-6 text-white drop-shadow-lg" />
+        </button>
+      )}
 
       {/* Volume control */}
       <button
