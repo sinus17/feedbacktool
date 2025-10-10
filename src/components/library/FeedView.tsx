@@ -39,6 +39,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const [showFullCaption, setShowFullCaption] = useState(false);
   const [showCopiedToast, setShowCopiedToast] = useState(false);
   const [showPlayOverlay, setShowPlayOverlay] = useState(true); // Show by default until autoplay succeeds
+  const hasUserInteractedRef = useRef(false); // Track if user has interacted
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
@@ -126,6 +127,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
           await videoRef.current.play();
           console.log(`✅ Video autoplaying (${isMuted ? 'muted' : 'with sound'})`);
           setShowPlayOverlay(false);
+          hasUserInteractedRef.current = true; // Mark as interacted
         } catch (err) {
           console.error('❌ Autoplay failed:', err);
           // If unmuted autoplay fails, try muted
@@ -136,15 +138,21 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
               await videoRef.current.play();
               console.log('✅ Video autoplaying (muted fallback)');
               setShowPlayOverlay(false);
+              hasUserInteractedRef.current = true; // Mark as interacted
             } catch (err2) {
               console.error('❌ Muted autoplay also failed:', err2);
+              // Only show overlay if user hasn't interacted yet
+              if (!hasUserInteractedRef.current) {
+                setShowPlayOverlay(true);
+                setIsPlaying(false);
+              }
+            }
+          } else {
+            // Only show overlay if user hasn't interacted yet
+            if (!hasUserInteractedRef.current) {
               setShowPlayOverlay(true);
               setIsPlaying(false);
             }
-          } else {
-            // Show play overlay if muted autoplay fails
-            setShowPlayOverlay(true);
-            setIsPlaying(false);
           }
         }
       }
@@ -566,14 +574,19 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                     exit={{ opacity: 0, scale: 0.9 }}
                     className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20 cursor-pointer"
                     onClick={async (e) => {
+                      e.preventDefault();
                       e.stopPropagation();
+                      
+                      // Immediately hide overlay
+                      hasUserInteractedRef.current = true;
+                      setShowPlayOverlay(false);
+                      
                       if (videoRef.current) {
                         try {
                           // Try to play with sound first (user interaction allows this)
                           videoRef.current.muted = false;
                           setIsMuted(false);
                           await videoRef.current.play();
-                          setShowPlayOverlay(false);
                           setIsPlaying(true);
                           console.log('✅ Video playing with sound after user interaction');
                         } catch (err) {
@@ -583,9 +596,39 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                             videoRef.current.muted = true;
                             setIsMuted(true);
                             await videoRef.current.play();
-                            setShowPlayOverlay(false);
                             setIsPlaying(true);
                             console.log('✅ Video playing muted after user interaction');
+                          } catch (err2) {
+                            console.error('Failed to play:', err2);
+                          }
+                        }
+                      }
+                    }}
+                    onTouchEnd={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      
+                      // Immediately hide overlay
+                      hasUserInteractedRef.current = true;
+                      setShowPlayOverlay(false);
+                      
+                      if (videoRef.current) {
+                        try {
+                          // Try to play with sound first (user interaction allows this)
+                          videoRef.current.muted = false;
+                          setIsMuted(false);
+                          await videoRef.current.play();
+                          setIsPlaying(true);
+                          console.log('✅ Video playing with sound after user interaction (touch)');
+                        } catch (err) {
+                          console.error('Failed to play with sound:', err);
+                          // Fallback to muted if sound fails
+                          try {
+                            videoRef.current.muted = true;
+                            setIsMuted(true);
+                            await videoRef.current.play();
+                            setIsPlaying(true);
+                            console.log('✅ Video playing muted after user interaction (touch)');
                           } catch (err2) {
                             console.error('Failed to play:', err2);
                           }
