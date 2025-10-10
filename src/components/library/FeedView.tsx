@@ -32,7 +32,11 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const hasShuffledRef = useRef(false); // Track if we've already shuffled
   const isNavigatingRef = useRef(false); // Prevent multiple navigations at once
   const [showAnalysis, setShowAnalysis] = useState(false);
-  const [isMuted, setIsMuted] = useState(true); // Start muted for autoplay to work
+  // Get initial mute state from localStorage, default to true for autoplay
+  const [isMuted, setIsMuted] = useState(() => {
+    const saved = localStorage.getItem('feedVideoMuted');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
@@ -228,7 +232,10 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      // Prevent default scrolling behavior
+      // Don't prevent scrolling if analysis modal is open
+      if (showAnalysis) return;
+      
+      // Prevent default scrolling behavior for video navigation
       e.preventDefault();
     };
 
@@ -314,6 +321,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     const newMutedState = !isMuted;
     console.log(`🔊 Toggling mute: ${isMuted} → ${newMutedState}`);
     setIsMuted(newMutedState);
+    localStorage.setItem('feedVideoMuted', String(newMutedState));
     if (videoRef.current) {
       videoRef.current.muted = newMutedState;
     }
@@ -586,6 +594,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                           // Try to play with sound first (user interaction allows this)
                           videoRef.current.muted = false;
                           setIsMuted(false);
+                          localStorage.setItem('feedVideoMuted', 'false');
                           await videoRef.current.play();
                           setIsPlaying(true);
                           console.log('✅ Video playing with sound after user interaction');
@@ -595,6 +604,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                           try {
                             videoRef.current.muted = true;
                             setIsMuted(true);
+                            localStorage.setItem('feedVideoMuted', 'true');
                             await videoRef.current.play();
                             setIsPlaying(true);
                             console.log('✅ Video playing muted after user interaction');
@@ -617,6 +627,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                           // Try to play with sound first (user interaction allows this)
                           videoRef.current.muted = false;
                           setIsMuted(false);
+                          localStorage.setItem('feedVideoMuted', 'false');
                           await videoRef.current.play();
                           setIsPlaying(true);
                           console.log('✅ Video playing with sound after user interaction (touch)');
@@ -626,6 +637,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                           try {
                             videoRef.current.muted = true;
                             setIsMuted(true);
+                            localStorage.setItem('feedVideoMuted', 'true');
                             await videoRef.current.play();
                             setIsPlaying(true);
                             console.log('✅ Video playing muted after user interaction (touch)');
@@ -887,7 +899,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="absolute left-[7.5%] right-[7.5%] top-20 max-h-[calc(100vh-10rem)] bg-dark-800/95 backdrop-blur-md rounded-2xl p-6 overflow-y-auto z-20 scrollbar-hide"
+            className="absolute left-[7.5%] right-[7.5%] top-20 bottom-20 bg-dark-800/95 backdrop-blur-md rounded-2xl z-20 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
@@ -898,7 +910,15 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
               <X className="w-5 h-5 text-white" />
             </button>
 
-            <div className="space-y-4 pr-12">
+            <div 
+              className="p-6 overflow-y-auto flex-1" 
+              style={{ 
+                WebkitOverflowScrolling: 'touch', 
+                overscrollBehavior: 'contain',
+                touchAction: 'pan-y'
+              }}
+            >
+              <div className="space-y-4 pr-12">
               <div>
                 <h3 className="text-xl font-bold text-white mb-2">🎯 Hook</h3>
                 <p className="text-gray-300">{analysis.hook || 'No hook analysis available'}</p>
@@ -939,6 +959,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                   </ul>
                 </div>
               )}
+              </div>
             </div>
           </motion.div>
         )}
