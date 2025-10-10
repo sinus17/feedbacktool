@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Undo, Redo, Trash2 } from 'lucide-react';
+import interact from 'interactjs';
 import { ReleaseService, ReleaseSheet } from '../services/releaseService';
 import { SocialEmbed } from '../components/SocialEmbed';
 import { ReleaseSheetEditModal } from '../components/ReleaseSheetEditModal';
@@ -139,6 +140,9 @@ export const ReleaseSheetEditor: React.FC = () => {
           console.log('Rendering social embeds...');
           renderSocialEmbeds();
           
+          // Initialize interact.js on images
+          console.log('Initializing interact on images...');
+          renderImages();
           
           // Render release link icon
           console.log('Rendering release link icon...');
@@ -236,6 +240,7 @@ export const ReleaseSheetEditor: React.FC = () => {
               
               // Re-render special elements
               renderSocialEmbeds();
+              renderImages();
               renderReleaseLinkIcon();
               
               // Restore cursor position if it was saved
@@ -784,6 +789,97 @@ export const ReleaseSheetEditor: React.FC = () => {
 
 
 
+  // Initialize interact.js for draggable and resizable elements
+  const initializeInteract = (element: Element) => {
+    const htmlElement = element as HTMLElement;
+    
+    // Skip if already initialized
+    if ((htmlElement as any)._interactInitialized) return;
+    (htmlElement as any)._interactInitialized = true;
+    
+    // Make element position relative if not already
+    if (!htmlElement.style.position || htmlElement.style.position === 'static') {
+      htmlElement.style.position = 'relative';
+    }
+    
+    // Initialize interact.js
+    interact(htmlElement)
+      .draggable({
+        listeners: {
+          start(event) {
+            const target = event.target as HTMLElement;
+            target.style.cursor = 'grabbing';
+            target.style.zIndex = '1000';
+          },
+          move(event) {
+            const target = event.target as HTMLElement;
+            const x = (parseFloat(target.getAttribute('data-x') || '0')) + event.dx;
+            const y = (parseFloat(target.getAttribute('data-y') || '0')) + event.dy;
+            
+            target.style.transform = `translate(${x}px, ${y}px)`;
+            target.setAttribute('data-x', x.toString());
+            target.setAttribute('data-y', y.toString());
+          },
+          end(event) {
+            const target = event.target as HTMLElement;
+            target.style.cursor = 'grab';
+            target.style.zIndex = '';
+            handleContentChange();
+          }
+        },
+        modifiers: [
+          interact.modifiers.restrict({
+            restriction: 'parent',
+            endOnly: true
+          })
+        ]
+      })
+      .resizable({
+        edges: { left: true, right: true, bottom: true, top: true },
+        listeners: {
+          move(event) {
+            const target = event.target as HTMLElement;
+            let x = parseFloat(target.getAttribute('data-x') || '0');
+            let y = parseFloat(target.getAttribute('data-y') || '0');
+            
+            // Update the element's style
+            target.style.width = `${event.rect.width}px`;
+            target.style.height = `${event.rect.height}px`;
+            
+            // Translate when resizing from top or left edges
+            x += event.deltaRect.left;
+            y += event.deltaRect.top;
+            
+            target.style.transform = `translate(${x}px, ${y}px)`;
+            target.setAttribute('data-x', x.toString());
+            target.setAttribute('data-y', y.toString());
+          },
+          end() {
+            handleContentChange();
+          }
+        },
+        modifiers: [
+          interact.modifiers.restrictSize({
+            min: { width: 100, height: 50 }
+          })
+        ]
+      })
+      .styleCursor(false);
+    
+    // Add visual indicator that element is draggable
+    htmlElement.style.cursor = 'grab';
+    htmlElement.style.border = '2px dashed transparent';
+    htmlElement.style.transition = 'border-color 0.2s';
+    
+    // Show border on hover
+    htmlElement.addEventListener('mouseenter', () => {
+      htmlElement.style.borderColor = '#3b82f6';
+    });
+    htmlElement.addEventListener('mouseleave', () => {
+      htmlElement.style.borderColor = 'transparent';
+    });
+  };
+
   const renderSocialEmbeds = () => {
     if (!editorRef.current) return;
     
@@ -797,6 +893,9 @@ export const ReleaseSheetEditor: React.FC = () => {
       const embedId = container.getAttribute('data-embed-id');
       
       if (url && platform && embedId) {
+        // Initialize interact.js for drag and resize
+        initializeInteract(container);
+        
         // Clear existing content and add React root marker
         container.innerHTML = '<div data-react-root="true"></div>';
         const reactContainer = container.querySelector('[data-react-root]') as HTMLElement;
@@ -816,6 +915,16 @@ export const ReleaseSheetEditor: React.FC = () => {
           );
         });
       }
+    });
+  };
+
+  const renderImages = () => {
+    if (!editorRef.current) return;
+    
+    const imageContainers = editorRef.current.querySelectorAll('.image-container');
+    imageContainers.forEach((container) => {
+      // Initialize interact.js for drag and resize
+      initializeInteract(container);
     });
   };
 
