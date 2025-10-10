@@ -32,11 +32,12 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const hasShuffledRef = useRef(false); // Track if we've already shuffled
   const isNavigatingRef = useRef(false); // Prevent multiple navigations at once
   const [showAnalysis, setShowAnalysis] = useState(false);
-  const [isMuted, setIsMuted] = useState(true); // Start muted for autoplay to work
+  const [isMuted, setIsMuted] = useState(false); // Start unmuted - play with sound
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [showFullCaption, setShowFullCaption] = useState(false);
+  const [showCopiedToast, setShowCopiedToast] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
@@ -117,15 +118,26 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         // Reset playing state
         setIsPlaying(true);
         
-        // Ensure video is muted for autoplay to work
-        videoRef.current.muted = true;
-        setIsMuted(true);
+        // Set mute state based on current preference (not forced)
+        videoRef.current.muted = isMuted;
         
         try {
           await videoRef.current.play();
-          console.log('✅ Video playing (muted for autoplay)');
+          console.log(`✅ Video playing (${isMuted ? 'muted' : 'with sound'})`);
         } catch (err) {
           console.error('❌ Autoplay failed:', err);
+          // If autoplay fails, try muting and playing again
+          if (!isMuted) {
+            console.log('🔇 Autoplay failed with sound, trying muted...');
+            videoRef.current.muted = true;
+            setIsMuted(true);
+            try {
+              await videoRef.current.play();
+              console.log('✅ Video playing (muted as fallback)');
+            } catch (err2) {
+              console.error('❌ Muted autoplay also failed:', err2);
+            }
+          }
         }
       }
     };
@@ -133,7 +145,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     // Small delay to ensure video is loaded
     const timer = setTimeout(playVideo, 150);
     return () => clearTimeout(timer);
-  }, [currentIndex]);
+  }, [currentIndex, isMuted]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -306,6 +318,10 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
       // Try to use the Clipboard API
       await navigator.clipboard.writeText(shareUrl);
       console.log('✅ Link copied to clipboard:', shareUrl);
+      
+      // Show toast notification
+      setShowCopiedToast(true);
+      setTimeout(() => setShowCopiedToast(false), 1000);
     } catch (err) {
       console.error('Failed to copy link:', err);
       
@@ -318,6 +334,10 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
       document.body.removeChild(input);
       
       console.log('✅ Link copied to clipboard (fallback):', shareUrl);
+      
+      // Show toast notification
+      setShowCopiedToast(true);
+      setTimeout(() => setShowCopiedToast(false), 1000);
     }
   };
 
@@ -561,7 +581,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
       </AnimatePresence>
 
       {/* Left side: Author info and caption */}
-      <div className="absolute bottom-0 left-0 p-6 pb-20 pr-24 max-w-2xl z-10">
+      <div className="absolute bottom-0 left-0 p-6 pb-16 md:pb-28 pr-24 max-w-2xl z-10">
         <div 
           className="flex items-center gap-3 mb-3 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={(e) => {
@@ -846,6 +866,21 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
           <Volume2 className="w-6 h-6 text-white drop-shadow-lg" />
         )}
       </button>
+
+      {/* Copied to Clipboard Toast - Inside video container */}
+      <AnimatePresence>
+        {showCopiedToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-20 left-0 right-0 mx-auto w-fit px-4 py-2 bg-gray-800/80 backdrop-blur-sm rounded-lg z-50"
+          >
+            <p className="text-white text-sm font-medium">Link copied to clipboard</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
       </div>
     </div>
   );

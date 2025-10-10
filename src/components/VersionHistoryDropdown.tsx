@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 
 interface Version {
   version_id: string;
@@ -104,6 +104,14 @@ export const VersionHistoryDropdown: React.FC<VersionHistoryDropdownProps> = ({
     }
   };
 
+  const formatRelativeTime = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch {
+      return dateString;
+    }
+  };
+
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -151,32 +159,38 @@ export const VersionHistoryDropdown: React.FC<VersionHistoryDropdownProps> = ({
               </div>
             ) : (
               <div className="py-2">
-                {versions.map((version, index) => (
-                  <div
-                    key={version.version_id}
-                    className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300">
-                            v{version.version_number}
-                          </span>
-                          {index === 0 && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              (Previous)
+                {versions.map((version, index) => {
+                  const isCurrent = index === 0;
+                  return (
+                    <div
+                      key={version.version_id}
+                      className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300">
+                              v{version.version_number}
                             </span>
-                          )}
-                        </div>
-                        
-                        <div className="text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
-                          <div className="truncate font-medium text-gray-900 dark:text-gray-100">
-                            {version.title}
+                            {isCurrent && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                                Current
+                              </span>
+                            )}
                           </div>
-                          <div>{formatDate(version.saved_at)}</div>
-                          <div>{formatSize(version.content_size)}</div>
+                          
+                          <div className="text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
+                            <div className="truncate font-medium text-gray-900 dark:text-gray-100">
+                              {version.title}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span>{formatRelativeTime(version.saved_at)}</span>
+                              <span className="text-gray-400">•</span>
+                              <span className="text-gray-500">{formatDate(version.saved_at)}</span>
+                            </div>
+                            <div>{formatSize(version.content_size)}</div>
+                          </div>
                         </div>
-                      </div>
 
                       <button
                         onClick={() => handleRestore(version.version_id)}
@@ -192,7 +206,8 @@ export const VersionHistoryDropdown: React.FC<VersionHistoryDropdownProps> = ({
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

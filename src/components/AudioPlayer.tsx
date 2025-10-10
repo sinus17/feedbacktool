@@ -138,12 +138,15 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
       });
 
       // Check for cached waveform (IndexedDB first, then database)
+      console.log('🔍 Checking for cached waveform:', fileName);
       let cachedPeaks = await getCachedWaveform(audioUrl);
       
       if (!cachedPeaks) {
+        console.log('❌ Not in IndexedDB, checking database...');
         // Try database if not in IndexedDB
         cachedPeaks = await getWaveformFromDB(audioUrl);
         if (cachedPeaks) {
+          console.log('✅ Found in database! Caching to IndexedDB...');
           // Cache in IndexedDB for next time
           try {
             const db = await openWaveformDB();
@@ -153,14 +156,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
           } catch (e) {
             console.error('Error caching to IndexedDB:', e);
           }
+        } else {
+          console.log('❌ Not in database either, will generate fresh waveform');
         }
+      } else {
+        console.log('✅ Found in IndexedDB! Loading instantly...');
       }
       
       if (cachedPeaks) {
         // Load audio with cached peaks for instant display
+        console.log('⚡ Loading with cached peaks');
         wavesurfer.current.load(audioUrl, [cachedPeaks]);
       } else {
         // Load audio normally and cache the peaks
+        console.log('🔄 Generating waveform (this will be slow)...');
         wavesurfer.current.load(audioUrl);
         
         // Cache peaks after they're generated
@@ -168,6 +177,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
           const peaks = wavesurfer.current?.getDecodedData()?.getChannelData(0);
           const duration = wavesurfer.current?.getDuration();
           if (peaks) {
+            console.log('💾 Caching generated waveform...');
             cacheWaveform(audioUrl, peaks, duration);
           }
         });
@@ -175,6 +185,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
 
       // Event listeners
       wavesurfer.current.on('ready', () => {
+        console.log('🎵 WaveSurfer ready for:', fileName);
         setIsLoading(false);
         setDuration(wavesurfer.current?.getDuration() || 0);
       });
@@ -268,10 +279,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
       </div>
 
       {/* Waveform */}
-      <div className={`relative ${isLoading ? 'blur-sm' : ''}`}>
+      <div className="relative">
         {/* Loading Waveform Animation */}
         {isLoading && (
-          <div className="h-[60px] flex items-center justify-center space-x-1 bg-gray-100 dark:bg-gray-700 rounded">
+          <div className="absolute inset-0 h-[60px] flex items-center justify-center space-x-1 bg-gray-100 dark:bg-gray-700 rounded z-10">
             {Array.from({ length: 50 }).map((_, i) => (
               <div
                 key={i}
@@ -287,7 +298,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
             ))}
           </div>
         )}
-        <div ref={waveformRef} className={`w-full ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`} />
+        <div ref={waveformRef} className="w-full" />
       </div>
 
       {/* Controls */}

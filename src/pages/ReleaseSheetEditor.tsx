@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Undo, Redo } from 'lucide-react';
+import { ArrowLeft, Undo, Redo, Trash2 } from 'lucide-react';
 import { ReleaseService, ReleaseSheet } from '../services/releaseService';
-import { AudioPlayer } from '../components/AudioPlayer';
 import { SocialEmbed } from '../components/SocialEmbed';
 import { ReleaseSheetEditModal } from '../components/ReleaseSheetEditModal';
 import { VersionHistoryDropdown } from '../components/VersionHistoryDropdown';
@@ -24,11 +23,6 @@ export const ReleaseSheetEditor: React.FC = () => {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSizePicker, setShowSizePicker] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [uploadingAudio, setUploadingAudio] = useState(false);
-  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
-  const [lastDragFileTypes, setLastDragFileTypes] = useState<string>('');
-  const [lastDragPosition, setLastDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [linkedRelease, setLinkedRelease] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [artists, setArtists] = useState<{ id: string; name: string }[]>([]);
@@ -111,15 +105,22 @@ export const ReleaseSheetEditor: React.FC = () => {
             el.removeAttribute('style');
           });
           
-          // Remove image-container wrapper divs that have dark backgrounds
+          // Clean up image containers - remove any control buttons
           const imageContainers = tempDiv.querySelectorAll('.image-container');
           imageContainers.forEach((container: any) => {
-            // Get the inner content (the actual content inside the wrapper)
-            const innerContent = container.innerHTML;
-            // Replace the container with just its content
-            const fragment = document.createElement('div');
-            fragment.innerHTML = innerContent;
-            container.replaceWith(...Array.from(fragment.childNodes));
+            // Remove any existing control buttons
+            const controlsDiv = container.querySelector('.absolute.top-2.right-2');
+            if (controlsDiv) {
+              controlsDiv.remove();
+            }
+            
+            // Remove hover-related classes (group, relative) since we don't need them
+            container.classList.remove('group', 'relative');
+            
+            // Ensure basic classes are present
+            if (!container.classList.contains('block')) {
+              container.classList.add('block', 'my-4', 'text-center');
+            }
           });
           
           htmlContent = tempDiv.innerHTML;
@@ -133,17 +134,11 @@ export const ReleaseSheetEditor: React.FC = () => {
           console.log('Current innerHTML length after:', editorRef.current.innerHTML.length);
           console.log('=== INNERHTML SET ===');
           
-          // Replace audio player placeholders with actual players
-          console.log('Rendering audio players...');
-          renderAudioPlayers();
           
           // Replace social embed placeholders with actual embeds
           console.log('Rendering social embeds...');
           renderSocialEmbeds();
           
-          // Setup image size controls
-          console.log('Rendering images...');
-          renderImages();
           
           // Render release link icon
           console.log('Rendering release link icon...');
@@ -240,9 +235,7 @@ export const ReleaseSheetEditor: React.FC = () => {
               editorRef.current.scrollLeft = scrollLeft;
               
               // Re-render special elements
-              renderAudioPlayers();
               renderSocialEmbeds();
-              renderImages();
               renderReleaseLinkIcon();
               
               // Restore cursor position if it was saved
@@ -450,29 +443,6 @@ export const ReleaseSheetEditor: React.FC = () => {
     scheduleAutoSave();
   };
 
-  const cleanupContent = (html: string): string => {
-    // Remove empty divs with only Tailwind CSS variables
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    
-    // Remove empty divs that only contain <br> or whitespace
-    const emptyDivs = tempDiv.querySelectorAll('div');
-    emptyDivs.forEach(div => {
-      const hasOnlyBr = div.innerHTML.trim() === '<br>' || div.innerHTML.trim() === '';
-      const hasOnlyWhitespace = div.textContent?.trim() === '';
-      
-      if (hasOnlyBr || hasOnlyWhitespace) {
-        // Check if this div has Tailwind CSS variables (style attribute with --tw- variables)
-        const style = div.getAttribute('style');
-        if (style && style.includes('--tw-')) {
-          div.remove();
-        }
-      }
-    });
-    
-    return tempDiv.innerHTML;
-  };
-
   const handleContentChange = () => {
     if (!sheet || !editorRef.current) return;
     
@@ -654,6 +624,43 @@ export const ReleaseSheetEditor: React.FC = () => {
     execCommand('redo');
   };
 
+  const deleteReleaseSheet = async () => {
+    if (!sheet) return;
+    
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete "${sheet.title}"? This action cannot be undone.`
+    );
+    
+    if (!confirmDelete) return;
+    
+    try {
+      if (isTemplate) {
+        // Delete template
+        const { error } = await (supabase as any)
+          .from('release_sheet_templates')
+          .delete()
+          .eq('id', sheet.id);
+        
+        if (error) throw error;
+        alert('Template deleted successfully!');
+        navigate('/release-sheets?tab=templates');
+      } else {
+        // Delete release sheet
+        const { error } = await (supabase as any)
+          .from('release_sheets')
+          .delete()
+          .eq('id', sheet.id);
+        
+        if (error) throw error;
+        alert('Release sheet deleted successfully!');
+        navigate(fromAdmin ? '/release-sheets' : `/artist/${artistId}/release-sheets`);
+      }
+    } catch (error) {
+      console.error('Error deleting:', error);
+      alert('Failed to delete. Please try again.');
+    }
+  };
+
   const saveAsTemplate = async () => {
     if (!sheet || !editorRef.current || !artistId) return;
     
@@ -693,413 +700,13 @@ export const ReleaseSheetEditor: React.FC = () => {
     }
   };
 
-  // Audio upload functions
-  const uploadAudioFile = async (file: File): Promise<string | null> => {
-    try {
-      setUploadingAudio(true);
-      
-      // Validate file size (50MB limit)
-      if (file.size > 50 * 1024 * 1024) {
-        alert('File size too large. Maximum size is 50MB.');
-        return null;
-      }
-      
-      // Validate file type
-      const validTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/flac', 'audio/ogg'];
-      const validExtensions = ['mp3', 'wav', 'm4a', 'flac', 'ogg'];
-      const fileExt = file.name.split('.').pop()?.toLowerCase();
-      
-      if (!validTypes.includes(file.type) && !validExtensions.includes(fileExt || '')) {
-        alert('Unsupported file type. Please use MP3, WAV, M4A, FLAC, or OGG files.');
-        return null;
-      }
-      
-      // Generate unique filename
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `release-sheets/${sheetId}/audio/${fileName}`;
-
-      // Upload to Supabase Storage
-      const { error } = await supabase.storage
-        .from('release-sheet-files')
-        .upload(filePath, file);
-
-      if (error) {
-        console.error('Error uploading audio:', error);
-        
-        // Show user-friendly error messages
-        if (error.message.includes('Bucket not found')) {
-          alert('Storage bucket not configured. Please contact support.');
-        } else if (error.message.includes('File size')) {
-          alert('File too large. Maximum size is 50MB.');
-        } else if (error.message.includes('not allowed')) {
-          alert('File type not allowed. Please use MP3, WAV, M4A, FLAC, or OGG files.');
-        } else {
-          alert('Failed to upload audio file. Please try again.');
-        }
-        return null;
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('release-sheet-files')
-        .getPublicUrl(filePath);
-
-      return publicUrl;
-    } catch (error) {
-      console.error('Error uploading audio file:', error);
-      alert('An unexpected error occurred while uploading. Please try again.');
-      return null;
-    } finally {
-      setUploadingAudio(false);
-    }
-  };
-
   // Image upload functions
-  const uploadImageFile = async (file: File): Promise<string | null> => {
-    console.log('📤 UPLOAD IMAGE FILE - Starting upload for:', file.name);
-    
-    try {
-      
-      // Validate file size (10MB limit for images)
-      console.log('📏 Validating file size:', file.size, 'bytes');
-      if (file.size > 10 * 1024 * 1024) {
-        console.log('❌ File too large:', file.size);
-        alert('Image size too large. Maximum size is 10MB.');
-        return null;
-      }
-      
-      // Validate file type
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-      const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-      const fileExt = file.name.split('.').pop()?.toLowerCase();
-      
-      console.log('🔍 File validation:', {
-        fileType: file.type,
-        fileExtension: fileExt,
-        validTypes,
-        validExtensions
-      });
-      
-      if (!validTypes.includes(file.type) && !validExtensions.includes(fileExt || '')) {
-        console.log('❌ Invalid file type');
-        alert('Unsupported file type. Please use JPG, PNG, GIF, or WebP files.');
-        return null;
-      }
-      
-      // Generate unique filename
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `release-sheets/${sheetId}/images/${fileName}`;
-      
-      console.log('📁 Generated file path:', filePath);
-
-      // Upload to Supabase Storage (use same bucket as audio files)
-      
-      // Add timeout to prevent hanging
-      const uploadPromise = supabase.storage
-        .from('release-sheet-files')
-        .upload(filePath, file);
-      
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Upload timeout after 30 seconds')), 30000)
-      );
-      
-      const { error } = await Promise.race([uploadPromise, timeoutPromise]) as any;
-
-      if (error) {
-        console.error('❌ Supabase upload error:', error);
-        alert('Failed to upload image file. Please try again.');
-        return null;
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('release-sheet-files')
-        .getPublicUrl(filePath);
-
-      return publicUrl;
-    } catch (error) {
-      console.error('💥 Upload exception:', error);
-      alert('An unexpected error occurred while uploading. Please try again.');
-      return null;
-    } finally {
-      // Image upload completed
-    }
-  };
-
-  const insertAudioPlayer = (audioUrl: string, fileName: string) => {
-    const audioId = `audio-${Date.now()}`;
-    const audioPlayerHTML = `
-      <div class="audio-player-container my-4" data-audio-url="${audioUrl}" data-file-name="${fileName}" data-audio-id="${audioId}">
-        <div class="flex items-center space-x-2 mb-2">
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">🎵 ${fileName}</span>
-        </div>
-        <p class="text-xs text-gray-500 mb-2">Audio player will load when viewing</p>
-      </div>
-    `;
-
-    // Insert at cursor position
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const div = document.createElement('div');
-      div.innerHTML = audioPlayerHTML;
-      const frag = document.createDocumentFragment();
-      let node;
-      while ((node = div.firstChild)) {
-        frag.appendChild(node);
-      }
-      range.insertNode(frag);
-      handleContentChange();
-    } else {
-      execCommand('insertHTML', audioPlayerHTML);
-    }
-  };
-
-  const insertAtPosition = (html: string, position: { x: number; y: number; range: Range | null }) => {
-    if (!position.range) {
-      // Fallback to execCommand if no range available
-      execCommand('insertHTML', html);
-      return;
-    }
-    
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    const frag = document.createDocumentFragment();
-    let node;
-    while ((node = div.firstChild)) {
-      frag.appendChild(node);
-    }
-    position.range.deleteContents();
-    position.range.insertNode(frag);
-    handleContentChange();
-  };
 
 
 
 
 
-  const handleFileDrop = async (files: FileList) => {
-    console.log('🚀 HANDLE FILE DROP - Processing', files.length, 'files');
-    
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      console.log(`📄 Processing file ${i + 1}/${files.length}:`, {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        lastModified: new Date(file.lastModified).toISOString()
-      });
-      
-      // Check if it's an audio file
-      if (file.type.startsWith('audio/') || 
-          file.name.toLowerCase().endsWith('.mp3') || 
-          file.name.toLowerCase().endsWith('.wav') ||
-          file.name.toLowerCase().endsWith('.m4a') ||
-          file.name.toLowerCase().endsWith('.flac')) {
-        
-        console.log('🎵 AUDIO FILE detected:', file.name);
-        const audioUrl = await uploadAudioFile(file);
-        if (audioUrl) {
-          console.log('✅ Audio uploaded successfully:', audioUrl);
-          insertAudioPlayer(audioUrl, file.name);
-        } else {
-          console.log('❌ Audio upload failed');
-        }
-      }
-      // Check if it's an image file
-      else if (file.type.startsWith('image/') || 
-               file.name.toLowerCase().endsWith('.jpg') || 
-               file.name.toLowerCase().endsWith('.jpeg') ||
-               file.name.toLowerCase().endsWith('.png') ||
-               file.name.toLowerCase().endsWith('.gif') ||
-               file.name.toLowerCase().endsWith('.webp')) {
-        
-        console.log('📸 IMAGE FILE detected:', file.name);
-        console.log('🔄 Starting image upload process...');
-        
-        // Try direct insertion without placeholder for now
-        const imageUrl = await uploadImageFile(file);
-        console.log('📤 Upload result:', imageUrl);
-        
-        if (imageUrl) {
-          console.log('✅ Image uploaded successfully, creating HTML...');
-          
-          // Insert image directly
-          const imageId = `image-${Date.now()}`;
-          const imageHTML = `
-            <div class="image-container group relative block my-4 text-center" data-image-url="${imageUrl}" data-file-name="${file.name}" data-image-id="${imageId}" data-size="M">
-              <img src="${imageUrl}" alt="${file.name}" class="max-w-md h-auto rounded-lg shadow-sm mx-auto" loading="lazy" />
-              <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-md p-1">
-                <div class="flex space-x-1">
-                  <button class="size-btn text-white text-xs px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 cursor-pointer" data-size="S">S</button>
-                  <button class="size-btn text-white text-xs px-2 py-1 rounded bg-blue-500 cursor-pointer" data-size="M">M</button>
-                  <button class="size-btn text-white text-xs px-2 py-1 rounded bg-gray-600 hover:bg-gray-500 cursor-pointer" data-size="L">L</button>
-                  <button class="delete-btn text-white text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-500 cursor-pointer ml-1" title="Delete image">×</button>
-                </div>
-              </div>
-            </div>
-          `;
-          
-          console.log('🎯 Inserting image HTML at position...');
-          
-          // Use the current selection or fall back to execCommand
-          const selection = window.getSelection();
-          if (selection && selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            const position = { x: 0, y: 0, range };
-            console.log('📍 Using current selection position');
-            insertAtPosition(imageHTML, position);
-          } else {
-            console.log('📍 Using execCommand insertHTML');
-            execCommand('insertHTML', imageHTML);
-          }
-          
-          console.log('🔧 Setting up size controls...');
-          // Setup size controls
-          setTimeout(() => {
-            renderImages();
-            console.log('✅ Image insertion completed');
-          }, 100);
-        } else {
-          console.log('❌ Image upload failed');
-        }
-      } else {
-        console.log('❓ Unknown file type:', file.type, file.name);
-      }
-    }
-    
-    console.log('🏁 FILE DROP processing completed');
-  };
 
-  const getDropPosition = (e: React.DragEvent) => {
-    if (!editorRef.current) return null;
-    
-    const rect = editorRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    // Find the closest text node or element to insert before
-    const range = document.caretRangeFromPoint(e.clientX, e.clientY);
-    return { x, y, range };
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Only log once when drag starts or file type changes
-    const items = Array.from(e.dataTransfer.items);
-    const currentFileTypes = items.map(item => item.type).join(',');
-    
-    if (!isDragOver || lastDragFileTypes !== currentFileTypes) {
-      console.log('🔄 DRAG OVER - DataTransfer items:', e.dataTransfer.items.length);
-      items.forEach((item, index) => {
-        console.log(`📄 Item ${index}:`, {
-          kind: item.kind,
-          type: item.type,
-          fileName: item.getAsFile()?.name
-        });
-      });
-      setLastDragFileTypes(currentFileTypes);
-    }
-
-    const hasMediaFiles = items.some(item =>
-      item.type.startsWith('audio/') ||
-      item.type.startsWith('image/') ||
-      (item.kind === 'file' && item.type === '' &&
-       ['mp3', 'wav', 'm4a', 'flac', 'jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext =>
-         item.getAsFile()?.name.toLowerCase().endsWith(`.${ext}`)
-       ))
-    );
-
-    if (!isDragOver && hasMediaFiles) {
-      console.log('🎯 Has media files:', hasMediaFiles);
-    }
-
-    if (hasMediaFiles) {
-      setIsDragOver(true);
-      const position = getDropPosition(e);
-      
-      // Only log position changes that are significant (more than 5px difference)
-      if (position && (!lastDragPosition || 
-          Math.abs(position.x - lastDragPosition.x) > 5 || 
-          Math.abs(position.y - lastDragPosition.y) > 5)) {
-        console.log('📍 Drop position:', position);
-        setLastDragPosition({ x: position.x, y: position.y });
-      }
-      
-      if (position) {
-        setDragPosition({ x: position.x, y: position.y });
-      }
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Only hide if leaving the editor entirely
-    if (!editorRef.current?.contains(e.relatedTarget as Node)) {
-      setIsDragOver(false);
-      setDragPosition(null);
-      setLastDragFileTypes('');
-      setLastDragPosition(null);
-      
-      // Clean up any unwanted elements when drag ends
-      if (editorRef.current) {
-        const htmlContent = cleanupContent(editorRef.current.innerHTML);
-        if (htmlContent !== editorRef.current.innerHTML) {
-          editorRef.current.innerHTML = htmlContent;
-        }
-      }
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    console.log('🎯 DROP EVENT - Files dropped:', e.dataTransfer.files.length);
-    
-    setIsDragOver(false);
-    setDragPosition(null);
-    
-    // Set cursor position for insertion
-    const position = getDropPosition(e);
-    console.log('📍 Final drop position:', position);
-    
-    if (position?.range) {
-      const selection = window.getSelection();
-      if (selection) {
-        selection.removeAllRanges();
-        selection.addRange(position.range);
-        console.log('✅ Selection set at drop position');
-      }
-    }
-    
-    const files = e.dataTransfer.files;
-    console.log('📁 Files to process:', Array.from(files).map(f => ({
-      name: f.name,
-      type: f.type,
-      size: f.size
-    })));
-    
-    if (files.length > 0) {
-      handleFileDrop(files);
-    } else {
-      console.log('❌ No files to drop');
-    }
-    
-    // Clean up any unwanted elements after drop
-    setTimeout(() => {
-      if (editorRef.current) {
-        const htmlContent = cleanupContent(editorRef.current.innerHTML);
-        if (htmlContent !== editorRef.current.innerHTML) {
-          editorRef.current.innerHTML = htmlContent;
-        }
-      }
-    }, 100);
-  };
 
   // Social media URL detection
   const detectSocialMediaUrl = (text: string): { platform: 'instagram' | 'tiktok' | 'youtube'; url: string } | null => {
@@ -1175,33 +782,7 @@ export const ReleaseSheetEditor: React.FC = () => {
     }
   };
 
-  const renderAudioPlayers = () => {
-    if (!editorRef.current) return;
-    
-    const audioContainers = editorRef.current.querySelectorAll('.audio-player-container');
-    audioContainers.forEach((container) => {
-      const audioUrl = container.getAttribute('data-audio-url');
-      const fileName = container.getAttribute('data-file-name');
-      const audioId = container.getAttribute('data-audio-id');
-      
-      if (audioUrl && fileName && audioId) {
-        // Create a React root for this audio player
-        import('react-dom/client').then(({ createRoot }) => {
-          const root = createRoot(container);
-          root.render(
-            <AudioPlayer 
-              audioUrl={audioUrl} 
-              fileName={fileName}
-              onDelete={() => {
-                container.remove();
-                handleContentChange();
-              }}
-            />
-          );
-        });
-      }
-    });
-  };
+
 
   const renderSocialEmbeds = () => {
     if (!editorRef.current) return;
@@ -1303,58 +884,6 @@ export const ReleaseSheetEditor: React.FC = () => {
     }
   };
 
-  const renderImages = () => {
-    if (!editorRef.current) return;
-    
-    const imageContainers = editorRef.current.querySelectorAll('.image-container');
-    imageContainers.forEach((container) => {
-      // Handle size buttons
-      const sizeButtons = container.querySelectorAll('.size-btn');
-      sizeButtons.forEach((button) => {
-        button.addEventListener('click', (e) => {
-          e.preventDefault();
-          const newSize = button.getAttribute('data-size') as 'S' | 'M' | 'L';
-          const img = container.querySelector('img');
-          const sizeClasses = {
-            S: 'max-w-xs',
-            M: 'max-w-md', 
-            L: 'max-w-2xl'
-          };
-          
-          if (img) {
-            // Remove old size classes
-            img.classList.remove('max-w-xs', 'max-w-md', 'max-w-2xl');
-            // Add new size class and ensure center alignment
-            img.classList.add(sizeClasses[newSize], 'mx-auto');
-            
-            // Update button states
-            sizeButtons.forEach(btn => {
-              btn.classList.remove('bg-blue-500');
-              btn.classList.add('bg-gray-600', 'hover:bg-gray-500');
-            });
-            button.classList.remove('bg-gray-600', 'hover:bg-gray-500');
-            button.classList.add('bg-blue-500');
-            
-            // Update container data attribute
-            container.setAttribute('data-size', newSize);
-            handleContentChange();
-          }
-        });
-      });
-      
-      // Handle delete button
-      const deleteButton = container.querySelector('.delete-btn');
-      if (deleteButton) {
-        deleteButton.addEventListener('click', (e) => {
-          e.preventDefault();
-          if (confirm('Are you sure you want to delete this image?')) {
-            container.remove();
-            handleContentChange();
-          }
-        });
-      }
-    });
-  };
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -1733,19 +1262,28 @@ export const ReleaseSheetEditor: React.FC = () => {
                       Template
                     </span>
                   ) : (
-                    <button 
-                      onClick={saveAsTemplate}
-                      className="p-2 hover:bg-green-100 dark:hover:bg-green-700 rounded transition-colors text-green-600 dark:text-green-400" 
-                      title="Save as Template"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14,2 14,8 20,8"></polyline>
-                        <line x1="16" x2="8" y1="13" y2="13"></line>
-                        <line x1="16" x2="8" y1="17" y2="17"></line>
-                        <polyline points="10,9 9,9 8,9"></polyline>
-                      </svg>
-                    </button>
+                    <>
+                      <button 
+                        onClick={saveAsTemplate}
+                        className="p-2 hover:bg-green-100 dark:hover:bg-green-700 rounded transition-colors text-green-600 dark:text-green-400" 
+                        title="Save as Template"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14,2 14,8 20,8"></polyline>
+                          <line x1="16" x2="8" y1="13" y2="13"></line>
+                          <line x1="16" x2="8" y1="17" y2="17"></line>
+                          <polyline points="10,9 9,9 8,9"></polyline>
+                        </svg>
+                      </button>
+                      <button 
+                        onClick={deleteReleaseSheet}
+                        className="p-2 hover:bg-red-100 dark:hover:bg-red-700 rounded transition-colors text-red-600 dark:text-red-400" 
+                        title="Delete Release Sheet"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
                   )}
                 </div>
               )}
@@ -1776,8 +1314,12 @@ export const ReleaseSheetEditor: React.FC = () => {
         {lastSaved && !saving && !realtimeUpdate && (
           <div className="flex items-center gap-2">
             <div 
+              onClick={() => {
+                console.log('💾 Manual save triggered');
+                scheduleAutoSave();
+              }}
               className="text-white opacity-50 px-3 py-1 rounded-full text-sm hover:opacity-100 transition-opacity cursor-pointer group relative"
-              title={`Saved ${lastSaved.toLocaleTimeString()}`}
+              title={`Click to save now • Last saved ${lastSaved.toLocaleTimeString()}`}
             >
               {/* Diskette with checkmark icon */}
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline">
@@ -1791,7 +1333,7 @@ export const ReleaseSheetEditor: React.FC = () => {
               
               {/* Tooltip on hover */}
               <div className="absolute right-full top-1/2 transform -translate-y-1/2 mr-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                Saved {lastSaved.toLocaleTimeString()}
+                Click to save now • Last saved {lastSaved.toLocaleTimeString()}
               </div>
             </div>
             
@@ -1814,9 +1356,6 @@ export const ReleaseSheetEditor: React.FC = () => {
           onInput={handleContentChange}
           onBlur={handleEditorBlur}
           onPaste={handlePaste}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
           onClick={(e) => {
             // Make links clickable
             const target = e.target as HTMLElement;
@@ -1839,34 +1378,6 @@ export const ReleaseSheetEditor: React.FC = () => {
           data-placeholder="Start writing your release sheet..."
         >
         </div>
-        
-        {/* Drop Line Indicator */}
-        {isDragOver && dragPosition && (
-          <div
-            className="absolute pointer-events-none z-10"
-            style={{
-              left: '10%',
-              right: '10%',
-              top: `${dragPosition.y}px`,
-              height: '2px',
-              backgroundColor: '#3b82f6',
-              boxShadow: '0 0 4px rgba(59, 130, 246, 0.5)',
-            }}
-          >
-            <div className="absolute -left-2 -top-1 w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-md"></div>
-            <div className="absolute -right-2 -top-1 w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-md"></div>
-          </div>
-        )}
-        
-        {/* Upload Status */}
-        {uploadingAudio && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-4 py-2 rounded-lg shadow-lg z-20">
-            <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <span>Uploading audio...</span>
-            </div>
-          </div>
-        )}
       </div>
 
       <style>{`
