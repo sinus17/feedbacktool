@@ -32,12 +32,13 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const hasShuffledRef = useRef(false); // Track if we've already shuffled
   const isNavigatingRef = useRef(false); // Prevent multiple navigations at once
   const [showAnalysis, setShowAnalysis] = useState(false);
-  const [isMuted, setIsMuted] = useState(false); // Start unmuted - play with sound
+  const [isMuted, setIsMuted] = useState(true); // Start muted for autoplay to work
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [showFullCaption, setShowFullCaption] = useState(false);
   const [showCopiedToast, setShowCopiedToast] = useState(false);
+  const [showPlayOverlay, setShowPlayOverlay] = useState(true); // Show by default until autoplay succeeds
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
@@ -118,34 +119,26 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         // Reset playing state
         setIsPlaying(true);
         
-        // Set mute state based on current preference (not forced)
-        videoRef.current.muted = isMuted;
+        // Always start muted for autoplay to work
+        videoRef.current.muted = true;
+        setIsMuted(true);
         
         try {
           await videoRef.current.play();
-          console.log(`✅ Video playing (${isMuted ? 'muted' : 'with sound'})`);
+          console.log('✅ Video autoplaying (muted)');
+          setShowPlayOverlay(false);
         } catch (err) {
           console.error('❌ Autoplay failed:', err);
-          // If autoplay fails, try muting and playing again
-          if (!isMuted) {
-            console.log('🔇 Autoplay failed with sound, trying muted...');
-            videoRef.current.muted = true;
-            setIsMuted(true);
-            try {
-              await videoRef.current.play();
-              console.log('✅ Video playing (muted as fallback)');
-            } catch (err2) {
-              console.error('❌ Muted autoplay also failed:', err2);
-            }
-          }
+          // Show play overlay immediately if autoplay is blocked
+          setShowPlayOverlay(true);
+          setIsPlaying(false);
         }
       }
     };
 
-    // Small delay to ensure video is loaded
-    const timer = setTimeout(playVideo, 150);
-    return () => clearTimeout(timer);
-  }, [currentIndex, isMuted]);
+    // Try to play immediately
+    playVideo();
+  }, [currentIndex]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -528,7 +521,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                   loop
                   playsInline
                   autoPlay
-                  muted={isMuted}
+                  muted
                   poster={currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl}
                 />
               )}
@@ -544,6 +537,40 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                     className="absolute inset-0 flex items-center justify-center pointer-events-none"
                   >
                     <Heart className="w-32 h-32 text-red-500 fill-red-500" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Play Overlay - shown when autoplay fails */}
+              <AnimatePresence>
+                {showPlayOverlay && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-20 cursor-pointer"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (videoRef.current) {
+                        try {
+                          videoRef.current.muted = true;
+                          await videoRef.current.play();
+                          setShowPlayOverlay(false);
+                          setIsPlaying(true);
+                          console.log('✅ Video playing after user interaction');
+                        } catch (err) {
+                          console.error('Failed to play:', err);
+                        }
+                      }
+                    }}
+                  >
+                    <div className="flex flex-col items-center gap-4 px-8">
+                      <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-2xl">
+                        <Play className="w-12 h-12 text-black ml-1" fill="black" />
+                      </div>
+                      <p className="text-white text-xl font-bold text-center">Tap to Start</p>
+                      <p className="text-gray-300 text-sm text-center">Click anywhere to play video</p>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
