@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Video, AlertCircle, Loader } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { AlertCircle, Loader } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Login: React.FC = () => {
@@ -41,17 +41,15 @@ export const Login: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center">
-            <Video className="h-12 w-12 text-primary-500" />
+            <img 
+              src="/NEU_PSD_swipeup-marketing.png" 
+              alt="SwipeUp Marketing" 
+              className="h-24 w-auto"
+            />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Sign in to Video Feedback
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link to="/signup" className="font-medium text-primary-500 hover:text-primary-600">
-              create a new account
-            </Link>
-          </p>
         </div>
 
         {message && (
