@@ -119,26 +119,40 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         // Reset playing state
         setIsPlaying(true);
         
-        // Always start muted for autoplay to work
-        videoRef.current.muted = true;
-        setIsMuted(true);
+        // Use current mute preference (don't force mute after first interaction)
+        videoRef.current.muted = isMuted;
         
         try {
           await videoRef.current.play();
-          console.log('✅ Video autoplaying (muted)');
+          console.log(`✅ Video autoplaying (${isMuted ? 'muted' : 'with sound'})`);
           setShowPlayOverlay(false);
         } catch (err) {
           console.error('❌ Autoplay failed:', err);
-          // Show play overlay immediately if autoplay is blocked
-          setShowPlayOverlay(true);
-          setIsPlaying(false);
+          // If unmuted autoplay fails, try muted
+          if (!isMuted) {
+            try {
+              videoRef.current.muted = true;
+              setIsMuted(true);
+              await videoRef.current.play();
+              console.log('✅ Video autoplaying (muted fallback)');
+              setShowPlayOverlay(false);
+            } catch (err2) {
+              console.error('❌ Muted autoplay also failed:', err2);
+              setShowPlayOverlay(true);
+              setIsPlaying(false);
+            }
+          } else {
+            // Show play overlay if muted autoplay fails
+            setShowPlayOverlay(true);
+            setIsPlaying(false);
+          }
         }
       }
     };
 
     // Try to play immediately
     playVideo();
-  }, [currentIndex]);
+  }, [currentIndex, isMuted]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -289,9 +303,11 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   };
 
   const toggleMute = () => {
-    setIsMuted(!isMuted);
+    const newMutedState = !isMuted;
+    console.log(`🔊 Toggling mute: ${isMuted} → ${newMutedState}`);
+    setIsMuted(newMutedState);
     if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
+      videoRef.current.muted = newMutedState;
     }
   };
 
