@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { Play, Pause, Volume2, Download } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface AudioPlayerProps {
   audioUrl: string;
@@ -52,22 +53,62 @@ const getCachedWaveform = async (audioUrl: string): Promise<Float32Array | null>
   }
 };
 
-const cacheWaveform = async (audioUrl: string, peaks: Float32Array): Promise<void> => {
+const cacheWaveform = async (audioUrl: string, peaks: Float32Array, duration?: number): Promise<void> => {
   try {
+    // Cache in IndexedDB for fast local access
     const db = await openWaveformDB();
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       const transaction = db.transaction([WAVEFORM_STORE], 'readwrite');
       const store = transaction.objectStore(WAVEFORM_STORE);
       const request = store.put(Array.from(peaks), audioUrl);
       
       request.onsuccess = () => {
-        console.log('🎵 Cached waveform for:', audioUrl);
-        resolve();
+        console.log('🎵 Cached waveform in IndexedDB for:', audioUrl);
+        resolve(undefined);
       };
       request.onerror = () => reject(request.error);
     });
+    
+    // Also save to database for persistence across devices
+    const peaksArray = Array.from(peaks);
+    const { error } = await supabase
+      .from('audio_waveforms')
+      .upsert({
+        audio_url: audioUrl,
+        peaks: peaksArray,
+        duration: duration,
+        updated_at: new Date().toISOString()
+      } as any, {
+        onConflict: 'audio_url'
+      } as any);
+    
+    if (error) {
+      console.error('Error saving waveform to database:', error);
+    } else {
+      console.log('🎵 Cached waveform in database for:', audioUrl);
+    }
   } catch (error) {
     console.error('Error caching waveform:', error);
+  }
+};
+
+const getWaveformFromDB = async (audioUrl: string): Promise<Float32Array | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('audio_waveforms')
+      .select('peaks')
+      .eq('audio_url' as any, audioUrl as any)
+      .single();
+    
+    if (error || !data) {
+      return null;
+    }
+    
+    console.log('🎵 Retrieved waveform from database for:', audioUrl);
+    return new Float32Array((data as any).peaks);
+  } catch (error) {
+    console.error('Error getting waveform from database:', error);
+    return null;
   }
 };
 
@@ -96,8 +137,24 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
         mediaControls: false,
       });
 
-      // Check for cached waveform
-      const cachedPeaks = await getCachedWaveform(audioUrl);
+      // Check for cached waveform (IndexedDB first, then database)
+      let cachedPeaks = await getCachedWaveform(audioUrl);
+      
+      if (!cachedPeaks) {
+        // Try database if not in IndexedDB
+        cachedPeaks = await getWaveformFromDB(audioUrl);
+        if (cachedPeaks) {
+          // Cache in IndexedDB for next time
+          try {
+            const db = await openWaveformDB();
+            const transaction = db.transaction([WAVEFORM_STORE], 'readwrite');
+            const store = transaction.objectStore(WAVEFORM_STORE);
+            store.put(Array.from(cachedPeaks), audioUrl);
+          } catch (e) {
+            console.error('Error caching to IndexedDB:', e);
+          }
+        }
+      }
       
       if (cachedPeaks) {
         // Load audio with cached peaks for instant display
@@ -109,8 +166,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, fileName, on
         // Cache peaks after they're generated
         wavesurfer.current.on('ready', () => {
           const peaks = wavesurfer.current?.getDecodedData()?.getChannelData(0);
+          const duration = wavesurfer.current?.getDuration();
           if (peaks) {
-            cacheWaveform(audioUrl, peaks);
+            cacheWaveform(audioUrl, peaks, duration);
           }
         });
       }
