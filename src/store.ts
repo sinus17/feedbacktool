@@ -128,7 +128,7 @@ const useStore = create<StoreState>((set, get) => ({
         return;
       }
 
-      // Optimized query - only select necessary fields
+      // Optimized query - only select necessary fields including messages
       let query = supabase
         .from('submissions')
         .select(`
@@ -140,7 +140,17 @@ const useStore = create<StoreState>((set, get) => ({
           status,
           notes,
           created_at,
-          updated_at
+          updated_at,
+          messages (
+            id,
+            text,
+            is_admin,
+            user_id,
+            video_url,
+            created_at,
+            read_at,
+            updated_at
+          )
         `, { count: 'exact' });
 
       // Apply filters
@@ -163,18 +173,33 @@ const useStore = create<StoreState>((set, get) => ({
 
       if (error) throw error;
 
-      const transformedSubmissions: VideoSubmission[] = (data || []).map((sub: any) => ({
-        id: sub.id,
-        projectName: sub.project_name,
-        videoUrl: sub.video_url,
-        artistId: sub.artist_id,
-        type: sub.type,
-        status: sub.status,
-        notes: sub.notes,
-        createdAt: sub.created_at,
-        updatedAt: sub.updated_at,
-        messages: [] // Messages will be loaded separately when needed
-      }));
+      const transformedSubmissions: VideoSubmission[] = (data || []).map((sub: any) => {
+        const messages = (sub.messages || []).map((msg: any) => ({
+          id: msg.id,
+          text: msg.text,
+          isAdmin: msg.is_admin,
+          userId: msg.user_id,
+          videoUrl: msg.video_url,
+          createdAt: msg.created_at,
+          readAt: msg.read_at,
+          updatedAt: msg.updated_at
+        }));
+        
+        console.log(`📨 Loaded ${messages.length} messages for submission: ${sub.project_name}`);
+        
+        return {
+          id: sub.id,
+          projectName: sub.project_name,
+          videoUrl: sub.video_url,
+          artistId: sub.artist_id,
+          type: sub.type,
+          status: sub.status,
+          notes: sub.notes,
+          createdAt: sub.created_at,
+          updatedAt: sub.updated_at,
+          messages
+        };
+      });
 
       // Update pagination info
       const totalCount = count || 0;
@@ -792,13 +817,26 @@ const useStore = create<StoreState>((set, get) => ({
 
       console.log('Debug - Transformed message:', transformedMessage);
 
-      set(state => ({
-        submissions: state.submissions.map(sub => 
-          sub.id.toString() === submissionId.toString()
-            ? { ...sub, messages: [...sub.messages, transformedMessage] }
-            : sub
-        )
-      }));
+      set(state => {
+        console.log('🔄 Store: Updating submissions with new message');
+        console.log('Looking for submission ID:', submissionId);
+        console.log('Current submissions count:', state.submissions.length);
+        
+        const updatedSubmissions = state.submissions.map(sub => {
+          if (sub.id.toString() === submissionId.toString()) {
+            console.log('✅ Found matching submission:', sub.projectName);
+            console.log('Current messages count:', sub.messages.length);
+            console.log('Adding new message:', transformedMessage);
+            const updated = { ...sub, messages: [...sub.messages, transformedMessage] };
+            console.log('Updated messages count:', updated.messages.length);
+            return updated;
+          }
+          return sub;
+        });
+        
+        console.log('🔄 Store: State update complete');
+        return { submissions: updatedSubmissions };
+      });
 
       // Send WhatsApp notification for feedback
       if (isAdmin) {

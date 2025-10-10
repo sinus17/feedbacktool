@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MessageSquare, AlertCircle, CheckCircle, Search, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle, Search, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface WhatsAppLog {
@@ -15,14 +15,12 @@ interface WhatsAppLog {
 export const WhatsAppLogs: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<WhatsAppLog[]>([]);
 
   useEffect(() => {
     const fetchLogs = async () => {
       try {
         setLoading(true);
-        setError(null);
 
         const { data, error: fetchError } = await supabase
           .from('whatsapp_logs')
@@ -30,10 +28,9 @@ export const WhatsAppLogs: React.FC = () => {
           .order('created_at', { ascending: false });
 
         if (fetchError) throw fetchError;
-        setLogs(data || []);
+        setLogs((data as unknown as WhatsAppLog[]) || []);
       } catch (err) {
         console.error('Error loading WhatsApp logs:', err);
-        setError('Failed to load WhatsApp logs');
       } finally {
         setLoading(false);
       }
@@ -78,7 +75,7 @@ export const WhatsAppLogs: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">WhatsApp Logs</h2>

@@ -89,9 +89,16 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
   }, []);
 
   useEffect(() => {
+    console.log('🔄 FeedbackModal: Checking for submission updates');
+    console.log('Current submission ID:', currentSubmission.id);
+    console.log('Total submissions in store:', submissions.length);
     const updatedSubmission = submissions.find(s => s.id === currentSubmission.id);
     if (updatedSubmission) {
+      console.log('✅ Found updated submission with', updatedSubmission.messages?.length || 0, 'messages');
+      console.log('Messages:', updatedSubmission.messages);
       setCurrentSubmission(updatedSubmission);
+    } else {
+      console.log('❌ No matching submission found in store');
     }
   }, [submissions, currentSubmission.id]);
 
@@ -254,34 +261,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
 
       setNewMessage('');
       setNotes('');
-      
-      // Get current user ID for the temporary message
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // Update the submissions array in the store to reflect the status change
-      // This ensures other components using the same data are also updated
-      const updatedSubmissions = submissions.map(sub => {
-        if (sub.id === currentSubmission.id) {
-          // Create a new message object
-          const newMessageObj = {
-            id: Date.now().toString(), // Temporary ID until refresh
-            text: newMessage,
-            isAdmin: !isArtistView,
-            userId: user?.id || null, // Include userId so sender name displays correctly
-            createdAt: new Date().toISOString()
-          };
-          
-          return {
-            ...sub,
-            status: isArtistView ? 'feedback-needed' as const : 'correction-needed' as const,
-            messages: [...sub.messages, newMessageObj]
-          };
-        }
-        return sub;
-      });
-      
-      // Force a re-render of components using the submissions data
-      useStore.setState({ submissions: updatedSubmissions });
     } catch (err) {
       console.error('❌ Feedback: Error in feedback submission:', err);
       console.error('Error in feedback submission:', err);

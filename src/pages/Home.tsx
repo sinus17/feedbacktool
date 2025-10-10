@@ -46,7 +46,7 @@ export const Home: React.FC = () => {
   }, [fetchSubmissions, fetchArtists, selectedArtist, selectedType, selectedStatus]);
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-semibold">Video Submissions</h2>
