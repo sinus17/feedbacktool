@@ -785,7 +785,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
       </div>
 
       {/* Right side: Stats */}
-      <div className="absolute right-4 bottom-5 flex flex-col gap-5 z-10 items-end">
+      <div className="absolute right-3 md:right-4 bottom-5 flex flex-col gap-5 z-10 items-end">
         {/* Views/Plays */}
         <div className="flex flex-col items-center gap-0.5" onClick={handleStatsClick}>
           <button className="p-2 transition-opacity hover:opacity-70">
