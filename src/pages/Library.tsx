@@ -9,7 +9,7 @@ import { VideoDetailModal } from '../components/library/VideoDetailModal';
 import { FeedView } from '../components/library/FeedView';
 import type { LibraryVideo } from '../types';
 
-const CACHE_KEY = 'library_videos_v3'; // Updated for German-first analysis
+const CACHE_KEY = 'library_videos_v4'; // Updated for photo post support
 const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 export const Library: React.FC = () => {
@@ -33,6 +33,33 @@ export const Library: React.FC = () => {
     console.log('🔄 Library useEffect triggered - starting data load');
     loadVideos();
     loadUserProfile();
+
+    // Subscribe to realtime updates for new videos
+    const channel = supabase
+      .channel('video_library_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'video_library',
+          filter: 'processing_status=eq.completed'
+        },
+        (payload) => {
+          console.log('🔔 Realtime update received:', payload);
+          // Reload videos when a new video is completed
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            console.log('📹 New/updated video detected, reloading...');
+            loadVideos(true); // Force refresh
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔌 Unsubscribing from realtime updates');
+      supabase.removeChannel(channel);
+    };
   }, []);
   
   useEffect(() => {
@@ -132,6 +159,15 @@ export const Library: React.FC = () => {
 
       console.log('✅ Video query completed!');
       console.log('📦 Video query result:', { hasData: !!data, error, dataLength: data?.length });
+      
+      // Debug: Log first video to see available fields
+      if (data && data.length > 0) {
+        console.log('🔍 First video raw data keys:', Object.keys(data[0]));
+        console.log('🔍 First video photo fields:', {
+          is_photo_post: data[0].is_photo_post,
+          image_urls: data[0].image_urls
+        });
+      }
 
       if (error) throw error;
 
@@ -156,6 +192,8 @@ export const Library: React.FC = () => {
         thumbnailStorageUrl: v.thumbnail_storage_url,
         creatorAvatarUrl: v.creator_avatar_url,
         creatorAvatarStorageUrl: v.creator_avatar_storage_url,
+        isPhotoPost: v.is_photo_post,
+        imageUrls: v.image_urls,
         genre: v.genre,
         category: v.category,
         tags: v.tags,
@@ -187,6 +225,20 @@ export const Library: React.FC = () => {
       }));
 
       console.log('🗺️  Mapped videos:', mappedVideos?.length);
+      
+      // Debug: Check if photo post data was mapped
+      const photoPost = mappedVideos?.find((v: any) => v.isPhotoPost);
+      if (photoPost) {
+        console.log('📸 Found photo post after mapping:', {
+          id: photoPost.id,
+          isPhotoPost: photoPost.isPhotoPost,
+          imageUrls: photoPost.imageUrls,
+          imageUrlsLength: photoPost.imageUrls?.length
+        });
+      } else {
+        console.log('⚠️ No photo posts found in mapped videos');
+      }
+      
       console.log('💾 Setting videos state...');
       setVideos(mappedVideos);
       
@@ -204,6 +256,13 @@ export const Library: React.FC = () => {
     setProcessingVideos(prev => new Set(prev).add(queueId));
     // Invalidate cache so next load fetches fresh data
     cache.invalidate(CACHE_KEY);
+    
+    // Force refresh after 7 seconds to ensure the video appears in the queue
+    console.log('⏱️ Scheduling auto-refresh in 7 seconds...');
+    setTimeout(() => {
+      console.log('🔄 Auto-refreshing after video added...');
+      loadVideos(true);
+    }, 7000);
   };
 
   const filterVideos = () => {
@@ -403,7 +462,15 @@ export const Library: React.FC = () => {
               <VideoCard
                 key={video.id}
                 video={video}
-                onClick={() => setSelectedVideo(video)}
+                onClick={() => {
+                  console.log('🎯 Video clicked:', {
+                    id: video.id,
+                    isPhotoPost: video.isPhotoPost,
+                    hasImageUrls: !!video.imageUrls,
+                    imageUrlsLength: video.imageUrls?.length
+                  });
+                  setSelectedVideo(video);
+                }}
               />
             ))}
           </div>

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { LibraryVideo } from '../../types';
+import { PhotoSlideshow } from './PhotoSlideshow';
 
 interface FeedViewProps {
   videos: LibraryVideo[];
@@ -38,6 +39,8 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+  const touchEndY = useRef<number>(0);
 
   // Shuffle videos when they load (only once)
   useEffect(() => {
@@ -165,6 +168,49 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
       container.addEventListener('wheel', handleWheel, { passive: false });
       return () => {
         container.removeEventListener('wheel', handleWheel);
+      };
+    }
+  }, [currentIndex, shuffledVideos.length, showAnalysis]);
+
+  // Touch navigation for mobile
+  useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY.current = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      // Prevent default scrolling behavior
+      e.preventDefault();
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (showAnalysis) return;
+      
+      touchEndY.current = e.changedTouches[0].clientY;
+      const deltaY = touchStartY.current - touchEndY.current;
+      
+      // Minimum swipe distance (50px)
+      if (Math.abs(deltaY) > 50) {
+        if (deltaY > 0) {
+          // Swiped up - next video
+          navigateToNext();
+        } else {
+          // Swiped down - previous video
+          navigateToPrevious();
+        }
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('touchstart', handleTouchStart, { passive: true });
+      container.addEventListener('touchmove', handleTouchMove, { passive: false });
+      container.addEventListener('touchend', handleTouchEnd, { passive: true });
+      
+      return () => {
+        container.removeEventListener('touchstart', handleTouchStart);
+        container.removeEventListener('touchmove', handleTouchMove);
+        container.removeEventListener('touchend', handleTouchEnd);
       };
     }
   }, [currentIndex, shuffledVideos.length, showAnalysis]);
@@ -358,15 +404,22 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 bg-black overflow-hidden flex items-center justify-center"
-      style={{ height: '100vh', width: '100vw' }}
+      className="fixed inset-0 bg-black/95 overflow-hidden flex items-center justify-center z-50"
+      style={{ 
+        height: '100dvh', // Dynamic viewport height for mobile (fallback to 100vh in older browsers)
+        width: '100vw',
+        touchAction: 'pan-y',
+        overscrollBehavior: 'none',
+        backdropFilter: 'blur(10px)'
+      }}
     >
       {/* 9:16 Container */}
       <div className="relative bg-black overflow-hidden" style={{ 
         width: '100%',
-        maxWidth: 'calc(100vh * 9 / 16)',
-        height: '100vh',
-        aspectRatio: '9/16'
+        maxWidth: 'calc(100dvh * 9 / 16)',
+        height: '100dvh', // Dynamic viewport height for mobile
+        aspectRatio: '9/16',
+        touchAction: 'pan-y'
       }}>
         {/* Top gradient overlay */}
         <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/50 to-transparent z-30 pointer-events-none" />
@@ -393,16 +446,23 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos }) => {
               onClick={handleVideoTap}
               onTouchEnd={handleVideoTap}
             >
-              <video
-                ref={videoRef}
-                src={currentVideo.videoUrl}
-                className="w-full h-full object-cover"
-                loop
-                playsInline
-                autoPlay
-                muted={isMuted}
-                poster={currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl}
-              />
+              {currentVideo.isPhotoPost && currentVideo.imageUrls && currentVideo.imageUrls.length > 0 ? (
+                <PhotoSlideshow 
+                  images={currentVideo.imageUrls} 
+                  onTap={handleVideoTap}
+                />
+              ) : (
+                <video
+                  ref={videoRef}
+                  src={currentVideo.videoUrl}
+                  className="w-full h-full object-cover"
+                  loop
+                  playsInline
+                  autoPlay
+                  muted={isMuted}
+                  poster={currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl}
+                />
+              )}
               
               {/* Heart Animation on Double Tap */}
               <AnimatePresence>

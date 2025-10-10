@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Loader, AlertCircle } from 'lucide-react';
+import { Loader, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SafeZoneOverlay } from './video/SafeZoneOverlay';
 import { VideoControls } from './VideoControls';
 import { processVideoUrl, getVideoErrorMessage, isSupabaseStorageUrl } from '../utils/video/player';
@@ -7,9 +7,11 @@ import { processVideoUrl, getVideoErrorMessage, isSupabaseStorageUrl } from '../
 interface VideoPlayerProps {
   url: string;
   isDesktop: boolean;
+  isPhotoPost?: boolean;
+  imageUrls?: string[];
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url }) => {
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, isPhotoPost = false, imageUrls = [] }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0.1);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -24,6 +26,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
     setCurrentTime(0);
@@ -163,6 +166,74 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url }) => {
       else setAspectRatio('4:5');
     }
   };
+
+  // Handle photo slideshow
+  if (isPhotoPost && imageUrls.length > 0) {
+    console.log('📸 Photo slideshow mode:', { isPhotoPost, imageCount: imageUrls.length, currentSlide, imageUrls });
+    
+    const nextSlide = () => {
+      setCurrentSlide((prev) => (prev + 1) % imageUrls.length);
+    };
+
+    const prevSlide = () => {
+      setCurrentSlide((prev) => (prev - 1 + imageUrls.length) % imageUrls.length);
+    };
+
+    return (
+      <div
+        ref={containerRef}
+        className="relative bg-black rounded-lg overflow-hidden"
+        style={{ aspectRatio: '9/16', maxHeight: '80vh' }}
+      >
+        {/* Photo Slideshow */}
+        <div className="relative w-full h-full">
+          <img
+            src={imageUrls[currentSlide]}
+            alt={`Slide ${currentSlide + 1}`}
+            className="w-full h-full object-contain"
+            onError={(e) => console.error('❌ Image load error:', imageUrls[currentSlide], e)}
+            onLoad={() => console.log('✅ Image loaded:', imageUrls[currentSlide])}
+          />
+
+          {/* Navigation Arrows */}
+          {imageUrls.length > 1 && (
+            <>
+              <button
+                onClick={prevSlide}
+                className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-all z-10"
+                aria-label="Previous slide"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                onClick={nextSlide}
+                className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-all z-10"
+                aria-label="Next slide"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+
+              {/* Slide Indicators */}
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
+                {imageUrls.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentSlide(index)}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      index === currentSlide
+                        ? 'bg-white w-6'
+                        : 'bg-white/50 hover:bg-white/75'
+                    }`}
+                    aria-label={`Go to slide ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (!processedUrl || error) {
     return (

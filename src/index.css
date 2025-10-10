@@ -5,6 +5,14 @@
 @layer base {
   html {
     font-family: 'Work Sans', system-ui, sans-serif;
+    /* Prevent mobile bounce/scroll */
+    overscroll-behavior: none;
+    touch-action: pan-x pan-y;
+  }
+  
+  body {
+    /* Prevent mobile bounce/scroll */
+    overscroll-behavior: none;
   }
   
   input, textarea, select {

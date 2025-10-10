@@ -59,7 +59,7 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
   const [englishAnalysis, setEnglishAnalysis] = useState((initialVideo as any).gemini_analysis_en || null);
   const [editType, setEditType] = useState<'song-specific' | 'off-topic'>('song-specific');
   const [editActor, setEditActor] = useState<'solo' | 'multiple'>('solo');
-  const predefinedGenres = ['Pop', 'Hip-Hop', 'Rock', 'Electronic', 'R&B', 'Country', 'Jazz', 'Classical'];
+  const predefinedGenres = ['Pop', 'Hip-Hop', 'Rock', 'Electronic', 'Jazz', 'Classical'];
   const categoryOptions = ['Performance', 'Entertainment', 'Relatable', 'Personal'];
 
   useEffect(() => {
@@ -411,13 +411,34 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left: Video Player */}
             <div className="space-y-4 relative">
-              {video.videoUrl ? (
-                <VideoPlayer url={video.videoUrl} isDesktop={true} />
-              ) : (
-                <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-[70vh] mx-auto flex items-center justify-center text-gray-500">
-                  Video not available
-                </div>
-              )}
+              {(() => {
+                console.log('🎬 VideoDetailModal render:', { 
+                  isPhotoPost: video.isPhotoPost, 
+                  hasImageUrls: !!video.imageUrls, 
+                  imageUrlsLength: video.imageUrls?.length,
+                  imageUrls: video.imageUrls,
+                  hasVideoUrl: !!video.videoUrl 
+                });
+                
+                if (video.isPhotoPost && video.imageUrls && video.imageUrls.length > 0) {
+                  return (
+                    <VideoPlayer 
+                      url={video.videoUrl || ''} 
+                      isDesktop={true} 
+                      isPhotoPost={true}
+                      imageUrls={video.imageUrls}
+                    />
+                  );
+                } else if (video.videoUrl) {
+                  return <VideoPlayer url={video.videoUrl} isDesktop={true} />;
+                } else {
+                  return (
+                    <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-[70vh] mx-auto flex items-center justify-center text-gray-500">
+                      Video not available
+                    </div>
+                  );
+                }
+              })()}
               
               {/* Scanning Animation Overlay */}
               {isAnalyzing && (
@@ -528,7 +549,7 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-5 gap-4 p-4 bg-dark-700 rounded-lg">
+                <div className={`grid ${video.platform === 'instagram' ? 'grid-cols-3' : 'grid-cols-5'} gap-4 p-4 bg-dark-700 rounded-lg`}>
                   <div className="text-center">
                     <div className="mx-auto mb-1 text-gray-400 flex justify-center">
                       <EyeIcon />
@@ -550,20 +571,24 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                     <p className="text-sm font-semibold text-white">{formatNumber(video.commentsCount)}</p>
                     <p className="text-xs text-gray-400">Comments</p>
                   </div>
-                  <div className="text-center">
-                    <div className="mx-auto mb-1 text-gray-400 flex justify-center">
-                      <ShareIcon />
-                    </div>
-                    <p className="text-sm font-semibold text-white">{formatNumber(video.sharesCount)}</p>
-                    <p className="text-xs text-gray-400">Shares</p>
-                  </div>
-                  <div className="text-center">
-                    <div className="mx-auto mb-1 text-gray-400 flex justify-center">
-                      <BookmarkIcon />
-                    </div>
-                    <p className="text-sm font-semibold text-white">{formatNumber(video.collectCount)}</p>
-                    <p className="text-xs text-gray-400">Saves</p>
-                  </div>
+                  {video.platform === 'tiktok' && (
+                    <>
+                      <div className="text-center">
+                        <div className="mx-auto mb-1 text-gray-400 flex justify-center">
+                          <ShareIcon />
+                        </div>
+                        <p className="text-sm font-semibold text-white">{formatNumber(video.sharesCount)}</p>
+                        <p className="text-xs text-gray-400">Shares</p>
+                      </div>
+                      <div className="text-center">
+                        <div className="mx-auto mb-1 text-gray-400 flex justify-center">
+                          <BookmarkIcon />
+                        </div>
+                        <p className="text-sm font-semibold text-white">{formatNumber(video.collectCount)}</p>
+                        <p className="text-xs text-gray-400">Saves</p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {video.title && (

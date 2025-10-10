@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader, Plus, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -19,10 +20,69 @@ export const AddVideoModal: React.FC<AddVideoModalProps> = ({ isOpen, onClose, o
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [customGenres, setCustomGenres] = useState<string[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const inputRef = useRef<HTMLDivElement>(null);
+  const [previewPosition, setPreviewPosition] = useState({ top: 0, left: 0 });
 
-  // Predefined genres (can be extended)
-  const predefinedGenres = ['Pop', 'Hip-Hop', 'Rock', 'Electronic', 'R&B', 'Country', 'Jazz', 'Classical'];
+  const predefinedGenres = ['Pop', 'Hip-Hop', 'Rock', 'Electronic', 'Jazz', 'Classical'];
   const categoryOptions = ['Performance', 'Entertainment', 'Relatable', 'Personal'];
+
+  // Load custom genres from database
+  useEffect(() => {
+    if (isOpen) {
+      loadCustomGenres();
+    }
+  }, [isOpen]);
+
+  // Load preview image when URL changes
+  useEffect(() => {
+    const loadPreview = async () => {
+      if (!url || (!url.includes('tiktok.com') && !url.includes('instagram.com'))) {
+        setPreviewImage(null);
+        return;
+      }
+
+      setIsLoadingPreview(true);
+      try {
+        // Use the existing edge function to get video metadata
+        const response = await supabase.functions.invoke('get-video-preview', {
+          body: { url }
+        });
+
+        if (response.data?.thumbnailUrl) {
+          setPreviewImage(response.data.thumbnailUrl);
+        } else {
+          setPreviewImage(null);
+        }
+      } catch (error) {
+        console.error('Error loading preview:', error);
+        setPreviewImage(null);
+      } finally {
+        setIsLoadingPreview(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(loadPreview, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [url]);
+
+  const loadCustomGenres = async () => {
+    try {
+      const { data } = await supabase
+        .from('custom_genres')
+        .select('name')
+        .order('name');
+      
+      if (data) {
+        setCustomGenres(data.map((g: any) => g.name));
+      }
+    } catch (error) {
+      console.error('Error loading custom genres:', error);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -147,10 +207,23 @@ export const AddVideoModal: React.FC<AddVideoModalProps> = ({ isOpen, onClose, o
     }
   };
 
-  const addCustomGenre = () => {
+  const addCustomGenre = async () => {
     const trimmedGenre = customGenreInput.trim();
-    if (trimmedGenre && !genres.includes(trimmedGenre) && !predefinedGenres.includes(trimmedGenre)) {
+    if (trimmedGenre && !genres.includes(trimmedGenre)) {
       setGenres([...genres, trimmedGenre]);
+      
+      // If it's not in predefined or custom genres, save it to database
+      if (!predefinedGenres.includes(trimmedGenre) && !customGenres.includes(trimmedGenre)) {
+        try {
+          await supabase
+            .from('custom_genres' as any)
+            .insert({ name: trimmedGenre } as any);
+          setCustomGenres([...customGenres, trimmedGenre].sort());
+        } catch (error) {
+          console.error('Error saving custom genre:', error);
+        }
+      }
+      
       setCustomGenreInput('');
       setShowCustomGenreInput(false);
     }
@@ -181,7 +254,18 @@ export const AddVideoModal: React.FC<AddVideoModalProps> = ({ isOpen, onClose, o
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+          <div 
+            ref={inputRef}
+            className="relative"
+            onMouseEnter={() => {
+              if (previewImage && inputRef.current) {
+                const rect = inputRef.current.getBoundingClientRect();
+                setPreviewPosition({ top: rect.top, left: rect.left + rect.width / 2 });
+                setIsInputFocused(true);
+              }
+            }}
+            onMouseLeave={() => setIsInputFocused(false)}
+          >
             <label htmlFor="video-url" className="block text-sm font-medium text-gray-300 mb-2">
               Video URL *
             </label>
@@ -190,10 +274,19 @@ export const AddVideoModal: React.FC<AddVideoModalProps> = ({ isOpen, onClose, o
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              onFocus={() => {
+                if (inputRef.current) {
+                  const rect = inputRef.current.getBoundingClientRect();
+                  setPreviewPosition({ top: rect.top, left: rect.left + rect.width / 2 });
+                }
+                setIsInputFocused(true);
+              }}
+              onBlur={() => setTimeout(() => setIsInputFocused(false), 200)}
               placeholder="https://www.tiktok.com/@username/video/..."
               disabled={isSubmitting}
               className="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
             />
+            
             <p className="mt-2 text-xs text-gray-400">
               Supported platforms: TikTok and Instagram
             </p>
@@ -204,7 +297,7 @@ export const AddVideoModal: React.FC<AddVideoModalProps> = ({ isOpen, onClose, o
               Genres (Optional)
             </label>
             <div className="flex flex-wrap gap-2">
-              {predefinedGenres.map((genre) => (
+              {[...predefinedGenres, ...customGenres].map((genre: string) => (
                 <button
                   key={genre}
                   type="button"
@@ -388,6 +481,47 @@ export const AddVideoModal: React.FC<AddVideoModalProps> = ({ isOpen, onClose, o
           </div>
         </form>
       </div>
+
+      {/* Preview Portal - Rendered outside modal to avoid clipping */}
+      {isInputFocused && previewImage && createPortal(
+        <div 
+          className="fixed pointer-events-none"
+          style={{ 
+            top: `${previewPosition.top + 12}px`,
+            left: `${previewPosition.left}px`,
+            transform: 'translate(-50%, -100%)',
+            zIndex: 10000
+          }}
+        >
+          <div className="bg-dark-800 border border-gray-600 rounded-lg p-2 shadow-2xl">
+            <img 
+              src={previewImage} 
+              alt="Video preview" 
+              className="w-24 h-auto rounded"
+              onError={() => setPreviewImage(null)}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Loading Portal */}
+      {isInputFocused && isLoadingPreview && createPortal(
+        <div 
+          className="fixed pointer-events-none"
+          style={{ 
+            top: `${previewPosition.top + 12}px`,
+            left: `${previewPosition.left}px`,
+            transform: 'translate(-50%, -100%)',
+            zIndex: 10000
+          }}
+        >
+          <div className="bg-dark-800 border border-gray-600 rounded-lg p-4 shadow-2xl">
+            <Loader className="w-8 h-8 text-primary-500 animate-spin" />
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

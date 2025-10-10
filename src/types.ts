@@ -95,6 +95,8 @@ export interface LibraryVideo {
   thumbnailStorageUrl?: string;
   creatorAvatarUrl?: string;
   creatorAvatarStorageUrl?: string;
+  isPhotoPost?: boolean;
+  imageUrls?: string[];
   textLanguage?: string;
   diversificationLabels?: string[];
   diversification_labels?: string[];
