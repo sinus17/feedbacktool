@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { supabase } from '../lib/supabase';
-import { Archive as ArchiveIcon, Loader, AlertCircle, RefreshCw, RotateCcw, ExternalLink, Copy, Check } from 'lucide-react';
+import { Loader, AlertCircle, RefreshCw, RotateCcw, ExternalLink, Copy, Check } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 
@@ -26,7 +26,7 @@ export const Archive: React.FC = () => {
     item: null
   });
 
-  const { artists, submissions, adCreatives, fetchArtists, fetchSubmissions, fetchAdCreatives } = useStore();
+  const { fetchArtists, fetchSubmissions, fetchAdCreatives } = useStore();
 
   const formatDate = (dateString: string | null): string => {
     if (!dateString) return '-';
@@ -72,7 +72,7 @@ export const Archive: React.FC = () => {
 
       // Transform and combine the data
       const transformedItems: ArchivedItem[] = [
-        ...(archivedArtists || []).map(artist => ({
+        ...(archivedArtists || []).map((artist: any) => ({
           id: artist.id,
           type: 'artist' as const,
           name: artist.name,
@@ -83,7 +83,7 @@ export const Archive: React.FC = () => {
             elementId: artist.element_id
           }
         })),
-        ...(archivedSubmissions || []).map(submission => ({
+        ...(archivedSubmissions || []).map((submission: any) => ({
           id: submission.id,
           type: 'submission' as const,
           name: submission.project_name,
@@ -95,7 +95,7 @@ export const Archive: React.FC = () => {
             type: submission.type
           }
         })),
-        ...(archivedCreatives || []).map(creative => ({
+        ...(archivedCreatives || []).map((creative: any) => ({
           id: creative.id,
           type: 'ad_creative' as const,
           name: `${creative.platform} content`,
@@ -136,8 +136,8 @@ export const Archive: React.FC = () => {
           // Update artist archived status
           const { error: artistError } = await supabase
             .from('artists')
-            .update({ archived: false })
-            .eq('id', item.id)
+            .update({ archived: false } as any)
+            .eq('id' as any, item.id as any)
             .select();
 
           if (artistError) throw artistError;
@@ -145,9 +145,9 @@ export const Archive: React.FC = () => {
           // Update associated submissions
           const { error: submissionsError } = await supabase
             .from('submissions')
-            .update({ status: 'new' })
-            .eq('artist_id', item.id)
-            .eq('status', 'archived')
+            .update({ status: 'new' } as any)
+            .eq('artist_id' as any, item.id as any)
+            .eq('status' as any, 'archived' as any)
             .select();
 
           if (submissionsError) throw submissionsError;
@@ -158,8 +158,8 @@ export const Archive: React.FC = () => {
         case 'submission': {
           const { error: submissionError } = await supabase
             .from('submissions')
-            .update({ status: 'new' })
-            .eq('id', item.id)
+            .update({ status: 'new' } as any)
+            .eq('id' as any, item.id as any)
             .select();
 
           if (submissionError) throw submissionError;
@@ -170,8 +170,8 @@ export const Archive: React.FC = () => {
         case 'ad_creative': {
           const { error: creativeError } = await supabase
             .from('ad_creatives')
-            .update({ status: 'pending' })
-            .eq('id', item.id)
+            .update({ status: 'pending' } as any)
+            .eq('id' as any, item.id as any)
             .select();
 
           if (creativeError) throw creativeError;
@@ -191,7 +191,7 @@ export const Archive: React.FC = () => {
           timestamp: new Date().toISOString(),
           ...item.metadata
         }
-      }).select();
+      } as any).select();
 
       await fetchArchivedItems();
     } catch (err) {
