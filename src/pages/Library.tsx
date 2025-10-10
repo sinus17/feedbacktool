@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Loader, Grid3x3, List, Play } from 'lucide-react';
+import { Plus, Search, Loader, Grid3x3, Play } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { cache } from '../lib/cache';
@@ -22,12 +22,13 @@ export const Library: React.FC = () => {
   const [selectedVideo, setSelectedVideo] = useState<LibraryVideo | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
-  const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
-  const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [userTeam, setUserTeam] = useState<string>('');
   const [processingVideos, setProcessingVideos] = useState<Set<string>>(new Set());
   
   const activeTab = searchParams.get('tab') || 'grid';
+  const isPublicMode = searchParams.get('public') === 'true';
 
   useEffect(() => {
     console.log('🔄 Library useEffect triggered - starting data load');
@@ -75,7 +76,7 @@ export const Library: React.FC = () => {
 
   useEffect(() => {
     filterVideos();
-  }, [videos, searchQuery, selectedGenre, selectedPlatform, showFeaturedOnly]);
+  }, [videos, searchQuery, selectedGenre, selectedType, selectedCategory]);
 
   const loadUserProfile = async () => {
     console.log('👤 Loading user profile...');
@@ -159,15 +160,6 @@ export const Library: React.FC = () => {
 
       console.log('✅ Video query completed!');
       console.log('📦 Video query result:', { hasData: !!data, error, dataLength: data?.length });
-      
-      // Debug: Log first video to see available fields
-      if (data && data.length > 0) {
-        console.log('🔍 First video raw data keys:', Object.keys(data[0]));
-        console.log('🔍 First video photo fields:', {
-          is_photo_post: data[0].is_photo_post,
-          image_urls: data[0].image_urls
-        });
-      }
 
       if (error) throw error;
 
@@ -225,20 +217,6 @@ export const Library: React.FC = () => {
       }));
 
       console.log('🗺️  Mapped videos:', mappedVideos?.length);
-      
-      // Debug: Check if photo post data was mapped
-      const photoPost = mappedVideos?.find((v: any) => v.isPhotoPost);
-      if (photoPost) {
-        console.log('📸 Found photo post after mapping:', {
-          id: photoPost.id,
-          isPhotoPost: photoPost.isPhotoPost,
-          imageUrls: photoPost.imageUrls,
-          imageUrlsLength: photoPost.imageUrls?.length
-        });
-      } else {
-        console.log('⚠️ No photo posts found in mapped videos');
-      }
-      
       console.log('💾 Setting videos state...');
       setVideos(mappedVideos);
       
@@ -288,14 +266,19 @@ export const Library: React.FC = () => {
       filtered = filtered.filter((v) => v.genre === selectedGenre);
     }
 
-    // Platform filter
-    if (selectedPlatform !== 'all') {
-      filtered = filtered.filter((v) => v.platform === selectedPlatform);
+    // Type filter (song-specific / off-topic)
+    if (selectedType !== 'all') {
+      filtered = filtered.filter((v) => v.type === selectedType);
     }
 
-    // Featured filter
-    if (showFeaturedOnly) {
-      filtered = filtered.filter((v) => v.featured);
+    // Category filter (Performance, Relatable, Entertainment, Personal)
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter((v) => {
+        if (Array.isArray(v.category)) {
+          return v.category.includes(selectedCategory);
+        }
+        return v.category === selectedCategory;
+      });
     }
 
     console.log('✅ Filtered videos:', filtered.length);
@@ -308,33 +291,34 @@ export const Library: React.FC = () => {
 
   // If feed mode, show FeedView
   if (activeTab === 'feed') {
-    return <FeedView videos={filteredVideos} />;
+    return <FeedView videos={filteredVideos} isPublicMode={isPublicMode} />;
   }
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: '#111111' }}>
-      {/* Hero Section */}
-      <div className="relative border-b" style={{ borderColor: '#222222' }}>
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-4xl font-bold mb-2">Video Library</h1>
-              <p className="text-gray-400">
-                Curated collection of inspiring social media videos
-              </p>
+      {/* Hero Section - Hidden in public mode */}
+      {!isPublicMode && (
+        <div className="relative border-b" style={{ borderColor: '#222222' }}>
+          <div className="max-w-7xl mx-auto px-6 py-12">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-4xl font-bold mb-2">Video Library</h1>
+                <p className="text-gray-400">
+                  Curated collection of inspiring social media videos
+                </p>
+              </div>
+              {canEdit && (
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center gap-2"
+                >
+                  <Plus className="h-5 w-5" />
+                  Add Video
+                </button>
+              )}
             </div>
-            {canEdit && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center gap-2"
-              >
-                <Plus className="h-5 w-5" />
-                Add Video
-              </button>
-            )}
-          </div>
 
-          {/* Filters */}
+            {/* Filters */}
           <div className="flex flex-col gap-4">
             {/* Search - Full Width */}
             <div className="relative">
@@ -364,25 +348,28 @@ export const Library: React.FC = () => {
                 ))}
               </select>
 
-              {/* Type Filter */}
+              {/* Type Filter (song-specific / off-topic) */}
               <select
-                value={selectedPlatform}
-                onChange={(e) => setSelectedPlatform(e.target.value)}
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
                 className="px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="all">All Types</option>
-                <option value="tiktok">TikTok</option>
-                <option value="instagram">Instagram</option>
+                <option value="song-specific">Song-Specific</option>
+                <option value="off-topic">Off-Topic</option>
               </select>
 
-              {/* Category Filter */}
+              {/* Category Filter (Performance, Relatable, etc.) */}
               <select
-                value={showFeaturedOnly ? 'featured' : 'all'}
-                onChange={(e) => setShowFeaturedOnly(e.target.value === 'featured')}
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
                 className="px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="all">All Categories</option>
-                <option value="featured">Featured</option>
+                <option value="Performance">Performance</option>
+                <option value="Relatable">Relatable</option>
+                <option value="Entertainment">Entertainment</option>
+                <option value="Personal">Personal</option>
               </select>
 
               {/* View Mode Toggle - Fits perfectly next to Category on mobile */}
@@ -397,17 +384,6 @@ export const Library: React.FC = () => {
                 title="Grid View"
               >
                 <Grid3x3 className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => setSearchParams({ tab: 'list' })}
-                className={`flex-1 p-2 rounded-lg transition-colors flex items-center justify-center ${
-                  activeTab === 'list'
-                    ? 'bg-primary-500 text-white'
-                    : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
-                }`}
-                title="List View"
-              >
-                <List className="h-5 w-5" />
               </button>
               <button
                 onClick={() => setSearchParams({ tab: 'feed' })}
@@ -430,6 +406,7 @@ export const Library: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -451,26 +428,12 @@ export const Library: React.FC = () => {
             )}
           </div>
         ) : (
-          <div
-            className={
-              activeTab === 'list'
-                ? 'space-y-4'
-                : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4'
-            }
-          >
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
             {filteredVideos.map((video) => (
               <VideoCard
                 key={video.id}
                 video={video}
-                onClick={() => {
-                  console.log('🎯 Video clicked:', {
-                    id: video.id,
-                    isPhotoPost: video.isPhotoPost,
-                    hasImageUrls: !!video.imageUrls,
-                    imageUrlsLength: video.imageUrls?.length
-                  });
-                  setSelectedVideo(video);
-                }}
+                onClick={() => setSelectedVideo(video)}
               />
             ))}
           </div>

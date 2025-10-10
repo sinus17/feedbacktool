@@ -5,11 +5,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface PhotoSlideshowProps {
   images: string[];
   onTap?: (e: React.MouseEvent | React.TouchEvent) => void;
+  indicatorPosition?: 'bottom' | 'above-caption'; // Position for slide indicators
 }
 
-export const PhotoSlideshow = ({ images, onTap }: PhotoSlideshowProps) => {
+export const PhotoSlideshow = ({ images, onTap, indicatorPosition = 'bottom' }: PhotoSlideshowProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(0);
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
 
   // Auto-advance slides every 3 seconds
   useEffect(() => {
@@ -21,16 +24,46 @@ export const PhotoSlideshow = ({ images, onTap }: PhotoSlideshowProps) => {
     return () => clearInterval(timer);
   }, [images.length]);
 
-  const goToNext = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const goToNext = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setDirection(1);
     setCurrentIndex((prev) => (prev + 1) % images.length);
   };
 
-  const goToPrev = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const goToPrev = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setDirection(-1);
     setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  // Handle touch events for swipe
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe) {
+      goToNext();
+    } else if (isRightSwipe) {
+      goToPrev();
+    } else {
+      // If not a swipe, treat as tap
+      onTap?.(e);
+    }
+
+    // Reset
+    setTouchStart(0);
+    setTouchEnd(0);
   };
 
   const variants = {
@@ -51,7 +84,13 @@ export const PhotoSlideshow = ({ images, onTap }: PhotoSlideshowProps) => {
   };
 
   return (
-    <div className="relative w-full h-full bg-black" onClick={onTap}>
+    <div 
+      className="relative w-full h-full bg-black" 
+      onClick={onTap}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Image Slideshow */}
       <AnimatePresence initial={false} custom={direction}>
         <motion.img
@@ -91,7 +130,9 @@ export const PhotoSlideshow = ({ images, onTap }: PhotoSlideshowProps) => {
 
       {/* Slide Indicators */}
       {images.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-2">
+        <div className={`absolute left-1/2 -translate-x-1/2 z-10 flex gap-2 ${
+          indicatorPosition === 'above-caption' ? 'bottom-64' : 'bottom-4'
+        }`}>
           {images.map((_, index) => (
             <button
               key={index}

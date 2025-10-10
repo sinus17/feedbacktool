@@ -169,7 +169,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, isPhotoPost = fal
 
   // Handle photo slideshow
   if (isPhotoPost && imageUrls.length > 0) {
-    console.log('📸 Photo slideshow mode:', { isPhotoPost, imageCount: imageUrls.length, currentSlide, imageUrls });
     
     const nextSlide = () => {
       setCurrentSlide((prev) => (prev + 1) % imageUrls.length);
@@ -191,8 +190,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, isPhotoPost = fal
             src={imageUrls[currentSlide]}
             alt={`Slide ${currentSlide + 1}`}
             className="w-full h-full object-contain"
-            onError={(e) => console.error('❌ Image load error:', imageUrls[currentSlide], e)}
-            onLoad={() => console.log('✅ Image loaded:', imageUrls[currentSlide])}
           />
 
           {/* Navigation Arrows */}

@@ -411,34 +411,20 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left: Video Player */}
             <div className="space-y-4 relative">
-              {(() => {
-                console.log('🎬 VideoDetailModal render:', { 
-                  isPhotoPost: video.isPhotoPost, 
-                  hasImageUrls: !!video.imageUrls, 
-                  imageUrlsLength: video.imageUrls?.length,
-                  imageUrls: video.imageUrls,
-                  hasVideoUrl: !!video.videoUrl 
-                });
-                
-                if (video.isPhotoPost && video.imageUrls && video.imageUrls.length > 0) {
-                  return (
-                    <VideoPlayer 
-                      url={video.videoUrl || ''} 
-                      isDesktop={true} 
-                      isPhotoPost={true}
-                      imageUrls={video.imageUrls}
-                    />
-                  );
-                } else if (video.videoUrl) {
-                  return <VideoPlayer url={video.videoUrl} isDesktop={true} />;
-                } else {
-                  return (
-                    <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-[70vh] mx-auto flex items-center justify-center text-gray-500">
-                      Video not available
-                    </div>
-                  );
-                }
-              })()}
+              {video.isPhotoPost && video.imageUrls && video.imageUrls.length > 0 ? (
+                <VideoPlayer 
+                  url={video.videoUrl || ''} 
+                  isDesktop={true} 
+                  isPhotoPost={true}
+                  imageUrls={video.imageUrls}
+                />
+              ) : video.videoUrl ? (
+                <VideoPlayer url={video.videoUrl} isDesktop={true} />
+              ) : (
+                <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-[70vh] mx-auto flex items-center justify-center text-gray-500">
+                  Video not available
+                </div>
+              )}
               
               {/* Scanning Animation Overlay */}
               {isAnalyzing && (

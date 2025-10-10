@@ -23,6 +23,7 @@ import { Signup } from './pages/Signup';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
+import { PublicLibraryRoute } from './components/PublicLibraryRoute';
 import { useDarkMode } from './hooks/useDarkMode';
 import { SnowEffect } from './components/SnowEffect';
 import './styles/snow.css';
@@ -122,6 +123,23 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               
+              {/* Library route - public when public=true parameter is present */}
+              <Route 
+                path="/library" 
+                element={
+                  <PublicLibraryRoute>
+                    {(isPublic) => (
+                      <div className="flex w-full h-screen">
+                        {!isPublic && <Sidebar />}
+                        <main className={`flex-1 overflow-auto ${isPublic ? 'w-full' : ''}`} style={{ backgroundColor: '#111111' }}>
+                          <Library />
+                        </main>
+                      </div>
+                    )}
+                  </PublicLibraryRoute>
+                } 
+              />
+              
               {/* Protected routes */}
               <Route
                 path="/*"
@@ -136,7 +154,6 @@ function App() {
                             <Route path="ad-creatives" element={<AdCreatives />} />
                             <Route path="content-plan" element={<ContentPlan />} />
                             <Route path="release-sheets" element={<ReleaseSheets />} />
-                            <Route path="library" element={<Library />} />
                             <Route path="artists" element={<Artists />} />
                             <Route path="whatsapp" element={<WhatsAppLogs />} />
                             <Route path="archive" element={<Archive />} />
