@@ -32,7 +32,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const hasShuffledRef = useRef(false); // Track if we've already shuffled
   const isNavigatingRef = useRef(false); // Prevent multiple navigations at once
   const [showAnalysis, setShowAnalysis] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true); // Start muted for autoplay to work
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
@@ -117,23 +117,15 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         // Reset playing state
         setIsPlaying(true);
         
+        // Ensure video is muted for autoplay to work
+        videoRef.current.muted = true;
+        setIsMuted(true);
+        
         try {
-          // Try to play with sound first
           await videoRef.current.play();
-          console.log('✅ Video playing with sound');
+          console.log('✅ Video playing (muted for autoplay)');
         } catch (err) {
-          console.warn('⚠️ Autoplay with sound failed, trying muted:', err);
-          // If autoplay fails, try muted
-          if (videoRef.current) {
-            videoRef.current.muted = true;
-            setIsMuted(true);
-            try {
-              await videoRef.current.play();
-              console.log('✅ Video playing muted');
-            } catch (e) {
-              console.error('❌ Muted autoplay also failed:', e);
-            }
-          }
+          console.error('❌ Autoplay failed:', err);
         }
       }
     };
