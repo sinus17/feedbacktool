@@ -553,13 +553,26 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                       e.stopPropagation();
                       if (videoRef.current) {
                         try {
-                          videoRef.current.muted = true;
+                          // Try to play with sound first (user interaction allows this)
+                          videoRef.current.muted = false;
+                          setIsMuted(false);
                           await videoRef.current.play();
                           setShowPlayOverlay(false);
                           setIsPlaying(true);
-                          console.log('✅ Video playing after user interaction');
+                          console.log('✅ Video playing with sound after user interaction');
                         } catch (err) {
-                          console.error('Failed to play:', err);
+                          console.error('Failed to play with sound:', err);
+                          // Fallback to muted if sound fails
+                          try {
+                            videoRef.current.muted = true;
+                            setIsMuted(true);
+                            await videoRef.current.play();
+                            setShowPlayOverlay(false);
+                            setIsPlaying(true);
+                            console.log('✅ Video playing muted after user interaction');
+                          } catch (err2) {
+                            console.error('Failed to play:', err2);
+                          }
                         }
                       }
                     }}
@@ -568,8 +581,8 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                       <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-2xl">
                         <Play className="w-12 h-12 text-black ml-1" fill="black" />
                       </div>
-                      <p className="text-white text-xl font-bold text-center">Tap to Start</p>
-                      <p className="text-gray-300 text-sm text-center">Click anywhere to play video</p>
+                      <p className="text-white text-xl font-bold text-center">Tap to Play</p>
+                      <p className="text-gray-300 text-sm text-center">Video will play with sound</p>
                     </div>
                   </motion.div>
                 )}
