@@ -37,23 +37,20 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#111111' }}>
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center">
             <img 
-              src="/NEU_PSD_swipeup-marketing.png" 
+              src="/NEU_PSD_swipeup-marketing_2.png" 
               alt="SwipeUp Marketing" 
-              className="h-24 w-auto"
+              className="h-28 w-auto"
             />
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to Video Feedback
-          </h2>
         </div>
 
         {message && (
-          <div className="flex items-center gap-2 text-green-500 bg-green-50 p-3 rounded-md">
+          <div className="flex items-center gap-2 text-green-400 bg-green-900/30 p-3 rounded-md border border-green-700">
             <AlertCircle className="h-5 w-5" />
             <p>{message}</p>
           </div>
@@ -61,7 +58,7 @@ export const Login: React.FC = () => {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="flex items-center gap-2 text-red-500 bg-red-50 p-3 rounded-md">
+            <div className="flex items-center gap-2 text-red-400 bg-red-900/30 p-3 rounded-md border border-red-700">
               <AlertCircle className="h-5 w-5" />
               <p>{error}</p>
             </div>
@@ -69,7 +66,7 @@ export const Login: React.FC = () => {
 
           <div className="rounded-md shadow-sm space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
                 Email address
               </label>
               <input
@@ -80,13 +77,13 @@ export const Login: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-600 placeholder-gray-500 text-white bg-dark-700 focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
                 placeholder="you@example.com"
                 disabled={loading}
               />
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
                 Password
               </label>
               <input
@@ -97,7 +94,7 @@ export const Login: React.FC = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-600 placeholder-gray-500 text-white bg-dark-700 focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
                 placeholder="••••••••"
                 disabled={loading}
               />

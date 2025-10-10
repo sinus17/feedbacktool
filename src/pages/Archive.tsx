@@ -50,7 +50,7 @@ export const Archive: React.FC = () => {
       const { data: archivedArtists, error: artistsError } = await supabase
         .from('artists')
         .select('*')
-        .eq('archived', true);
+        .eq('archived' as any, true as any);
 
       if (artistsError) throw artistsError;
 
@@ -58,7 +58,7 @@ export const Archive: React.FC = () => {
       const { data: archivedSubmissions, error: submissionsError } = await supabase
         .from('submissions')
         .select('*, artists!inner(*)')
-        .eq('status', 'archived');
+        .eq('status' as any, 'archived' as any);
 
       if (submissionsError) throw submissionsError;
 
@@ -66,7 +66,7 @@ export const Archive: React.FC = () => {
       const { data: archivedCreatives, error: creativesError } = await supabase
         .from('ad_creatives')
         .select('*, artists!inner(*)')
-        .eq('status', 'archived');
+        .eq('status' as any, 'archived' as any);
 
       if (creativesError) throw creativesError;
 
