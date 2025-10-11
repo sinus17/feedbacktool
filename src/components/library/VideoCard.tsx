@@ -184,10 +184,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onClick }) => {
       <div className="mt-2 space-y-1">
         {video.accountUsername && (
           <div className="flex items-center gap-2">
-            {/* Profile Picture */}
-            {video.creatorAvatarStorageUrl || video.creatorAvatarUrl ? (
+            {/* Profile Picture - Only use storage URL to prevent external CDN requests */}
+            {video.creatorAvatarStorageUrl ? (
               <img
-                src={video.creatorAvatarStorageUrl || video.creatorAvatarUrl}
+                src={video.creatorAvatarStorageUrl}
                 alt={video.accountName || video.accountUsername}
                 className="h-8 w-8 rounded-full object-cover"
                 onError={(e) => {
@@ -195,13 +195,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onClick }) => {
                   e.currentTarget.nextElementSibling?.classList.remove('hidden');
                 }}
               />
-            ) : null}
-            <div className="h-8 w-8 rounded-full bg-dark-700 flex items-center justify-center text-gray-400 hidden">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-              </svg>
-            </div>
+            ) : (
+              <div className="h-8 w-8 rounded-full bg-dark-700 flex items-center justify-center text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </div>
+            )}
             
             {/* Username with Platform Icon - Clickable */}
             <a

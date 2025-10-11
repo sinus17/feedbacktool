@@ -3,8 +3,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Register Service Worker for PWA
-if ('serviceWorker' in navigator) {
+// Register Service Worker for PWA (skip in Instagram in-app browser)
+const isInstagramBrowser = /Instagram/i.test(navigator.userAgent);
+if ('serviceWorker' in navigator && !isInstagramBrowser) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
@@ -14,6 +15,8 @@ if ('serviceWorker' in navigator) {
         console.error('❌ Service Worker registration failed:', error);
       });
   });
+} else if (isInstagramBrowser) {
+  console.log('📱 Instagram browser detected - Service Worker disabled');
 }
 
 const rootElement = document.getElementById('root');
@@ -30,10 +33,12 @@ if (!rootElement) {
     );
   } catch (error) {
     console.error('Error rendering app:', error);
+    const isInstagram = /Instagram/i.test(navigator.userAgent);
     rootElement.innerHTML = `
       <div style="padding: 20px; text-align: center; color: white; background: #1f2937; min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column;">
         <h1>Application Error</h1>
-        <p>Failed to load the application. Please check the console for details.</p>
+        <p>Failed to load the application.${isInstagram ? ' Instagram browser detected.' : ''}</p>
+        <p style="font-size: 12px; color: #9ca3af; margin-top: 10px;">Try opening in your default browser for best experience.</p>
         <button onclick="window.location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
           Reload Page
         </button>

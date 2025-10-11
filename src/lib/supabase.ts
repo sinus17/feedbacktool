@@ -9,9 +9,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Configure retry options
-const RETRY_COUNT = 2;
-const RETRY_DELAY = 500; // 0.5 seconds
-const REQUEST_TIMEOUT = 10000; // 10 seconds
+const RETRY_COUNT = 1; // Reduced for Instagram browser
+const RETRY_DELAY = 300; // 0.3 seconds
+const REQUEST_TIMEOUT = 5000; // 5 seconds (reduced for faster timeout)
 
 // Add retry wrapper with exponential backoff
 async function withRetry<T>(

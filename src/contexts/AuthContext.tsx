@@ -16,14 +16,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authInitialized, setAuthInitialized] = useState(false);
+  
+  // Check if we're on a public route (skip auth for Instagram browser compatibility)
+  const isPublicRoute = window.location.pathname.startsWith('/artist/') || 
+                        window.location.pathname.startsWith('/preview/') ||
+                        window.location.pathname.startsWith('/library');
+  const isInstagramBrowser = /Instagram/i.test(navigator.userAgent);
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
 
     async function initializeAuth() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
+      // Skip auth initialization for public routes in Instagram browser
+      if (isPublicRoute && isInstagramBrowser) {
+        console.log('📱 Skipping auth for public route in Instagram browser');
         if (mounted) {
+          setCurrentUser(null);
+          setAuthInitialized(true);
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        // Set a timeout to prevent infinite loading in Instagram browser
+        const authPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Auth timeout')), 5000);
+        });
+
+        const { data: { session } } = await Promise.race([authPromise, timeoutPromise]) as any;
+        
+        if (mounted) {
+          clearTimeout(timeoutId);
           setCurrentUser(session?.user ?? null);
           setAuthInitialized(true);
           setLoading(false);
@@ -31,6 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Auth initialization error:', error);
         if (mounted) {
+          clearTimeout(timeoutId);
+          // Continue without auth in case of timeout (e.g., Instagram browser)
+          setCurrentUser(null);
           setAuthInitialized(true);
           setLoading(false);
         }

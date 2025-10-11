@@ -989,10 +989,10 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
             }
           }}
         >
-          {/* Author profile picture */}
-          {currentVideo.creatorAvatarUrl || currentVideo.creatorAvatarStorageUrl ? (
+          {/* Author profile picture - Only use storage URL to prevent external CDN requests */}
+          {currentVideo.creatorAvatarStorageUrl ? (
             <img
-              src={currentVideo.creatorAvatarStorageUrl || currentVideo.creatorAvatarUrl}
+              src={currentVideo.creatorAvatarStorageUrl}
               alt={currentVideo.accountName || currentVideo.accountUsername || 'Author'}
               className="w-12 h-12 rounded-full object-cover"
             />
