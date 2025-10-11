@@ -35,46 +35,91 @@ async function translateText(text: any, targetLang: string = 'de'): Promise<stri
   return data.data.translations[0].translatedText;
 }
 
-async function translateGeminiAnalysis(analysis: any, targetLang: string = 'en'): Promise<any> {
+async function translateGeminiAnalysis(analysis: any, targetLang: string = 'en', isTrending: boolean = false): Promise<any> {
   const translated: any = {};
 
-  // Translate each field
-  if (analysis.hook) {
-    translated.hook = await translateText(analysis.hook, targetLang);
-  }
+  if (isTrending) {
+    // Translate trending video analysis fields
+    if (analysis.original_concept) {
+      translated.original_concept = await translateText(analysis.original_concept, targetLang);
+    }
 
-  if (analysis.content_type) {
-    translated.content_type = await translateText(analysis.content_type, targetLang);
-  }
+    if (analysis.why_it_went_viral) {
+      translated.why_it_went_viral = await translateText(analysis.why_it_went_viral, targetLang);
+    }
 
-  if (analysis.visual_style) {
-    translated.visual_style = await translateText(analysis.visual_style, targetLang);
-  }
+    if (analysis.music_adaptation) {
+      translated.music_adaptation = {
+        core_mechanic: analysis.music_adaptation.core_mechanic ? await translateText(analysis.music_adaptation.core_mechanic, targetLang) : '',
+        how_to_flip: analysis.music_adaptation.how_to_flip ? await translateText(analysis.music_adaptation.how_to_flip, targetLang) : '',
+        example_scenarios: analysis.music_adaptation.example_scenarios && Array.isArray(analysis.music_adaptation.example_scenarios)
+          ? await Promise.all(analysis.music_adaptation.example_scenarios.map((s: string) => translateText(s, targetLang)))
+          : []
+      };
+    }
 
-  // Translate shotlist array (handle both strings and objects)
-  if (analysis.shotlist && Array.isArray(analysis.shotlist)) {
-    translated.shotlist = await Promise.all(
-      analysis.shotlist.map(async (shot: any) => {
-        if (typeof shot === 'string') {
-          return await translateText(shot, targetLang);
-        } else if (typeof shot === 'object') {
-          // If it's an object, translate the description field
-          const translatedShot: any = {};
-          if (shot.scene) translatedShot.scene = await translateText(shot.scene, targetLang);
-          if (shot.action) translatedShot.action = await translateText(shot.action, targetLang);
-          if (shot.description) translatedShot.description = await translateText(shot.description, targetLang);
-          return translatedShot;
-        }
-        return shot;
-      })
-    );
-  }
+    if (analysis.best_song_topics && Array.isArray(analysis.best_song_topics)) {
+      translated.best_song_topics = await Promise.all(
+        analysis.best_song_topics.map((topic: string) => translateText(topic, targetLang))
+      );
+    }
 
-  // Translate engagement_factors array
-  if (analysis.engagement_factors && Array.isArray(analysis.engagement_factors)) {
-    translated.engagement_factors = await Promise.all(
-      analysis.engagement_factors.map((factor: string) => translateText(factor, targetLang))
-    );
+    if (analysis.production_requirements && Array.isArray(analysis.production_requirements)) {
+      translated.production_requirements = await Promise.all(
+        analysis.production_requirements.map((req: string) => translateText(req, targetLang))
+      );
+    }
+
+    if (analysis.shotlist_template && Array.isArray(analysis.shotlist_template)) {
+      translated.shotlist_template = await Promise.all(
+        analysis.shotlist_template.map((shot: string) => translateText(shot, targetLang))
+      );
+    }
+
+    if (analysis.engagement_factors && Array.isArray(analysis.engagement_factors)) {
+      translated.engagement_factors = await Promise.all(
+        analysis.engagement_factors.map((factor: string) => translateText(factor, targetLang))
+      );
+    }
+  } else {
+    // Translate regular video analysis fields
+    if (analysis.hook) {
+      translated.hook = await translateText(analysis.hook, targetLang);
+    }
+
+    if (analysis.content_type) {
+      translated.content_type = await translateText(analysis.content_type, targetLang);
+    }
+
+    if (analysis.visual_style) {
+      translated.visual_style = await translateText(analysis.visual_style, targetLang);
+    }
+
+    // Translate shotlist array (handle both strings and objects)
+    if (analysis.shotlist && Array.isArray(analysis.shotlist)) {
+      translated.shotlist = await Promise.all(
+        analysis.shotlist.map(async (shot: any) => {
+          if (typeof shot === 'string') {
+            return await translateText(shot, targetLang);
+          } else if (typeof shot === 'object') {
+            // If it's an object, translate the description field
+            const translatedShot: any = {};
+            if (shot.scene) translatedShot.scene = await translateText(shot.scene, targetLang);
+            if (shot.action) translatedShot.action = await translateText(shot.action, targetLang);
+            if (shot.description) translatedShot.description = await translateText(shot.description, targetLang);
+            return translatedShot;
+          }
+          return shot;
+        })
+      );
+    }
+
+    // Translate engagement_factors array
+    if (analysis.engagement_factors && Array.isArray(analysis.engagement_factors)) {
+      translated.engagement_factors = await Promise.all(
+        analysis.engagement_factors.map((factor: string) => translateText(factor, targetLang))
+      );
+    }
   }
 
   return translated;
@@ -116,7 +161,7 @@ serve(async (req) => {
       }
     );
 
-    const { videoId, targetLang = 'en' } = await req.json();
+    const { videoId, targetLang = 'en', isTrending = false } = await req.json();
 
     if (!videoId) {
       return new Response(
@@ -128,13 +173,15 @@ serve(async (req) => {
       );
     }
 
-    console.log('Fetching video:', videoId, 'Target language:', targetLang);
+    const tableName = isTrending ? 'video_library_recommendations' : 'video_library';
+    const idField = isTrending ? 'video_id' : 'id';
+    console.log('Fetching video:', videoId, 'Target language:', targetLang, 'Is trending:', isTrending);
 
-    // Get the video with English analysis
+    // Get the video with analysis
     const { data: video, error: fetchError } = await supabaseClient
-      .from('video_library')
+      .from(tableName)
       .select('gemini_analysis')
-      .eq('id', videoId)
+      .eq(idField, videoId)
       .single();
 
     if (fetchError || !video) {
@@ -155,16 +202,16 @@ serve(async (req) => {
     console.log(`Translating analysis to ${langName}...`);
 
     // Translate the analysis
-    const translatedAnalysis = await translateGeminiAnalysis(video.gemini_analysis, targetLang);
+    const translatedAnalysis = await translateGeminiAnalysis(video.gemini_analysis, targetLang, isTrending);
 
     console.log(`Saving ${langName} translation...`);
 
     // Save the translation to the appropriate column
     const updateColumn = targetLang === 'en' ? 'gemini_analysis_en' : 'gemini_analysis_de';
     const { error: updateError } = await supabaseClient
-      .from('video_library')
+      .from(tableName)
       .update({ [updateColumn]: translatedAnalysis })
-      .eq('id', videoId);
+      .eq(idField, videoId);
 
     if (updateError) {
       throw new Error(`Failed to save translation: ${updateError.message}`);

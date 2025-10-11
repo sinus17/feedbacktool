@@ -7,6 +7,7 @@ import { AddVideoModal } from '../components/library/AddVideoModal';
 import { VideoCard } from '../components/library/VideoCard';
 import { VideoDetailModal } from '../components/library/VideoDetailModal';
 import { FeedView } from '../components/library/FeedView';
+import { RecommendationsSection } from '../components/library/RecommendationsSection';
 import type { LibraryVideo } from '../types';
 
 const CACHE_KEY = 'library_videos_v4'; // Updated for photo post support
@@ -409,6 +410,9 @@ export const Library: React.FC = () => {
         </div>
       </div>
       )}
+
+      {/* Recommendations Section - Only show when not in public mode */}
+      {!isPublicMode && <RecommendationsSection />}
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">

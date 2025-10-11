@@ -43,11 +43,12 @@ interface VideoDetailModalProps {
 }
 
 export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initialVideo, isOpen = true, onClose, onUpdate, canEdit = false }) => {
-  const [video] = useState(initialVideo);
+  const [video, setVideo] = useState(initialVideo);
   const [editedVideo, setEditedVideo] = useState(initialVideo);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [geminiAnalysis, setGeminiAnalysis] = useState((initialVideo as any).gemini_analysis || null);
   const [editGenres, setEditGenres] = useState<string[]>([]);
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [showCustomGenreInput, setShowCustomGenreInput] = useState(false);
@@ -75,6 +76,35 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
     };
     loadCustomGenres();
   }, []);
+
+  // Update state when modal opens with new video and check for analysis
+  useEffect(() => {
+    const loadVideoData = async () => {
+      setVideo(initialVideo);
+      setGeminiAnalysis((initialVideo as any).gemini_analysis || null);
+      setEnglishAnalysis((initialVideo as any).gemini_analysis_en || null);
+      
+      // If modal just opened and no analysis in initialVideo, check database
+      if (isOpen && !(initialVideo as any).gemini_analysis) {
+        const isTrendingVideo = (initialVideo as any).platform === 'tiktok' && !canEdit;
+        const tableName = isTrendingVideo ? 'video_library_recommendations' : 'video_library';
+        const idField = isTrendingVideo ? 'video_id' : 'id';
+        
+        const { data } = await supabase
+          .from(tableName)
+          .select('gemini_analysis, gemini_analysis_en')
+          .eq(idField as any, initialVideo.id as any)
+          .single();
+        
+        if (data && (data as any).gemini_analysis) {
+          setGeminiAnalysis((data as any).gemini_analysis);
+          setEnglishAnalysis((data as any).gemini_analysis_en || null);
+        }
+      }
+    };
+    
+    loadVideoData();
+  }, [initialVideo, isOpen, canEdit]);
 
   useEffect(() => {
     setEditedVideo(video);
@@ -259,7 +289,7 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
     setAnalysisLanguage(lang);
     
     // Only trigger translation if switching to English and no translation exists
-    if (lang === 'en' && !englishAnalysis && !(video as any).gemini_analysis_en && (video as any).gemini_analysis) {
+    if (lang === 'en' && !englishAnalysis && !(video as any).gemini_analysis_en && geminiAnalysis) {
       await handleTranslate();
     }
   };
@@ -287,7 +317,14 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
-    console.log('Starting Gemini AI analysis for video:', video.id);
+    
+    // Check if this is a trending video (from recommendations table)
+    const isTrendingVideo = (video as any).platform === 'tiktok' && !canEdit;
+    const edgeFunctionName = isTrendingVideo ? 'analyze-trending-gemini' : 'analyze-video-gemini';
+    const tableName = isTrendingVideo ? 'video_library_recommendations' : 'video_library';
+    const idField = isTrendingVideo ? 'video_id' : 'id';
+    
+    console.log(`Starting Gemini AI analysis for ${isTrendingVideo ? 'trending' : 'library'} video:`, video.id);
     
     try {
       // Set a timeout of 2 minutes
@@ -295,7 +332,7 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
         setTimeout(() => reject(new Error('Analysis timed out after 2 minutes')), 120000)
       );
 
-      const analysisPromise = supabase.functions.invoke('analyze-video-gemini', {
+      const analysisPromise = supabase.functions.invoke(edgeFunctionName, {
         body: { videoId: video.id }
       });
 
@@ -310,24 +347,29 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
 
       // Reload the video data to show updated analysis
       const { data: updatedVideo } = await supabase
-        .from('video_library')
+        .from(tableName)
         .select('*')
-        .eq('id' as any, video.id as any)
+        .eq(idField as any, video.id as any)
         .single();
 
       if (updatedVideo) {
         // Update the edited video state with new analysis
-        setEditedVideo({
-          ...editedVideo,
-          contentDescription: (updatedVideo as any).content_description,
-          whyItWorks: (updatedVideo as any).why_it_works,
-          artistRecommendation: (updatedVideo as any).artist_recommendation,
-        });
+        if (!isTrendingVideo) {
+          setEditedVideo({
+            ...editedVideo,
+            contentDescription: (updatedVideo as any).content_description,
+            whyItWorks: (updatedVideo as any).why_it_works,
+            artistRecommendation: (updatedVideo as any).artist_recommendation,
+          });
+        }
         
-        // Update the main video object to show the Gemini Analysis section
-        Object.assign(video, {
-          ...(updatedVideo as any),
-          gemini_analysis: (updatedVideo as any).gemini_analysis
+        // Update the gemini analysis state to trigger re-render
+        setGeminiAnalysis((updatedVideo as any).gemini_analysis);
+        
+        // Update the video state
+        setVideo({
+          ...video,
+          ...(updatedVideo as any)
         });
       }
 
@@ -346,7 +388,20 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
       <div className="bg-[#121313] rounded-lg w-[95vw] max-w-6xl max-h-[95vh] overflow-y-auto my-4">
         {/* Header */}
         <div className="sticky top-0 bg-[#121313] border-b border-gray-700 p-4 flex justify-between items-center z-10">
-          <h2 className="text-xl font-semibold text-white">Video Details</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-semibold text-white">Video Details</h2>
+            {!canEdit && (video as any).music_adaptation_score !== undefined && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-[#202a82]/20 border border-[#202a82]/40 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" style={{ color: '#202a82' }}>
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                <span className="text-sm font-semibold" style={{ color: '#202a82' }}>
+                  {(video as any).music_adaptation_score}/10
+                </span>
+                <span className="text-xs text-gray-400">Adaptation Score</span>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {canEdit && !isEditing && (
               <>
@@ -410,38 +465,40 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
         <div className="p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left: Video Player */}
-            <div className="space-y-4 relative">
-              {video.isPhotoPost && video.imageUrls && video.imageUrls.length > 0 ? (
-                <VideoPlayer 
-                  url={video.videoUrl || ''} 
-                  isDesktop={true} 
-                  isPhotoPost={true}
-                  imageUrls={video.imageUrls}
-                />
-              ) : video.videoUrl ? (
-                <VideoPlayer url={video.videoUrl} isDesktop={true} />
-              ) : (
-                <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-[70vh] mx-auto flex items-center justify-center text-gray-500">
-                  Video not available
-                </div>
-              )}
-              
-              {/* Scanning Animation Overlay */}
-              {isAnalyzing && (
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center z-10">
+            <div className="space-y-4">
+              <div className="relative mx-auto" style={{ aspectRatio: '9/16', maxHeight: '80vh' }}>
+                {video.isPhotoPost && video.imageUrls && video.imageUrls.length > 0 ? (
+                  <VideoPlayer 
+                    url={video.videoUrl || ''} 
+                    isDesktop={true} 
+                    isPhotoPost={true}
+                    imageUrls={video.imageUrls}
+                  />
+                ) : video.videoUrl ? (
+                  <VideoPlayer url={video.videoUrl} isDesktop={true} />
+                ) : (
+                  <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-[70vh] mx-auto flex items-center justify-center text-gray-500">
+                    Video not available
+                  </div>
+                )}
+                
+                {/* Scanning Animation Overlay */}
+                {isAnalyzing && (
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center z-[5]">
                   <div className="relative w-full h-full overflow-hidden">
                     {/* Animated Laser Beam */}
                     <div className="absolute inset-0">
-                      <div className="absolute w-full h-1 bg-gradient-to-r from-transparent via-purple-500 to-transparent shadow-[0_0_20px_rgba(168,85,247,0.8)]" 
+                      <div className="absolute w-full h-1 bg-gradient-to-r from-transparent to-transparent shadow-[0_0_20px_rgba(32,42,130,0.8)]" 
                            style={{ 
-                             animation: 'scan 2s ease-in-out infinite'
+                             animation: 'scan 2s ease-in-out infinite',
+                             background: 'linear-gradient(to right, transparent, #202a82, transparent)'
                            }}>
                       </div>
                     </div>
                     
                     {/* Scanning Text */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor" className="h-12 w-12 text-purple-400 mb-4 animate-pulse">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor" className="h-12 w-12 mb-4 animate-pulse" style={{ color: '#202a82' }}>
                         <path d="M423.5 117.2C419 118.9 416 123.2 416 128C416 132.8 419 137.1 423.5 138.8L480 160L501.2 216.5C502.9 221 507.2 224 512 224C516.8 224 521.1 221 522.8 216.5L544 160L600.5 138.8C605 137.1 608 132.8 608 128C608 123.2 605 118.9 600.5 117.2L544 96L522.8 39.5C521.1 35 516.8 32 512 32C507.2 32 502.9 35 501.2 39.5L480 96L423.5 117.2zM238.5 137.3C235.9 131.6 230.2 128 224 128C217.8 128 212.1 131.6 209.5 137.3L156.4 252.3L41.4 305.4C35.6 308.1 32 313.8 32 320C32 326.2 35.6 331.9 41.3 334.5L156.3 387.6L209.4 502.6C212 508.3 217.7 511.9 223.9 511.9C230.1 511.9 235.8 508.3 238.4 502.6L291.5 387.6L406.5 334.5C412.2 331.9 415.8 326.2 415.8 320C415.8 313.8 412.2 308.1 406.5 305.5L291.5 252.4L238.4 137.4zM448 480L391.5 501.2C387 502.9 384 507.2 384 512C384 516.8 387 521.1 391.5 522.8L448 544L469.2 600.5C470.9 605 475.2 608 480 608C484.8 608 489.1 605 490.8 600.5L512 544L568.5 522.8C573 521.1 576 516.8 576 512C576 507.2 573 502.9 568.5 501.2L512 480L490.8 423.5C489.1 419 484.8 416 480 416C475.2 416 470.9 419 469.2 423.5L448 480z"/>
                       </svg>
                       <p className="text-lg font-semibold mb-2">Analyzing Video with Gemini AI</p>
@@ -450,6 +507,7 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                   </div>
                 </div>
               )}
+              </div>
             </div>
 
             {/* Right: Details */}
@@ -489,7 +547,7 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                     <span className="text-sm">
                       {video.accountName && `${video.accountName} • `}
                       @{video.accountUsername}
-                      {video.followerCount != null && video.followerCount >= 0 && ` • ${(video.followerCount / 1000).toFixed(1)}K followers`}
+                      {video.followerCount != null && video.followerCount > 0 && ` • ${(video.followerCount / 1000).toFixed(1)}K followers`}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -906,7 +964,7 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
               {/* Tab Content: Analysis */}
               {activeTab === 'analysis' && (
                 <div className="space-y-4">
-                  {(video as any).gemini_analysis ? (
+                  {geminiAnalysis ? (
                     <>
                       <div className="space-y-4 p-4 bg-purple-900/10 border border-purple-500/20 rounded-lg">
                         <div className="flex items-center justify-between">
@@ -952,13 +1010,129 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {(() => {
                             // Use English from state, or from video object, or trigger translation
-                            const analysis = analysisLanguage === 'en' 
-                              ? (englishAnalysis || (video as any).gemini_analysis_en || (video as any).gemini_analysis)
-                              : (video as any).gemini_analysis;
+                            let analysis = analysisLanguage === 'en' 
+                              ? (englishAnalysis || (video as any).gemini_analysis_en || geminiAnalysis)
+                              : geminiAnalysis;
+                            
+                            // Parse if it's a string
+                            if (typeof analysis === 'string') {
+                              try {
+                                analysis = JSON.parse(analysis);
+                              } catch (e) {
+                                console.error('Failed to parse analysis JSON:', e);
+                              }
+                            }
+                            
+                            console.log('🔍 Analysis data:', analysis);
+                            console.log('🔍 music_adaptation value:', analysis?.music_adaptation);
+                            console.log('🔍 Has music_adaptation:', !!analysis?.music_adaptation);
+                            
+                            // Check if this is a trending video analysis (has music_adaptation field)
+                            const isTrendingAnalysis = !!(analysis && analysis.music_adaptation);
+                            
+                            if (!analysis) {
+                              console.log('⚠️ No analysis data available');
+                              return null;
+                            }
                             
                             return (
                               <>
-                                {analysis.hook && (
+                                {/* Trending Video Analysis */}
+                                {isTrendingAnalysis && (
+                                  <>
+                                    {analysis.original_concept && (
+                                      <div className="col-span-full">
+                                        <h6 className="text-xs font-medium text-purple-300 mb-1">💡 Original Concept</h6>
+                                        <p className="text-sm text-gray-300">{analysis.original_concept}</p>
+                                      </div>
+                                    )}
+                                    
+                                    {analysis.why_it_went_viral && (
+                                      <div className="col-span-full">
+                                        <h6 className="text-xs font-medium text-purple-300 mb-1">🚀 Why It Went Viral</h6>
+                                        <p className="text-sm text-gray-300">{analysis.why_it_went_viral}</p>
+                                      </div>
+                                    )}
+                                    
+                                    {analysis.music_adaptation && (
+                                      <div className="col-span-full bg-purple-900/20 p-4 rounded-lg border border-purple-500/30">
+                                        <h6 className="text-sm font-semibold text-purple-300 mb-3">🎵 Music Adaptation Strategy</h6>
+                                        
+                                        {analysis.music_adaptation.core_mechanic && (
+                                          <div className="mb-3">
+                                            <h6 className="text-xs font-medium text-purple-200 mb-1">Core Mechanic</h6>
+                                            <p className="text-sm text-gray-300">{analysis.music_adaptation.core_mechanic}</p>
+                                          </div>
+                                        )}
+                                        
+                                        {analysis.music_adaptation.how_to_flip && (
+                                          <div className="mb-3">
+                                            <h6 className="text-xs font-medium text-purple-200 mb-1">How to Adapt</h6>
+                                            <p className="text-sm text-gray-300 whitespace-pre-line">{analysis.music_adaptation.how_to_flip}</p>
+                                          </div>
+                                        )}
+                                        
+                                        {analysis.music_adaptation.example_scenarios && Array.isArray(analysis.music_adaptation.example_scenarios) && (
+                                          <div>
+                                            <h6 className="text-xs font-medium text-purple-200 mb-2">Example Scenarios</h6>
+                                            <ul className="list-disc list-inside space-y-1">
+                                              {analysis.music_adaptation.example_scenarios.map((scenario: string, i: number) => (
+                                                <li key={i} className="text-sm text-gray-300">{scenario}</li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                    
+                                    {analysis.best_song_topics && Array.isArray(analysis.best_song_topics) && (
+                                      <div className="col-span-full">
+                                        <h6 className="text-xs font-medium text-purple-300 mb-2">🎼 Best Song Topics</h6>
+                                        <div className="flex flex-wrap gap-2">
+                                          {analysis.best_song_topics.map((topic: string, i: number) => (
+                                            <span key={i} className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-xs">{topic}</span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {analysis.production_requirements && Array.isArray(analysis.production_requirements) && (
+                                      <div className="col-span-full">
+                                        <h6 className="text-xs font-medium text-purple-300 mb-2">🎬 Production Requirements</h6>
+                                        <ul className="list-disc list-inside space-y-1">
+                                          {analysis.production_requirements.map((req: string, i: number) => (
+                                            <li key={i} className="text-sm text-gray-300">{req}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                    
+                                    {analysis.shotlist_template && Array.isArray(analysis.shotlist_template) && (
+                                      <div className="col-span-full">
+                                        <h6 className="text-xs font-medium text-purple-300 mb-2">📋 Shotlist Template</h6>
+                                        <ul className="list-decimal list-inside space-y-2">
+                                          {analysis.shotlist_template.map((shot: string, i: number) => (
+                                            <li key={i} className="text-sm text-gray-300 pl-2">{shot}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                    
+                                    {analysis.engagement_factors && Array.isArray(analysis.engagement_factors) && (
+                                      <div className="col-span-full">
+                                        <h6 className="text-xs font-medium text-purple-300 mb-2">🔥 Engagement Factors</h6>
+                                        <ul className="list-disc list-inside space-y-1">
+                                          {analysis.engagement_factors.map((factor: string, i: number) => (
+                                            <li key={i} className="text-sm text-gray-300">{factor}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                                
+                                {/* Regular Video Analysis */}
+                                {!isTrendingAnalysis && analysis.hook && (
                                   <div className="col-span-full">
                                     <h6 className="text-xs font-medium text-purple-300 mb-1">🎣 Hook</h6>
                                     <p className="text-sm text-gray-300">{analysis.hook}</p>
@@ -1017,22 +1191,24 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                         <path d="M423.5 117.2C419 118.9 416 123.2 416 128C416 132.8 419 137.1 423.5 138.8L480 160L501.2 216.5C502.9 221 507.2 224 512 224C516.8 224 521.1 221 522.8 216.5L544 160L600.5 138.8C605 137.1 608 132.8 608 128C608 123.2 605 118.9 600.5 117.2L544 96L522.8 39.5C521.1 35 516.8 32 512 32C507.2 32 502.9 35 501.2 39.5L480 96L423.5 117.2zM238.5 137.3C235.9 131.6 230.2 128 224 128C217.8 128 212.1 131.6 209.5 137.3L156.4 252.3L41.4 305.4C35.6 308.1 32 313.8 32 320C32 326.2 35.6 331.9 41.3 334.5L156.3 387.6L209.4 502.6C212 508.3 217.7 511.9 223.9 511.9C230.1 511.9 235.8 508.3 238.4 502.6L291.5 387.6L406.5 334.5C412.2 331.9 415.8 326.2 415.8 320C415.8 313.8 412.2 308.1 406.5 305.5L291.5 252.4L238.4 137.4zM448 480L391.5 501.2C387 502.9 384 507.2 384 512C384 516.8 387 521.1 391.5 522.8L448 544L469.2 600.5C470.9 605 475.2 608 480 608C484.8 608 489.1 605 490.8 600.5L512 544L568.5 522.8C573 521.1 576 516.8 576 512C576 507.2 573 502.9 568.5 501.2L512 480L490.8 423.5C489.1 419 484.8 416 480 416C475.2 416 470.9 419 469.2 423.5L448 480z"/>
                       </svg>
                       <h3 className="text-lg font-semibold text-gray-400 mb-2">No AI Analysis Yet</h3>
-                      <p className="text-sm text-gray-500 mb-4">This video hasn't been analyzed by Gemini AI yet.</p>
-                      {canEdit && (
-                        <button
-                          onClick={handleAnalyze}
-                          disabled={isAnalyzing}
-                          className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-                          style={{ backgroundColor: '#222d8c' }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a2370'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#222d8c'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor" className="h-4 w-4">
-                            <path d="M423.5 117.2C419 118.9 416 123.2 416 128C416 132.8 419 137.1 423.5 138.8L480 160L501.2 216.5C502.9 221 507.2 224 512 224C516.8 224 521.1 221 522.8 216.5L544 160L600.5 138.8C605 137.1 608 132.8 608 128C608 123.2 605 118.9 600.5 117.2L544 96L522.8 39.5C521.1 35 516.8 32 512 32C507.2 32 502.9 35 501.2 39.5L480 96L423.5 117.2zM238.5 137.3C235.9 131.6 230.2 128 224 128C217.8 128 212.1 131.6 209.5 137.3L156.4 252.3L41.4 305.4C35.6 308.1 32 313.8 32 320C32 326.2 35.6 331.9 41.3 334.5L156.3 387.6L209.4 502.6C212 508.3 217.7 511.9 223.9 511.9C230.1 511.9 235.8 508.3 238.4 502.6L291.5 387.6L406.5 334.5C412.2 331.9 415.8 326.2 415.8 320C415.8 313.8 412.2 308.1 406.5 305.5L291.5 252.4L238.4 137.4zM448 480L391.5 501.2C387 502.9 384 507.2 384 512C384 516.8 387 521.1 391.5 522.8L448 544L469.2 600.5C470.9 605 475.2 608 480 608C484.8 608 489.1 605 490.8 600.5L512 544L568.5 522.8C573 521.1 576 516.8 576 512C576 507.2 573 502.9 568.5 501.2L512 480L490.8 423.5C489.1 419 484.8 416 480 416C475.2 416 470.9 419 469.2 423.5L448 480z"/>
-                          </svg>
-                          {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
-                        </button>
-                      )}
+                      <p className="text-sm text-gray-500 mb-4">
+                        {canEdit 
+                          ? "This video hasn't been analyzed by Gemini AI yet." 
+                          : "This trending video hasn't been analyzed yet. Click below to get AI-powered insights on how to adapt this concept for music promotion."}
+                      </p>
+                      <button
+                        onClick={handleAnalyze}
+                        disabled={isAnalyzing}
+                        className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                        style={{ backgroundColor: '#222d8c' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a2370'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#222d8c'}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor" className="h-4 w-4">
+                          <path d="M423.5 117.2C419 118.9 416 123.2 416 128C416 132.8 419 137.1 423.5 138.8L480 160L501.2 216.5C502.9 221 507.2 224 512 224C516.8 224 521.1 221 522.8 216.5L544 160L600.5 138.8C605 137.1 608 132.8 608 128C608 123.2 605 118.9 600.5 117.2L544 96L522.8 39.5C521.1 35 516.8 32 512 32C507.2 32 502.9 35 501.2 39.5L480 96L423.5 117.2zM238.5 137.3C235.9 131.6 230.2 128 224 128C217.8 128 212.1 131.6 209.5 137.3L156.4 252.3L41.4 305.4C35.6 308.1 32 313.8 32 320C32 326.2 35.6 331.9 41.3 334.5L156.3 387.6L209.4 502.6C212 508.3 217.7 511.9 223.9 511.9C230.1 511.9 235.8 508.3 238.4 502.6L291.5 387.6L406.5 334.5C412.2 331.9 415.8 326.2 415.8 320C415.8 313.8 412.2 308.1 406.5 305.5L291.5 252.4L238.4 137.4zM448 480L391.5 501.2C387 502.9 384 507.2 384 512C384 516.8 387 521.1 391.5 522.8L448 544L469.2 600.5C470.9 605 475.2 608 480 608C484.8 608 489.1 605 490.8 600.5L512 544L568.5 522.8C573 521.1 576 516.8 576 512C576 507.2 573 502.9 568.5 501.2L512 480L490.8 423.5C489.1 419 484.8 416 480 416C475.2 416 470.9 419 469.2 423.5L448 480z"/>
+                        </svg>
+                        {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
+                      </button>
                     </div>
                   )}
                 </div>
