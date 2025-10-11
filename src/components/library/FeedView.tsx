@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Play, Volume2, VolumeX, X, ArrowLeft } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Share2, Play, Volume2, VolumeX, X, ArrowLeft, Download, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -44,11 +44,154 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const [showCopiedToast, setShowCopiedToast] = useState(false);
   const [showPlayOverlay, setShowPlayOverlay] = useState(true); // Show by default until autoplay succeeds
   const hasUserInteractedRef = useRef(false); // Track if user has interacted
+  const [showPWAPrompt, setShowPWAPrompt] = useState(false);
+  const [showIOSInstructions, setShowIOSInstructions] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isPWA, setIsPWA] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [isInstagramBrowser, setIsInstagramBrowser] = useState(false);
+  const [showBrowserInstructions, setShowBrowserInstructions] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
   const touchStartY = useRef<number>(0);
   const touchEndY = useRef<number>(0);
+
+  // Detect if running as PWA
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                        (window.navigator as any).standalone || 
+                        document.referrer.includes('android-app://');
+    setIsPWA(isStandalone);
+    
+    // Check notification permission status
+    if ('Notification' in window) {
+      const currentPermission = Notification.permission;
+      console.log('📱 Initial Notification permission:', currentPermission);
+      setNotificationsEnabled(currentPermission === 'granted');
+      
+      // If already denied, show instructions immediately
+      if (currentPermission === 'denied' && isStandalone) {
+        console.log('⚠️ Notifications were previously denied');
+      }
+    }
+    
+    // Detect Instagram in-app browser
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const isInstaInApp = /Instagram/i.test(userAgent);
+    setIsInstagramBrowser(isInstaInApp);
+    
+    // Show browser instructions modal automatically if in Instagram browser
+    if (isInstaInApp) {
+      setShowBrowserInstructions(true);
+    }
+    
+    // Only show PWA prompt on mobile and if not already installed and not in Instagram browser
+    if (!isStandalone && !isInstaInApp && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      // Show prompt instantly
+      setShowPWAPrompt(true);
+    }
+  }, []);
+
+  // Listen for beforeinstallprompt event (Android)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallPWA = async () => {
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    if (isIOS) {
+      // Show iOS instructions
+      setShowIOSInstructions(true);
+      setShowPWAPrompt(false);
+    } else if (deferredPrompt) {
+      // Android - trigger native prompt
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`User response to install prompt: ${outcome}`);
+      setDeferredPrompt(null);
+      setShowPWAPrompt(false);
+    }
+  };
+
+  const handleNotificationToggle = async () => {
+    console.log('🔔 handleNotificationToggle called');
+    console.log('isPWA:', isPWA);
+    console.log('Notification in window:', 'Notification' in window);
+    console.log('Current permission:', Notification.permission);
+    
+    if (!('Notification' in window)) {
+      console.log('❌ This browser does not support notifications');
+      alert('Your browser does not support notifications');
+      return;
+    }
+
+    if (notificationsEnabled) {
+      // User wants to disable - we can't revoke permission, just update state
+      console.log('Disabling notifications (local only)');
+      setNotificationsEnabled(false);
+      localStorage.setItem('notificationsEnabled', 'false');
+    } else {
+      // Check if permission was already denied
+      if (Notification.permission === 'denied') {
+        console.log('❌ Permission already denied');
+        if (isPWA && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+          alert('Notifications were blocked.\n\nTo enable them, you need to:\n1. Delete the SwipeUp app from your home screen\n2. Reinstall it via Safari (Share → Add to Home Screen)\n3. Enable notifications when prompted');
+        }
+        return;
+      }
+      
+      // User wants to enable - request permission
+      try {
+        console.log('Requesting notification permission...');
+        
+        // Check if we need service worker (for iOS PWA)
+        if ('serviceWorker' in navigator) {
+          console.log('Checking service worker...');
+          const registration = await navigator.serviceWorker.ready;
+          console.log('✅ Service Worker ready:', registration);
+        } else {
+          console.log('⚠️ No service worker support');
+        }
+        
+        console.log('Calling Notification.requestPermission()...');
+        const permission = await Notification.requestPermission();
+        console.log('📱 Notification permission result:', permission);
+        
+        if (permission === 'granted') {
+          setNotificationsEnabled(true);
+          localStorage.setItem('notificationsEnabled', 'true');
+          console.log('✅ Notifications enabled');
+          
+          // Show a test notification on iOS PWA
+          if (isPWA && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            new Notification('SwipeUp', {
+              body: 'Notifications are now enabled! You\'ll be notified about new trends.',
+              icon: '/plane_new.png',
+              badge: '/plane_new.png'
+            });
+          }
+        } else if (permission === 'denied') {
+          console.log('❌ Notification permission denied');
+          // On iOS PWA, notifications were blocked - user needs to reinstall
+          if (isPWA && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            alert('Notifications were blocked.\n\nTo enable them, you need to:\n1. Delete the SwipeUp app from your home screen\n2. Reinstall it via Safari (Share → Add to Home Screen)\n3. Enable notifications when prompted');
+          }
+        } else {
+          console.log('⚠️ Notification permission dismissed');
+        }
+      } catch (error) {
+        console.error('Error requesting notification permission:', error);
+      }
+    }
+  };
 
   // Shuffle videos when they load (only once) and handle direct video link
   useEffect(() => {
@@ -649,12 +792,103 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                       }
                     }}
                   >
-                    <div className="flex flex-col items-center gap-4 px-8">
-                      <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-2xl">
-                        <Play className="w-12 h-12 text-black ml-1" fill="black" />
+                    <div className="flex flex-col items-center gap-6 px-8">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-2xl">
+                          <Play className="w-12 h-12 text-black ml-1" fill="black" />
+                        </div>
+                        <p className="text-white text-xl font-bold text-center">Tap to Play</p>
+                        <p className="text-gray-300 text-sm text-center">Video will play with sound</p>
                       </div>
-                      <p className="text-white text-xl font-bold text-center">Tap to Play</p>
-                      <p className="text-gray-300 text-sm text-center">Video will play with sound</p>
+                      
+                      {/* Instagram Browser Warning */}
+                      {isInstagramBrowser && !isPWA && (
+                        <motion.button
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.3 }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowBrowserInstructions(true);
+                          }}
+                          onTouchEnd={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowBrowserInstructions(true);
+                          }}
+                          className="flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-lg hover:shadow-xl transition-all"
+                          style={{ backgroundColor: '#222d8c' }}
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                          <span>Open in Browser</span>
+                        </motion.button>
+                      )}
+
+                      {/* PWA Install Prompt */}
+                      {showPWAPrompt && !isPWA && !isInstagramBrowser && (
+                        <motion.button
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.3 }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleInstallPWA();
+                          }}
+                          onTouchEnd={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleInstallPWA();
+                          }}
+                          className="flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-lg hover:shadow-xl transition-all"
+                          style={{ backgroundColor: '#222d8c' }}
+                        >
+                          <Download className="w-5 h-5" />
+                          <span>Add to Home Screen</span>
+                          <ChevronRight className="w-4 h-4" />
+                        </motion.button>
+                      )}
+
+                      {/* Notification Toggle - Show when PWA is installed OR on desktop */}
+                      {(isPWA || !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.3 }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onTouchEnd={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          className="flex items-center justify-between gap-4 px-6 py-3 bg-dark-800/80 backdrop-blur-sm rounded-full text-white shadow-lg"
+                        >
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleNotificationToggle();
+                            }}
+                            className="flex items-center justify-between gap-4 w-full"
+                          >
+                            <span className="text-sm font-medium">Notify me about new trends</span>
+                            <div
+                              className={`relative w-12 h-6 rounded-full transition-colors ${
+                                notificationsEnabled ? 'bg-[#222d8c]' : 'bg-gray-600'
+                              }`}
+                            >
+                              <motion.div
+                                animate={{ x: notificationsEnabled ? 24 : 2 }}
+                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                className="absolute top-1 w-4 h-4 bg-white rounded-full"
+                              />
+                            </div>
+                          </button>
+                        </motion.div>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -999,6 +1233,114 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
             className="absolute top-20 left-0 right-0 mx-auto w-fit px-4 py-2 bg-gray-800/80 backdrop-blur-sm rounded-lg z-50"
           >
             <p className="text-white text-sm font-medium">Link copied to clipboard</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Instagram Browser Instructions Modal */}
+      <AnimatePresence>
+        {showBrowserInstructions && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-6"
+            onClick={() => setShowBrowserInstructions(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-dark-800 rounded-2xl p-6 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-white">Open in Browser</h3>
+                <button
+                  onClick={() => setShowBrowserInstructions(false)}
+                  className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center hover:bg-gray-600 transition-colors"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-sm text-gray-300">For the best experience, please open this page in your default browser (Safari or Chrome):</p>
+                
+                <div className="rounded-lg overflow-hidden">
+                  <img 
+                    src="/IMG_3893.jpg" 
+                    alt="Open in Browser Instructions"
+                    className="w-full h-auto"
+                  />
+                </div>
+
+                <div className="p-4 rounded-lg" style={{ backgroundColor: 'rgba(34, 45, 140, 0.2)', borderColor: 'rgba(34, 45, 140, 0.3)', borderWidth: '1px' }}>
+                  <p className="text-xs text-gray-200">
+                    💡 Tap the three dots (•••) in the top right corner and select "Open in Browser"
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowBrowserInstructions(false)}
+                className="w-full mt-6 px-6 py-3 rounded-lg text-white font-semibold hover:shadow-lg transition-all"
+                style={{ backgroundColor: '#222d8c' }}
+              >
+                Got it!
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* iOS Installation Instructions Modal */}
+      <AnimatePresence>
+        {showIOSInstructions && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-6"
+            onClick={() => setShowIOSInstructions(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-dark-800 rounded-2xl p-6 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-white">Add to Home Screen</h3>
+                <button
+                  onClick={() => setShowIOSInstructions(false)}
+                  className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center hover:bg-gray-600 transition-colors"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-sm text-gray-300">Install this app on your iPhone for the best experience:</p>
+                
+                <div className="rounded-lg overflow-hidden">
+                  <img 
+                    src="/Screenshot 2025-10-11 at 13.20.24.png" 
+                    alt="iOS Installation Instructions"
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowIOSInstructions(false)}
+                className="w-full mt-6 px-6 py-3 rounded-lg text-white font-semibold hover:shadow-lg transition-all"
+                style={{ backgroundColor: '#222d8c' }}
+              >
+                Got it!
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
