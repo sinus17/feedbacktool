@@ -52,6 +52,8 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const lastTapRef = useRef<number>(0);
   const touchStartY = useRef<number>(0);
   const touchEndY = useRef<number>(0);
+  const prevIndexRef = useRef<number>(0);
+  const isNavigatingRef = useRef<boolean>(false);
 
   // Initialize push notification hook
   const { getSubscription } = useSubscribe({ publicKey: VAPID_PUBLIC_KEY });
