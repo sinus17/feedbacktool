@@ -843,8 +843,8 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                         </motion.button>
                       )}
 
-                      {/* Notification Button - Show when PWA is installed OR on desktop */}
-                      {(isPWA || !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) && (
+                      {/* Notification Button - Show when PWA is installed OR on desktop AND not enabled */}
+                      {(isPWA || !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) && !notificationsEnabled && (
                         <motion.button
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -860,11 +860,11 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                             handleNotificationToggle();
                           }}
                           className="flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-lg hover:shadow-xl transition-all"
-                          style={{ backgroundColor: notificationsEnabled ? '#10b981' : '#222d8c' }}
+                          style={{ backgroundColor: '#222d8c' }}
                         >
                           <Bell className="w-5 h-5" />
-                          <span>{notificationsEnabled ? 'Notifications enabled ✓' : 'Notify me about new trends'}</span>
-                          {!notificationsEnabled && <ChevronRight className="w-4 h-4" />}
+                          <span>Notify me about new trends</span>
+                          <ChevronRight className="w-4 h-4" />
                         </motion.button>
                       )}
                     </div>
