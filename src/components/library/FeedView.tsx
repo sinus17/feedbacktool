@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { LibraryVideo } from '../../types';
 import { PhotoSlideshow } from './PhotoSlideshow';
+import { VAPID_PUBLIC_KEY, urlBase64ToUint8Array } from '../../config/vapid';
 
 interface FeedViewProps {
   videos: LibraryVideo[];
@@ -170,13 +171,42 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
           localStorage.setItem('notificationsEnabled', 'true');
           console.log('✅ Notifications enabled');
           
-          // Show a test notification on iOS PWA
-          if (isPWA && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-            new Notification('SwipeUp', {
-              body: 'Notifications are now enabled! You\'ll be notified about new trends.',
-              icon: '/plane_new.png',
-              badge: '/plane_new.png'
+          // Subscribe to push notifications
+          try {
+            const registration = await navigator.serviceWorker.ready;
+            console.log('Creating push subscription...');
+            
+            const subscription = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
             });
+            
+            console.log('✅ Push subscription created:', JSON.stringify(subscription));
+            
+            // Save subscription to database using RPC to avoid TypeScript issues
+            const { error: dbError } = await supabase.rpc('upsert_push_subscription', {
+              p_user_id: currentUser?.id || 'anonymous',
+              p_endpoint: subscription.endpoint,
+              p_subscription: subscription.toJSON()
+            });
+            
+            if (dbError) {
+              console.error('Failed to save subscription:', dbError);
+            } else {
+              console.log('✅ Subscription saved to database');
+            }
+            
+            // Show a test notification on iOS PWA
+            if (isPWA && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+              new Notification('SwipeUp', {
+                body: 'Notifications are now enabled! You\'ll be notified about new trends.',
+                icon: '/plane_new.png',
+                badge: '/plane_new.png'
+              });
+            }
+          } catch (subscriptionError) {
+            console.error('Failed to create push subscription:', subscriptionError);
+            // Still mark as enabled for local notifications
           }
         } else if (permission === 'denied') {
           console.log('❌ Notification permission denied');

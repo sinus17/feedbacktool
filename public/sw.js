@@ -6,6 +6,9 @@ const urlsToCache = [
   '/NEU_PSD_swipeup-marketing_2.png'
 ];
 
+// VAPID Public Key (same as in frontend)
+const VAPID_PUBLIC_KEY = 'BLeXYHMpjqspKNY_pxGtuCHgDbH6IxE6Ksk0vAtZPySciN9JvgrDX20TtAbjLWapDQU_BYO3Qbc4IQr10MWZTDk';
+
 // Install event - cache resources
 self.addEventListener('install', (event) => {
   console.log('Service Worker installing...');
