@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Bell, Send } from 'lucide-react';
 
 export const PushNotifications: React.FC = () => {
+  const [title, setTitle] = useState('SwipeUp');
   const [message, setMessage] = useState('');
   const [url, setUrl] = useState('/library?tab=feed&public=true');
   const [result, setResult] = useState<string>('');
@@ -25,7 +26,7 @@ export const PushNotifications: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: 'SwipeUp',
+          title: title,
           body: message,
           icon: '/plane_new.png',
           badge: '/plane_new.png',
@@ -39,6 +40,7 @@ export const PushNotifications: React.FC = () => {
       // Clear form on success
       if (data.success) {
         setMessage('');
+        setTitle('SwipeUp');
       }
     } catch (error: any) {
       setResult('Error: ' + error.message);
@@ -57,6 +59,20 @@ export const PushNotifications: React.FC = () => {
           </div>
 
           <form onSubmit={sendNotification} className="space-y-6">
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-2">
+                Title (Betreff)
+              </label>
+              <input
+                id="title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="SwipeUp"
+                className="w-full px-4 py-3 bg-dark-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
             <div>
               <label htmlFor="message" className="block text-sm font-medium text-gray-300 mb-2">
                 Message *
