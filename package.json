@@ -22,6 +22,7 @@
     "react-big-calendar": "^1.10.1",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
+    "react-pwa-push-notifications": "^1.0.0",
     "react-router-dom": "^6.22.2",
     "wavesurfer.js": "^7.10.3",
     "xlsx": "^0.18.5",

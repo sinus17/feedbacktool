@@ -7,7 +7,17 @@ const VAPID_PRIVATE_KEY = 'rLySOBREIcQ9kr26LOAmBwsjI65IxyLxQ0Sg08KVJj4';
 // Import web-push library
 import webpush from 'npm:web-push@3.6.7';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
     const { title, body, icon, badge, url } = await req.json();
 
@@ -78,7 +88,7 @@ serve(async (req) => {
         failed
       }),
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       }
     );
@@ -87,7 +97,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ error: error.message }),
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
       }
     );

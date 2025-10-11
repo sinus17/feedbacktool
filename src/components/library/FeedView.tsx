@@ -6,7 +6,9 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { LibraryVideo } from '../../types';
 import { PhotoSlideshow } from './PhotoSlideshow';
-import { VAPID_PUBLIC_KEY, urlBase64ToUint8Array } from '../../config/vapid';
+import { VAPID_PUBLIC_KEY } from '../../config/vapid';
+// @ts-ignore - Library has type issues but works fine
+import { useSubscribe } from 'react-pwa-push-notifications';
 
 interface FeedViewProps {
   videos: LibraryVideo[];
@@ -26,19 +28,12 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  // Randomize videos when they first load
+  const hasShuffledRef = useRef(false);
   const [shuffledVideos, setShuffledVideos] = useState<LibraryVideo[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const prevIndexRef = useRef(0); // Track previous index to determine direction
-  const hasShuffledRef = useRef(false); // Track if we've already shuffled
-  const isNavigatingRef = useRef(false); // Prevent multiple navigations at once
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [showAnalysis, setShowAnalysis] = useState(false);
-  // Get initial mute state from localStorage, default to true for autoplay
-  const [isMuted, setIsMuted] = useState(() => {
-    const saved = localStorage.getItem('feedVideoMuted');
-    return saved !== null ? saved === 'true' : true;
-  });
-  const [isPlaying, setIsPlaying] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [showFullCaption, setShowFullCaption] = useState(false);
@@ -57,6 +52,9 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const lastTapRef = useRef<number>(0);
   const touchStartY = useRef<number>(0);
   const touchEndY = useRef<number>(0);
+
+  // Initialize push notification hook
+  const { getSubscription } = useSubscribe({ publicKey: VAPID_PUBLIC_KEY });
 
   // Detect if running as PWA
   useEffect(() => {
@@ -128,12 +126,6 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     console.log('Notification in window:', 'Notification' in window);
     console.log('Current permission:', Notification.permission);
     
-    if (!('Notification' in window)) {
-      console.log('❌ This browser does not support notifications');
-      alert('Your browser does not support notifications');
-      return;
-    }
-
     if (notificationsEnabled) {
       // User wants to disable - we can't revoke permission, just update state
       console.log('Disabling notifications (local only)');
@@ -149,76 +141,45 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         return;
       }
       
-      // User wants to enable - request permission
+      // User wants to enable - use the hook
       try {
-        console.log('Requesting notification permission...');
+        console.log('Getting push subscription via hook...');
+        const subscription = await getSubscription();
+        console.log('✅ Push subscription created:', JSON.stringify(subscription));
         
-        // Check if we need service worker (for iOS PWA)
-        if ('serviceWorker' in navigator) {
-          console.log('Checking service worker...');
-          const registration = await navigator.serviceWorker.ready;
-          console.log('✅ Service Worker ready:', registration);
+        // Save subscription to database
+        const { error: dbError } = await supabase.rpc('upsert_push_subscription', {
+          p_user_id: currentUser?.id || 'anonymous',
+          p_endpoint: subscription.endpoint,
+          p_subscription: subscription.toJSON()
+        });
+        
+        if (dbError) {
+          console.error('Failed to save subscription:', dbError);
         } else {
-          console.log('⚠️ No service worker support');
+          console.log('✅ Subscription saved to database');
         }
         
-        console.log('Calling Notification.requestPermission()...');
-        const permission = await Notification.requestPermission();
-        console.log('📱 Notification permission result:', permission);
+        setNotificationsEnabled(true);
+        localStorage.setItem('notificationsEnabled', 'true');
         
-        if (permission === 'granted') {
-          setNotificationsEnabled(true);
-          localStorage.setItem('notificationsEnabled', 'true');
-          console.log('✅ Notifications enabled');
-          
-          // Subscribe to push notifications
-          try {
-            const registration = await navigator.serviceWorker.ready;
-            console.log('Creating push subscription...');
-            
-            const subscription = await registration.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-            });
-            
-            console.log('✅ Push subscription created:', JSON.stringify(subscription));
-            
-            // Save subscription to database using RPC to avoid TypeScript issues
-            const { error: dbError } = await supabase.rpc('upsert_push_subscription', {
-              p_user_id: currentUser?.id || 'anonymous',
-              p_endpoint: subscription.endpoint,
-              p_subscription: subscription.toJSON()
-            });
-            
-            if (dbError) {
-              console.error('Failed to save subscription:', dbError);
-            } else {
-              console.log('✅ Subscription saved to database');
-            }
-            
-            // Show a test notification on iOS PWA
-            if (isPWA && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-              new Notification('SwipeUp', {
-                body: 'Notifications are now enabled! You\'ll be notified about new trends.',
-                icon: '/plane_new.png',
-                badge: '/plane_new.png'
-              });
-            }
-          } catch (subscriptionError) {
-            console.error('Failed to create push subscription:', subscriptionError);
-            // Still mark as enabled for local notifications
-          }
-        } else if (permission === 'denied') {
-          console.log('❌ Notification permission denied');
-          // On iOS PWA, notifications were blocked - user needs to reinstall
-          if (isPWA && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-            alert('Notifications were blocked.\n\nTo enable them, you need to:\n1. Delete the SwipeUp app from your home screen\n2. Reinstall it via Safari (Share → Add to Home Screen)\n3. Enable notifications when prompted');
-          }
-        } else {
-          console.log('⚠️ Notification permission dismissed');
+        // Show a test notification on iOS PWA
+        if (isPWA && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+          new Notification('SwipeUp', {
+            body: 'Notifications are now enabled! You\'ll be notified about new trends.',
+            icon: '/plane_new.png',
+            badge: '/plane_new.png'
+          });
         }
-      } catch (error) {
-        console.error('Error requesting notification permission:', error);
+      } catch (error: any) {
+        console.error('Error subscribing to push notifications:', error);
+        
+        // Handle specific errors from the hook
+        if (error.message?.includes('denied')) {
+          alert('Notifications were blocked.\n\nTo enable them, you need to:\n1. Delete the SwipeUp app from your home screen\n2. Reinstall it via Safari (Share → Add to Home Screen)\n3. Enable notifications when prompted');
+        } else {
+          alert('Failed to enable notifications. Please try again.');
+        }
       }
     }
   };
