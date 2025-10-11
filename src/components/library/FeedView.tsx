@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Play, Volume2, VolumeX, X, ArrowLeft, Download, ChevronRight } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Share2, Play, Volume2, VolumeX, X, ArrowLeft, Download, ChevronRight, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -843,7 +843,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                         </motion.button>
                       )}
 
-                      {/* Notification Toggle - Show when PWA is installed OR on desktop */}
+                      {/* Notification Button - Show when PWA is installed OR on desktop */}
                       {(isPWA || !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) && (
                         <motion.button
                           initial={{ opacity: 0, y: 10 }}
@@ -859,20 +859,12 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                             e.stopPropagation();
                             handleNotificationToggle();
                           }}
-                          className="flex items-center justify-between gap-4 px-6 py-3 bg-dark-800/80 backdrop-blur-sm rounded-full text-white shadow-lg w-auto"
+                          className="flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-lg hover:shadow-xl transition-all"
+                          style={{ backgroundColor: notificationsEnabled ? '#10b981' : '#222d8c' }}
                         >
-                          <span className="text-sm font-medium">Notify me about new trends</span>
-                          <div
-                            className={`relative w-12 h-6 rounded-full transition-colors ${
-                              notificationsEnabled ? 'bg-[#222d8c]' : 'bg-gray-600'
-                            }`}
-                          >
-                            <motion.div
-                              animate={{ x: notificationsEnabled ? 24 : 2 }}
-                              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                              className="absolute top-1 w-4 h-4 bg-white rounded-full"
-                            />
-                          </div>
+                          <Bell className="w-5 h-5" />
+                          <span>{notificationsEnabled ? 'Notifications enabled ✓' : 'Notify me about new trends'}</span>
+                          {!notificationsEnabled && <ChevronRight className="w-4 h-4" />}
                         </motion.button>
                       )}
                     </div>
