@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Play, Volume2, VolumeX, X, ArrowLeft, Download, ChevronRight, Bell } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Share2, Play, X, ArrowLeft, Download, ChevronRight, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -469,23 +469,6 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     }, 500);
   };
 
-  const toggleMute = () => {
-    const newMutedState = !isMuted;
-    console.log(`🔊 Toggling mute: ${isMuted} → ${newMutedState}`);
-    setIsMuted(newMutedState);
-    localStorage.setItem('feedVideoMuted', String(newMutedState));
-    
-    if (videoRef.current) {
-      videoRef.current.muted = newMutedState;
-      
-      // Force play if video is paused (iOS PWA fix)
-      if (videoRef.current.paused) {
-        videoRef.current.play().catch(err => {
-          console.error('Failed to resume after mute toggle:', err);
-        });
-      }
-    }
-  };
 
   const handleStatsClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1262,18 +1245,6 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
           <ArrowLeft className="w-6 h-6 text-white drop-shadow-lg" />
         </button>
       )}
-
-      {/* Volume control */}
-      <button
-        onClick={toggleMute}
-        className="absolute top-4 right-4 p-3 transition-opacity hover:opacity-70 z-10"
-      >
-        {isMuted ? (
-          <VolumeX className="w-6 h-6 text-white drop-shadow-lg" />
-        ) : (
-          <Volume2 className="w-6 h-6 text-white drop-shadow-lg" />
-        )}
-      </button>
 
       {/* Copied to Clipboard Toast - Inside video container */}
       <AnimatePresence>
