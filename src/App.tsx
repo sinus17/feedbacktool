@@ -20,6 +20,7 @@ import { PreviewArtistView } from './pages/PreviewArtistView';
 import { Library } from './pages/Library';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
+import { PushNotifications } from './pages/PushNotifications';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -158,6 +159,7 @@ function App() {
                             <Route path="whatsapp" element={<WhatsAppLogs />} />
                             <Route path="archive" element={<Archive />} />
                             <Route path="settings" element={<Settings />} />
+                            <Route path="push-notifications" element={<PushNotifications />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                           </Routes>
                         </div>
