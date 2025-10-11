@@ -845,42 +845,35 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
 
                       {/* Notification Toggle - Show when PWA is installed OR on desktop */}
                       {(isPWA || !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) && (
-                        <motion.div
+                        <motion.button
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.3 }}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            handleNotificationToggle();
                           }}
                           onTouchEnd={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            handleNotificationToggle();
                           }}
-                          className="flex items-center justify-between gap-4 px-6 py-3 bg-dark-800/80 backdrop-blur-sm rounded-full text-white shadow-lg"
+                          className="flex items-center justify-between gap-4 px-6 py-3 bg-dark-800/80 backdrop-blur-sm rounded-full text-white shadow-lg w-auto"
                         >
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleNotificationToggle();
-                            }}
-                            className="flex items-center justify-between gap-4 w-full"
+                          <span className="text-sm font-medium">Notify me about new trends</span>
+                          <div
+                            className={`relative w-12 h-6 rounded-full transition-colors ${
+                              notificationsEnabled ? 'bg-[#222d8c]' : 'bg-gray-600'
+                            }`}
                           >
-                            <span className="text-sm font-medium">Notify me about new trends</span>
-                            <div
-                              className={`relative w-12 h-6 rounded-full transition-colors ${
-                                notificationsEnabled ? 'bg-[#222d8c]' : 'bg-gray-600'
-                              }`}
-                            >
-                              <motion.div
-                                animate={{ x: notificationsEnabled ? 24 : 2 }}
-                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                className="absolute top-1 w-4 h-4 bg-white rounded-full"
-                              />
-                            </div>
-                          </button>
-                        </motion.div>
+                            <motion.div
+                              animate={{ x: notificationsEnabled ? 24 : 2 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                              className="absolute top-1 w-4 h-4 bg-white rounded-full"
+                            />
+                          </div>
+                        </motion.button>
                       )}
                     </div>
                   </motion.div>
