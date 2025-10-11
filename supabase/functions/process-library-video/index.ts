@@ -173,10 +173,13 @@ async function getInstagramReelDetails(shortcode: string): Promise<any> {
   console.log('Instagram API Response keys:', Object.keys(result));
   
   if (result.error) {
-    throw new Error(`Instagram API error: ${result.error}`);
+    console.error('Instagram API Error Details:', JSON.stringify(result, null, 2));
+    const errorMessage = result.message || result.error || 'Unknown Instagram API error';
+    throw new Error(`Instagram API error: ${errorMessage} (Status: ${result.status || 'unknown'})`);
   }
   
   if (!result.data || !result.data.xdt_shortcode_media) {
+    console.error('Instagram API Response:', JSON.stringify(result, null, 2));
     throw new Error('No data returned from Instagram API');
   }
 
