@@ -206,6 +206,7 @@ export const Library: React.FC = () => {
         musicCoverThumb: v.music_cover_thumb,
         musicVideoCount: v.music_video_count,
         gemini_analysis: v.gemini_analysis,
+        gemini_analysis_en: v.gemini_analysis_en,
         geminiAnalyzedAt: v.gemini_analyzed_at,
         processingStatus: v.processing_status,
         processingError: v.processing_error,

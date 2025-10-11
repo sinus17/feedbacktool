@@ -47,6 +47,10 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isInstagramBrowser, setIsInstagramBrowser] = useState(false);
   const [showBrowserInstructions, setShowBrowserInstructions] = useState(false);
+  const [language, setLanguage] = useState<'de' | 'en'>(() => {
+    const saved = localStorage.getItem('analysisLanguage');
+    return (saved === 'en' ? 'en' : 'de') as 'de' | 'en';
+  });
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
@@ -628,13 +632,17 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     );
   }
 
-  // Parse Gemini analysis
-  const analysis = (currentVideo as any).gemini_analysis || {};
+  // Parse Gemini analysis based on selected language
+  const analysis = language === 'en' 
+    ? ((currentVideo as any).gemini_analysis_en || (currentVideo as any).gemini_analysis || {})
+    : ((currentVideo as any).gemini_analysis || {});
 
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 bg-black/95 overflow-hidden flex items-center justify-center z-50"
+      className={`fixed inset-0 overflow-hidden flex items-center justify-center z-50 transition-colors ${
+        showAnalysis ? 'bg-black' : 'bg-black/95'
+      }`}
       style={{ 
         height: '100dvh', // Dynamic viewport height for mobile (fallback to 100vh in older browsers)
         width: '100vw',
@@ -1132,6 +1140,34 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
               onWheel={(e) => e.stopPropagation()}
             >
               <div className="space-y-4 pr-12">
+              {/* Language Toggle */}
+              <div className="flex justify-start gap-1 mb-4">
+                <button
+                  onClick={() => {
+                    setLanguage('de');
+                    localStorage.setItem('analysisLanguage', 'de');
+                  }}
+                  className={`px-2 py-1 rounded text-sm transition-colors hover:bg-dark-600 ${
+                    language === 'de' ? 'bg-dark-600' : ''
+                  }`}
+                  title="Deutsch"
+                >
+                  🇩🇪
+                </button>
+                <button
+                  onClick={() => {
+                    setLanguage('en');
+                    localStorage.setItem('analysisLanguage', 'en');
+                  }}
+                  className={`px-2 py-1 rounded text-sm transition-colors hover:bg-dark-600 ${
+                    language === 'en' ? 'bg-dark-600' : ''
+                  }`}
+                  title="English"
+                >
+                  🇺🇸
+                </button>
+              </div>
+
               <div>
                 <h3 className="text-xl font-bold text-white mb-2">🎯 Hook</h3>
                 <p className="text-gray-300">{analysis.hook || 'No hook analysis available'}</p>
