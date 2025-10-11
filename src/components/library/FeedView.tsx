@@ -474,11 +474,13 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
 
   if (shuffledVideos.length === 0) {
     return (
-      <div className="h-screen flex items-center justify-center bg-black text-white">
-        <div className="text-center">
-          <p className="text-xl mb-2">Loading videos...</p>
-          <p className="text-gray-400 text-sm">Please wait</p>
-        </div>
+      <div className="h-screen flex flex-col items-center justify-center bg-black">
+        <img 
+          src="/NEU_PSD_swipeup-marketing_2.png" 
+          alt="Logo" 
+          className="w-32 h-32 object-contain mb-4"
+        />
+        <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin" />
       </div>
     );
   }
