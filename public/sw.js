@@ -59,19 +59,38 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   console.log('Push notification received:', event);
   
-  const options = {
-    body: event.data ? event.data.text() : 'New trend available!',
+  let notificationData = {
+    title: 'SwipeUp',
+    body: 'New trend available!',
     icon: '/plane_new.png',
     badge: '/plane_new.png',
+    url: '/library?tab=feed&public=true'
+  };
+  
+  // Parse the JSON payload
+  if (event.data) {
+    try {
+      notificationData = event.data.json();
+      console.log('Parsed notification data:', notificationData);
+    } catch (e) {
+      console.error('Failed to parse notification data:', e);
+      notificationData.body = event.data.text();
+    }
+  }
+  
+  const options = {
+    body: notificationData.body,
+    icon: notificationData.icon || '/plane_new.png',
+    badge: notificationData.badge || '/plane_new.png',
     vibrate: [200, 100, 200],
     data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
+      url: notificationData.url || '/library?tab=feed&public=true',
+      dateOfArrival: Date.now()
     }
   };
 
   event.waitUntil(
-    self.registration.showNotification('SwipeUp', options)
+    self.registration.showNotification(notificationData.title || 'SwipeUp', options)
   );
 });
 
@@ -80,7 +99,11 @@ self.addEventListener('notificationclick', (event) => {
   console.log('Notification clicked:', event);
   event.notification.close();
 
+  // Get the URL from notification data
+  const urlToOpen = event.notification.data?.url || '/library?tab=feed&public=true';
+  console.log('Opening URL:', urlToOpen);
+
   event.waitUntil(
-    clients.openWindow('/library?tab=feed&public=true')
+    clients.openWindow(urlToOpen)
   );
 });
