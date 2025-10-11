@@ -268,21 +268,30 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         videoRef.current.muted = isMuted;
         
         try {
+          // Don't call load() - it interrupts playback
+          // Just play directly, browser will load automatically
           await videoRef.current.play();
           console.log(`✅ Video autoplaying (${isMuted ? 'muted' : 'with sound'})`);
           setShowPlayOverlay(false);
           hasUserInteractedRef.current = true; // Mark as interacted
         } catch (err) {
           console.error('❌ Autoplay failed:', err);
-          // If unmuted autoplay fails, try muted WITHOUT changing user preference
+          // If unmuted autoplay fails, try muted
           if (!isMuted) {
             try {
               videoRef.current.muted = true;
-              // Don't update isMuted state or localStorage - keep user preference
               await videoRef.current.play();
-              console.log('✅ Video autoplaying (temporarily muted for this video only)');
+              console.log('⚠️ Video autoplaying muted (autoplay with sound failed)');
               setShowPlayOverlay(false);
-              hasUserInteractedRef.current = true; // Mark as interacted
+              hasUserInteractedRef.current = true;
+              
+              // After successful muted play, try to unmute if user wants sound
+              setTimeout(() => {
+                if (videoRef.current && !isMuted) {
+                  videoRef.current.muted = false;
+                  console.log('🔊 Attempting to unmute after initial muted autoplay');
+                }
+              }, 500);
             } catch (err2) {
               console.error('❌ Muted autoplay also failed:', err2);
               // Only show overlay if user hasn't interacted yet
@@ -302,8 +311,12 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
       }
     };
 
-    // Try to play immediately
-    playVideo();
+    // Small delay to ensure video element is ready
+    const timer = setTimeout(() => {
+      playVideo();
+    }, 50);
+    
+    return () => clearTimeout(timer);
   }, [currentIndex, isMuted]);
 
   // Keyboard navigation
@@ -461,8 +474,16 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     console.log(`🔊 Toggling mute: ${isMuted} → ${newMutedState}`);
     setIsMuted(newMutedState);
     localStorage.setItem('feedVideoMuted', String(newMutedState));
+    
     if (videoRef.current) {
       videoRef.current.muted = newMutedState;
+      
+      // Force play if video is paused (iOS PWA fix)
+      if (videoRef.current.paused) {
+        videoRef.current.play().catch(err => {
+          console.error('Failed to resume after mute toggle:', err);
+        });
+      }
     }
   };
 
@@ -700,6 +721,24 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                   autoPlay
                   muted
                   poster={currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Toggle play/pause on single click
+                    if (videoRef.current) {
+                      if (videoRef.current.paused) {
+                        videoRef.current.play().then(() => {
+                          setIsPlaying(true);
+                          console.log('▶️ Video resumed');
+                        }).catch(err => {
+                          console.error('Failed to play:', err);
+                        });
+                      } else {
+                        videoRef.current.pause();
+                        setIsPlaying(false);
+                        console.log('⏸️ Video paused');
+                      }
+                    }
+                  }}
                 />
               )}
               
