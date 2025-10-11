@@ -11,7 +11,8 @@ import {
   Archive,
   Calendar,
   FileText,
-  Library
+  Library,
+  Bell
 } from 'lucide-react';
 import { useStore } from '../store';
 import { Logo } from './Logo';
@@ -32,6 +33,7 @@ export function Sidebar() {
     { path: '/artists', icon: Users, label: 'Artist Management', exact: false },
     { path: '/whatsapp', icon: MessageSquare, label: 'WhatsApp Logs', exact: false },
     { path: '/archive', icon: Archive, label: 'Archive', exact: false },
+    { path: '/notifications', icon: Bell, label: 'Notifications', exact: false },
     { path: '/settings', icon: Settings, label: 'Settings', exact: false }
   ];
 

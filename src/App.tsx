@@ -159,7 +159,7 @@ function App() {
                             <Route path="whatsapp" element={<WhatsAppLogs />} />
                             <Route path="archive" element={<Archive />} />
                             <Route path="settings" element={<Settings />} />
-                            <Route path="push-notifications" element={<PushNotifications />} />
+                            <Route path="notifications" element={<PushNotifications />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                           </Routes>
                         </div>
