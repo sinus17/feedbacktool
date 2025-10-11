@@ -192,7 +192,6 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     const handleWheel = (e: WheelEvent) => {
       // Don't navigate if analysis modal is open or blocked
       if (showAnalysis || isBlocked) {
-        e.preventDefault();
         return;
       }
       
@@ -916,9 +915,9 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
               className="p-6 overflow-y-auto flex-1" 
               style={{ 
                 WebkitOverflowScrolling: 'touch', 
-                overscrollBehavior: 'contain',
-                touchAction: 'pan-y'
+                overscrollBehavior: 'contain'
               }}
+              onWheel={(e) => e.stopPropagation()}
             >
               <div className="space-y-4 pr-12">
               <div>
