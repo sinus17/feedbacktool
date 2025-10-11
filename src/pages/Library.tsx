@@ -146,7 +146,7 @@ export const Library: React.FC = () => {
       console.log('🔌 Supabase client:', !!supabase);
       
       // Use direct fetch to bypass problematic Supabase client wrapper
-      const directUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/video_library?select=*,gemini_analysis_en&processing_status=in.(processing,completed)&is_published=eq.true&order=created_at.desc`;
+      const directUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/video_library?select=*,gemini_analysis_en,author_verified&processing_status=in.(processing,completed)&is_published=eq.true&order=created_at.desc`;
       const directHeaders = {
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
@@ -208,6 +208,7 @@ export const Library: React.FC = () => {
         gemini_analysis: v.gemini_analysis,
         gemini_analysis_en: v.gemini_analysis_en,
         geminiAnalyzedAt: v.gemini_analyzed_at,
+        authorVerified: v.author_verified,
         processingStatus: v.processing_status,
         processingError: v.processing_error,
         createdAt: v.created_at,

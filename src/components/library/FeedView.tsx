@@ -664,10 +664,10 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         touchAction: 'pan-y'
       }}>
         {/* Top gradient overlay */}
-        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/50 to-transparent z-30 pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-black via-black/30 to-transparent z-10 pointer-events-none" />
         
         {/* Bottom gradient overlay */}
-        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/50 to-transparent z-30 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-64 bg-gradient-to-t from-black via-black/70 to-transparent z-10 pointer-events-none" />
         
         {/* Seamless scroll container with pre-loaded videos */}
         <div className="relative w-full h-full overflow-hidden">
@@ -1002,9 +1002,20 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
             </div>
           )}
           <div>
-            <p className="text-white font-semibold">
-              {currentVideo.accountName || currentVideo.accountUsername || 'Unknown Author'}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-white font-semibold">
+                {currentVideo.accountName || currentVideo.accountUsername || 'Unknown Author'}
+              </p>
+              {(currentVideo as any).authorVerified && (
+                <svg 
+                  className="w-4 h-4 flex-shrink-0" 
+                  viewBox="0 0 640 640"
+                  fill="#3b81f6"
+                >
+                  <path d="M320 64C356.8 64 388.8 84.7 404.9 115.1C437.8 105 475 112.9 501 139C527 165.1 535 202.3 524.9 235.2C555.3 251.2 576 283.2 576 320C576 356.8 555.3 388.8 524.9 404.9C535 437.8 527 475 501 501C475 527 437.7 535 404.8 524.9C388.8 555.3 356.8 576 320 576C283.2 576 251.2 555.3 235.1 524.9C202.2 535 165 527 139 501C113 475 105 437.7 115.1 404.8C84.7 388.8 64 356.8 64 320C64 283.2 84.7 251.2 115.1 235.1C105 202.2 112.9 165 139 139C165.1 113 202.3 105 235.2 115.1C251.2 84.7 283.2 64 320 64zM410.9 228.6C400.2 220.8 385.2 223.2 377.4 233.9L291.8 351.6L265.3 324.2C256.1 314.7 240.9 314.4 231.4 323.6C221.9 332.8 221.6 348 230.8 357.5L277.2 405.5C282.1 410.6 289 413.3 296.1 412.8C303.2 412.3 309.7 408.7 313.9 403L416.2 262.1C424 251.4 421.6 236.4 410.9 228.6z"/>
+                </svg>
+              )}
+            </div>
             <p className="text-gray-300 text-sm">
               {formatNumber(currentVideo.followerCount || 0)} followers
             </p>
