@@ -1,5 +1,5 @@
 // Service Worker for SwipeUp PWA
-const CACHE_NAME = 'swipeup-v1';
+const CACHE_NAME = 'swipeup-v2';
 const urlsToCache = [
   '/',
   '/plane_new.png',
