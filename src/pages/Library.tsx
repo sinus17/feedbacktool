@@ -10,7 +10,7 @@ import { FeedView } from '../components/library/FeedView';
 import { RecommendationsSection } from '../components/library/RecommendationsSection';
 import type { LibraryVideo } from '../types';
 
-const CACHE_KEY = 'library_videos_v4'; // Updated for photo post support
+const CACHE_KEY = 'library_videos_v5'; // Updated for is_adaptable field
 const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 export const Library: React.FC = () => {
@@ -147,7 +147,7 @@ export const Library: React.FC = () => {
       console.log('🔌 Supabase client:', !!supabase);
       
       // Use direct fetch to bypass problematic Supabase client wrapper
-      const directUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/video_library?select=*,gemini_analysis_en,author_verified&processing_status=in.(processing,completed)&is_published=eq.true&order=created_at.desc`;
+      const directUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/video_library?select=*,gemini_analysis_en,author_verified,is_adaptable&processing_status=in.(processing,completed)&is_published=eq.true&order=created_at.desc`;
       const directHeaders = {
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
@@ -210,6 +210,7 @@ export const Library: React.FC = () => {
         gemini_analysis_en: v.gemini_analysis_en,
         geminiAnalyzedAt: v.gemini_analyzed_at,
         authorVerified: v.author_verified,
+        is_adaptable: v.is_adaptable,
         processingStatus: v.processing_status,
         processingError: v.processing_error,
         createdAt: v.created_at,
@@ -418,7 +419,7 @@ export const Library: React.FC = () => {
       <div className="max-w-7xl mx-auto px-6 py-8">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader className="h-12 w-12 text-primary-500 animate-spin" />
+            <Loader className="h-8 w-8 text-primary-500 animate-spin" />
           </div>
         ) : filteredVideos.length === 0 ? (
           <div className="text-center py-20">

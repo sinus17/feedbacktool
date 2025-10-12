@@ -146,7 +146,7 @@ async function getInstagramReelDetails(shortcode: string): Promise<any> {
     throw new Error('RAPIDAPI_KEY environment variable is not set');
   }
 
-  const url = 'https://instagram-media-api.p.rapidapi.com/media/shortcode';
+  const url = 'https://instagram-media-api.p.rapidapi.com/media/shortcode_reels';
   
   const response = await fetch(url, {
     method: 'POST',
@@ -178,7 +178,8 @@ async function getInstagramReelDetails(shortcode: string): Promise<any> {
     throw new Error(`Instagram API error: ${errorMessage} (Status: ${result.status || 'unknown'})`);
   }
   
-  if (!result.data || !result.data.xdt_shortcode_media) {
+  // New API structure: data.xdt_api__v1__media__shortcode__web_info.items[0]
+  if (!result.data || !result.data.xdt_api__v1__media__shortcode__web_info || !result.data.xdt_api__v1__media__shortcode__web_info.items || result.data.xdt_api__v1__media__shortcode__web_info.items.length === 0) {
     console.error('Instagram API Response:', JSON.stringify(result, null, 2));
     throw new Error('No data returned from Instagram API');
   }
@@ -622,13 +623,13 @@ async function processInstagramReel(
     const apiResponse = await getInstagramReelDetails(shortcode);
     console.log('Details fetched successfully');
 
-    // Extract data from Instagram API response
-    const media = apiResponse.data.xdt_shortcode_media;
-    const owner = media.owner || {};
+    // Extract data from new Instagram API response structure
+    const items = apiResponse.data.xdt_api__v1__media__shortcode__web_info.items;
+    const media = items[0];
+    const owner = media.user || media.owner || {};
     
     // Extract caption text
-    const captionEdges = media.edge_media_to_caption?.edges || [];
-    const caption = captionEdges.length > 0 ? captionEdges[0].node.text : '';
+    const caption = media.caption?.text || '';
     
     // Extract hashtags from caption
     let hashtags: string[] = [];
@@ -638,13 +639,24 @@ async function processInstagramReel(
       hashtags = captionHashtags.map((tag: string) => tag.replace('#', ''));
     }
 
-    // Get video URL - Instagram provides it in video_url field
-    const videoDownloadUrl = media.video_url;
+    // Get video URL from video_versions array (highest quality)
+    const videoVersions = media.video_versions || [];
+    const videoDownloadUrl = videoVersions.length > 0 ? videoVersions[0].url : null;
     if (!videoDownloadUrl) {
       throw new Error('No video URL found in Instagram API response');
     }
 
     console.log('Video download URL from Instagram API:', videoDownloadUrl);
+
+    // Calculate duration from video_dash_manifest or use default
+    let duration = 0;
+    if (media.video_dash_manifest) {
+      // Try to extract duration from manifest
+      const durationMatch = media.video_dash_manifest.match(/mediaPresentationDuration="PT([\d.]+)S"/);
+      if (durationMatch) {
+        duration = Math.round(parseFloat(durationMatch[1]));
+      }
+    }
 
     // Extract data
     const videoData: VideoData = {
@@ -655,13 +667,14 @@ async function processInstagramReel(
       accountName: owner.full_name || owner.username || '',
       title: caption.substring(0, 100) || '', // First 100 chars as title
       description: caption || '',
-      uploadDate: media.taken_at_timestamp ? new Date(media.taken_at_timestamp * 1000).toISOString() : null,
-      duration: Math.round(media.video_duration || 0),
-      viewsCount: media.video_view_count || media.video_play_count || 0,
-      likesCount: media.edge_media_preview_like?.count || 0,
-      commentsCount: media.edge_media_to_comment?.count || media.edge_media_to_parent_comment?.count || 0,
+      uploadDate: media.taken_at ? new Date(media.taken_at * 1000).toISOString() : null,
+      duration: duration,
+      // Instagram API doesn't provide view counts - try multiple possible fields
+      viewsCount: media.view_count || media.play_count || media.video_view_count || 0,
+      likesCount: media.like_count || 0,
+      commentsCount: media.comment_count || 0,
       sharesCount: 0, // Instagram doesn't provide share count
-      thumbnailUrl: media.thumbnail_src || media.display_url || '',
+      thumbnailUrl: media.image_versions2?.candidates?.[0]?.url || media.display_uri || '',
     };
 
     // Upload video to Supabase storage
@@ -679,7 +692,7 @@ async function processInstagramReel(
     console.log('Uploading thumbnail and avatar images...');
     const thumbnailStorageUrl = await uploadImageToStorage(
       supabase,
-      media.thumbnail_src || media.display_url || '',
+      media.image_versions2?.candidates?.[0]?.url || media.display_uri || '',
       shortcode,
       'instagram',
       'thumbnail'
@@ -687,14 +700,16 @@ async function processInstagramReel(
 
     const avatarStorageUrl = await uploadImageToStorage(
       supabase,
-      owner.profile_pic_url || '',
+      owner.profile_pic_url || owner.hd_profile_pic_url_info?.url || '',
       shortcode,
       'instagram',
       'avatar'
     );
 
-    // Extract music info from clips_music_attribution_info
-    const musicInfo = media.clips_music_attribution_info || {};
+    // Extract music info from clips_metadata
+    const clipsMetadata = media.clips_metadata || {};
+    const originalSoundInfo = clipsMetadata.original_sound_info || {};
+    const musicInfo = clipsMetadata.music_info || {};
 
     // Insert into video_library
     const { data: libraryVideo, error: insertError } = await supabase
@@ -723,27 +738,27 @@ async function processInstagramReel(
         video_url: videoData.videoUrl,
         thumbnail_url: videoData.thumbnailUrl,
         thumbnail_storage_url: thumbnailStorageUrl,
-        cover_image_url: media.display_url || '',
+        cover_image_url: media.display_uri || '',
         dynamic_cover_url: '',
         
         // Creator stats
-        follower_count: owner.edge_followed_by?.count || 0,
+        follower_count: 0, // Not provided in new API
         creator_heart_count: 0,
-        creator_video_count: owner.edge_owner_to_timeline_media?.count || 0,
+        creator_video_count: 0, // Not provided in new API
         creator_avatar_url: owner.profile_pic_url || '',
         creator_avatar_storage_url: avatarStorageUrl,
         
-        // Music info
-        music_title: musicInfo.song_name || '',
-        music_author: musicInfo.artist_name || '',
-        is_original_sound: musicInfo.uses_original_audio || false,
+        // Music info - from clips_metadata
+        music_title: originalSoundInfo.original_audio_title || musicInfo.song_name || '',
+        music_author: originalSoundInfo.ig_artist?.username || musicInfo.artist_name || '',
+        is_original_sound: clipsMetadata.audio_type === 'original_sounds',
         music_url: '',
         music_album: '',
         music_cover_large: '',
         music_cover_medium: '',
         music_cover_thumb: '',
         music_video_count: 0,
-        music_is_copyrighted: false,
+        music_is_copyrighted: originalSoundInfo.is_explicit || false,
         spotify_id: null,
         apple_music_id: null,
         
@@ -756,8 +771,8 @@ async function processInstagramReel(
         // Video technical details
         video_quality: '',
         video_bitrate: 0,
-        video_width: media.dimensions?.width || 0,
-        video_height: media.dimensions?.height || 0,
+        video_width: media.original_width || 0,
+        video_height: media.original_height || 0,
         video_codec: '',
         
         // Complex data

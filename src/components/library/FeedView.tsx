@@ -47,6 +47,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isInstagramBrowser, setIsInstagramBrowser] = useState(false);
   const [showBrowserInstructions, setShowBrowserInstructions] = useState(false);
+  const [showAnalysisTooltip, setShowAnalysisTooltip] = useState(false);
   const [language, setLanguage] = useState<'de' | 'en'>(() => {
     const saved = localStorage.getItem('analysisLanguage');
     return (saved === 'en' ? 'en' : 'de') as 'de' | 'en';
@@ -274,6 +275,13 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
           console.log(`✅ Video autoplaying (${isMuted ? 'muted' : 'with sound'})`);
           setShowPlayOverlay(false);
           hasUserInteractedRef.current = true; // Mark as interacted
+          
+          // Show tooltip on first video after 1 second
+          if (currentIndex === 0) {
+            setTimeout(() => setShowAnalysisTooltip(true), 1000);
+            // Auto-hide after 5 seconds
+            setTimeout(() => setShowAnalysisTooltip(false), 6000);
+          }
         } catch (err) {
           console.error('❌ Autoplay failed:', err);
           // If unmuted autoplay fails, try muted
@@ -473,6 +481,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const handleStatsClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setShowAnalysis(true);
+    setShowAnalysisTooltip(false); // Hide tooltip when clicked
   };
 
   const handleShare = async (e: React.MouseEvent) => {
@@ -637,9 +646,20 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   }
 
   // Parse Gemini analysis based on selected language
-  const analysis = language === 'en' 
-    ? ((currentVideo as any).gemini_analysis_en || (currentVideo as any).gemini_analysis || {})
-    : ((currentVideo as any).gemini_analysis || {});
+  const rawAnalysis = language === 'en' 
+    ? ((currentVideo as any).gemini_analysis_en || (currentVideo as any).gemini_analysis)
+    : (currentVideo as any).gemini_analysis;
+  
+  let analysis: any = {};
+  if (rawAnalysis) {
+    try {
+      analysis = typeof rawAnalysis === 'string' ? JSON.parse(rawAnalysis) : rawAnalysis;
+      console.log('📊 Parsed analysis in feed:', analysis);
+    } catch (e) {
+      console.error('Failed to parse analysis:', e);
+      analysis = {};
+    }
+  }
 
   return (
     <div
@@ -725,6 +745,19 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                 />
               )}
               
+              {/* Adaptable Badge */}
+              {(currentVideo as any).is_adaptable && !showAnalysis && (
+                <div 
+                  className="absolute top-[116px] left-0 right-0 mx-auto w-fit px-3.5 py-2 bg-yellow-500/20 backdrop-blur-sm text-yellow-400 text-sm font-bold rounded-md border border-yellow-500/40 z-40 flex items-center gap-1.5 cursor-pointer hover:bg-yellow-500/30 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAnalysis(true);
+                  }}
+                >
+                  ⚡ Adaptable for Music
+                </div>
+              )}
+
               {/* Heart Animation on Double Tap */}
               <AnimatePresence>
                 {showHeartAnimation && (
@@ -1065,13 +1098,44 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         </div>
 
         {/* Comment */}
-        <div className="flex flex-col items-center gap-0.5" onClick={handleStatsClick}>
+        <div 
+          className={`flex flex-col items-center gap-0.5 relative transition-all duration-300 ${
+            showAnalysisTooltip ? 'bg-white/10 rounded-full p-1 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : ''
+          }`}
+          onClick={handleStatsClick}
+        >
           <button className="p-2 transition-opacity hover:opacity-70">
             <MessageCircle className="w-5 h-5 text-white drop-shadow-lg" />
           </button>
           <span className="text-white text-[10px] font-semibold drop-shadow-lg">
             {formatNumber(currentVideo.commentsCount || 0)}
           </span>
+          
+          {/* Tooltip with arrow */}
+          <AnimatePresence>
+            {showAnalysisTooltip && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+                className="absolute right-16 top-1/2 -translate-y-1/2 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowAnalysis(true);
+                  setShowAnalysisTooltip(false);
+                }}
+              >
+                {/* Tooltip text with arrow inside */}
+                <div className="bg-[#222d8c] backdrop-blur-sm text-white px-3 py-2 rounded-lg text-sm font-bold shadow-lg whitespace-nowrap flex items-center gap-2 hover:bg-[#2a3599] transition-colors">
+                  Click to open analysis
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" className="w-4 h-4 fill-current">
+                    <path d="M566.6 342.6C579.1 330.1 579.1 309.8 566.6 297.3L406.6 137.3C394.1 124.8 373.8 124.8 361.3 137.3C348.8 149.8 348.8 170.1 361.3 182.6L466.7 288L96 288C78.3 288 64 302.3 64 320C64 337.7 78.3 352 96 352L466.7 352L361.3 457.4C348.8 469.9 348.8 490.2 361.3 502.7C373.8 515.2 394.1 515.2 406.6 502.7L566.6 342.7z"/>
+                  </svg>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Save */}
@@ -1201,42 +1265,148 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                 </button>
               </div>
 
-              <div>
-                <h3 className="text-xl font-bold text-white mb-2">🎯 Hook</h3>
-                <p className="text-gray-300">{analysis.hook || 'No hook analysis available'}</p>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-white mb-2">📱 Content Type</h3>
-                <p className="text-gray-300">{analysis.content_type || 'N/A'}</p>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-white mb-2">🎨 Visual Style</h3>
-                <p className="text-gray-300">{analysis.visual_style || 'N/A'}</p>
-              </div>
-
-              {analysis.shotlist && analysis.shotlist.length > 0 && (
+              {/* Trending Video Analysis */}
+              {analysis.original_concept && (
+                <>
+                  {analysis.original_concept && (
+                    <div>
+                      <h3 className="text-sm font-medium text-[#3b81f6] mb-1">💡 Original Concept</h3>
+                      <p className="text-sm text-gray-300">{analysis.original_concept}</p>
+                    </div>
+                  )}
+                  
+                  {analysis.why_it_went_viral && (
+                    <div>
+                      <h3 className="text-sm font-medium text-[#3b81f6] mb-1">🚀 Why It Went Viral</h3>
+                      <p className="text-sm text-gray-300">{analysis.why_it_went_viral}</p>
+                    </div>
+                  )}
+                  
+                  {analysis.music_adaptation && (
+                    <div className="bg-[#222d8c]/20 p-4 rounded-lg border border-[#3b81f6]/30 relative">
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-[#3b81f6]">🎵 Music Adaptation Strategy</h3>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded-md border border-yellow-500/40 flex-shrink-0">
+                          ⚡ Adaptable
+                        </span>
+                      </div>
+                      
+                      {analysis.music_adaptation.core_mechanic && (
+                        <div className="mb-3">
+                          <h4 className="text-xs font-medium text-blue-300 mb-1">Core Mechanic</h4>
+                          <p className="text-sm text-gray-300">{analysis.music_adaptation.core_mechanic}</p>
+                        </div>
+                      )}
+                      
+                      {analysis.music_adaptation.how_to_flip && (
+                        <div className="mb-3">
+                          <h4 className="text-xs font-medium text-blue-300 mb-1">How to Adapt</h4>
+                          <p className="text-sm text-gray-300 whitespace-pre-line">{analysis.music_adaptation.how_to_flip}</p>
+                        </div>
+                      )}
+                      
+                      {analysis.music_adaptation.example_scenarios && Array.isArray(analysis.music_adaptation.example_scenarios) && (
+                        <div>
+                          <h4 className="text-xs font-medium text-blue-300 mb-2">Example Scenarios</h4>
+                          <ul className="list-disc list-inside space-y-1">
+                            {analysis.music_adaptation.example_scenarios.map((scenario: string, i: number) => (
+                              <li key={i} className="text-sm text-gray-300">{scenario}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {analysis.best_song_topics && Array.isArray(analysis.best_song_topics) && (
+                    <div>
+                      <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🎼 Best Song Topics</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.best_song_topics.map((topic: string, i: number) => (
+                          <span key={i} className="px-3 py-1 bg-[#3b81f6]/20 text-[#3b81f6] rounded-full text-xs">{topic}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {analysis.production_requirements && Array.isArray(analysis.production_requirements) && (
+                    <div>
+                      <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🎬 Production Requirements</h3>
+                      <ul className="list-disc list-inside space-y-1">
+                        {analysis.production_requirements.map((req: string, i: number) => (
+                          <li key={i} className="text-sm text-gray-300">{req}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {analysis.shotlist_template && Array.isArray(analysis.shotlist_template) && (
+                    <div>
+                      <h3 className="text-sm font-medium text-[#3b81f6] mb-2">📋 Shotlist Template</h3>
+                      <ul className="list-decimal list-inside space-y-2">
+                        {analysis.shotlist_template.map((shot: string, i: number) => (
+                          <li key={i} className="text-sm text-gray-300 pl-2">{shot}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {analysis.engagement_factors && Array.isArray(analysis.engagement_factors) && (
+                    <div>
+                      <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🔥 Engagement Factors</h3>
+                      <ul className="list-disc list-inside space-y-1">
+                        {analysis.engagement_factors.map((factor: string, i: number) => (
+                          <li key={i} className="text-sm text-gray-300">{factor}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+              
+              {/* Regular Video Analysis */}
+              {!analysis.original_concept && analysis.hook && (
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-2">🎬 Shotlist</h3>
-                  <ul className="space-y-1.5">
+                  <h3 className="text-sm font-medium text-[#3b81f6] mb-1">🎣 Hook</h3>
+                  <p className="text-sm text-gray-300">{analysis.hook}</p>
+                </div>
+              )}
+              
+              {analysis.content_type && (
+                <div>
+                  <h3 className="text-sm font-medium text-[#3b81f6] mb-1">📹 Content Type</h3>
+                  <p className="text-sm text-gray-300">{analysis.content_type}</p>
+                </div>
+              )}
+              
+              {analysis.visual_style && (
+                <div>
+                  <h3 className="text-sm font-medium text-[#3b81f6] mb-1">🎨 Visual Style</h3>
+                  <p className="text-sm text-gray-300">{analysis.visual_style}</p>
+                </div>
+              )}
+              
+              {analysis.shotlist && Array.isArray(analysis.shotlist) && (
+                <div>
+                  <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🎬 Shotlist</h3>
+                  <ul className="list-decimal list-inside space-y-2">
                     {analysis.shotlist.map((shot: any, i: number) => (
-                      <li key={i} className="text-gray-300 text-sm pl-4 border-l-2 border-purple-500">
-                        {typeof shot === 'string' ? shot : shot.description || `${shot.scene || ''} ${shot.action || ''}`.trim()}
+                      <li key={i} className="text-sm text-gray-300 pl-2">
+                        {typeof shot === 'string' ? shot : (
+                          shot.description || `${shot.scene || ''} ${shot.action || ''}`.trim()
+                        )}
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-
-              {analysis.engagement_factors && analysis.engagement_factors.length > 0 && (
+              
+              {!analysis.original_concept && analysis.engagement_factors && Array.isArray(analysis.engagement_factors) && (
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-2">🔥 Engagement Factors</h3>
-                  <ul className="space-y-1.5">
+                  <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🔥 Why This Works</h3>
+                  <ul className="list-disc list-inside space-y-1">
                     {analysis.engagement_factors.map((factor: string, i: number) => (
-                      <li key={i} className="text-gray-300 text-sm pl-4 border-l-2 border-pink-500">
-                        {factor}
-                      </li>
+                      <li key={i} className="text-sm text-gray-300">{factor}</li>
                     ))}
                   </ul>
                 </div>

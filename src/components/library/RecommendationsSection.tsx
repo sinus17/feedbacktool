@@ -258,7 +258,8 @@ export const RecommendationsSection: React.FC = () => {
       featured: false,
       createdAt: new Date(post.createTime * 1000).toISOString(),
       updatedAt: new Date().toISOString(),
-    };
+      isTrending: true, // Flag to identify trending videos
+    } as any;
   };
 
   const handleRefresh = async (e: React.MouseEvent) => {
@@ -450,7 +451,11 @@ export const RecommendationsSection: React.FC = () => {
           video={convertPostToLibraryVideo(selectedPost)}
           isOpen={!!selectedPost}
           onClose={() => setSelectedPost(null)}
-          canEdit={false}
+          canEdit={true}
+          onUpdate={() => {
+            // Refresh recommendations list after moving to library
+            fetchRecommendations(false);
+          }}
         />
       )}
     </div>

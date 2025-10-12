@@ -115,6 +115,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onClick }) => {
           </div>
         )}
 
+        {/* Adaptable Badge - Top Left */}
+        {(video as any).is_adaptable && (
+          <span className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded-md border border-yellow-500/40">
+            ⚡
+          </span>
+        )}
+
         {/* Play button overlay on hover (or Processing indicator) */}
         {isProcessing ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60">

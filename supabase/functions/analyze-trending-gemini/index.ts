@@ -26,15 +26,35 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get video details from recommendations table
-    const { data: video, error: videoError } = await supabaseClient
+    // Try to get video from recommendations table first, then fall back to video_library
+    let video = null
+    let isTrendingVideo = false
+    
+    const { data: trendingVideo, error: trendingError } = await supabaseClient
       .from('video_library_recommendations')
       .select('*')
       .eq('video_id', videoId)
       .single()
 
-    if (videoError || !video) {
-      throw new Error('Trending video not found')
+    if (trendingVideo && !trendingError) {
+      video = trendingVideo
+      isTrendingVideo = true
+      console.log('Found in recommendations table')
+    } else {
+      // Try video_library table
+      const { data: libraryVideo, error: libraryError } = await supabaseClient
+        .from('video_library')
+        .select('*')
+        .eq('id', videoId)
+        .single()
+
+      if (libraryError || !libraryVideo) {
+        throw new Error('Video not found in recommendations or library')
+      }
+      
+      video = libraryVideo
+      isTrendingVideo = false
+      console.log('Found in video_library table')
     }
 
     console.log('Trending video found:', video.video_id)
@@ -369,7 +389,7 @@ FOKUS:
       }
     }
 
-    // Save analysis to database
+    // Save analysis to database with upsert
     const updateData: any = {
       gemini_analysis: analysisJson,
       gemini_analyzed_at: new Date().toISOString(),
@@ -378,15 +398,32 @@ FOKUS:
     // Extract and save the music adaptation score if present
     if (analysisJson.music_adaptation_score !== undefined) {
       updateData.music_adaptation_score = analysisJson.music_adaptation_score
+      
+      // Mark as adaptable if score is 7 or higher
+      if (analysisJson.music_adaptation_score >= 7) {
+        updateData.is_adaptable = true
+      }
     }
     
-    const { error: updateError } = await supabaseClient
-      .from('video_library_recommendations')
-      .update(updateData)
-      .eq('video_id', videoId)
+    // Update the appropriate table
+    if (isTrendingVideo) {
+      const { error: updateError } = await supabaseClient
+        .from('video_library_recommendations')
+        .update(updateData)
+        .eq('video_id', videoId)
 
-    if (updateError) {
-      throw updateError
+      if (updateError) {
+        throw updateError
+      }
+    } else {
+      const { error: updateError } = await supabaseClient
+        .from('video_library')
+        .update(updateData)
+        .eq('id', videoId)
+
+      if (updateError) {
+        throw updateError
+      }
     }
 
     // Clean up: Delete all uploaded files from Gemini
@@ -415,7 +452,7 @@ FOKUS:
       body: JSON.stringify({ 
         videoId, 
         targetLang: 'en',
-        isTrending: true  // Flag to indicate this is a trending video
+        isTrending: isTrendingVideo  // Flag to indicate if this is a trending video
       }),
     }).catch((error) => {
       console.error('Failed to trigger English translation:', error);
