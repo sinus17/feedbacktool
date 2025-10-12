@@ -1,5 +1,5 @@
 // Service Worker for SwipeUp PWA
-const CACHE_NAME = 'swipeup-v4-20251012-nocache';
+const CACHE_NAME = 'swipeup-v5-20251012-clean';
 const urlsToCache = [
   '/plane_new.png',
   '/NEU_PSD_swipeup-marketing_2.png'
@@ -41,28 +41,34 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - network only for HTML/JS/CSS, cache for images
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  
-  // Skip chrome-extension and other non-http(s) requests
-  if (!url.protocol.startsWith('http')) {
+  // Skip non-http(s) requests (chrome-extension, data:, blob:, etc.)
+  if (!event.request.url.startsWith('http')) {
     return;
   }
   
-  // NEVER cache HTML, JS, CSS - always fetch from network
+  const url = new URL(event.request.url);
+  
+  // Skip external domains except fonts
+  const isOwnDomain = url.hostname.includes('swipeup-marketing.com') || 
+                      url.hostname.includes('supabase.co');
+  const isFontDomain = url.hostname.includes('googleapis.com') || 
+                       url.hostname.includes('gstatic.com');
+  
+  if (!isOwnDomain && !isFontDomain) {
+    return;
+  }
+  
+  // NEVER cache HTML, JS, CSS, API calls - always fetch from network
   if (url.pathname.endsWith('.html') || 
       url.pathname.endsWith('.js') || 
       url.pathname.endsWith('.css') ||
       url.pathname === '/' ||
-      url.pathname.includes('/assets/')) {
-    event.respondWith(
-      fetch(event.request)
-        .catch(() => {
-          // Only fallback to cache if network completely fails
-          return caches.match(event.request);
-        })
-    );
+      url.pathname.includes('/assets/') ||
+      url.pathname.includes('/rest/') ||
+      url.pathname.includes('/storage/')) {
+    event.respondWith(fetch(event.request));
   } else {
-    // Cache-first for images and static assets only
+    // Cache-first for fonts and static images only
     event.respondWith(
       caches.match(event.request)
         .then((response) => {
@@ -70,11 +76,13 @@ self.addEventListener('fetch', (event) => {
             return response;
           }
           return fetch(event.request).then((response) => {
-            // Only cache successful responses
-            if (response && response.status === 200) {
+            // Only cache successful, complete responses
+            if (response && response.status === 200 && response.type !== 'opaque') {
               const responseToCache = response.clone();
               caches.open(CACHE_NAME).then((cache) => {
-                cache.put(event.request, responseToCache);
+                cache.put(event.request, responseToCache).catch(() => {
+                  // Silently ignore cache errors
+                });
               });
             }
             return response;
