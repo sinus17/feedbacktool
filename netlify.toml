@@ -1,6 +1,7 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  # Force rebuild - fixed SPA redirect
 
 [build.processing]
   skip_processing = false
