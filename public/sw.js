@@ -1,5 +1,5 @@
 // Service Worker for SwipeUp PWA
-const CACHE_NAME = 'swipeup-v3-20251012';
+const CACHE_NAME = 'swipeup-v4-20251012-nocache';
 const urlsToCache = [
   '/plane_new.png',
   '/NEU_PSD_swipeup-marketing_2.png'
@@ -39,32 +39,30 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - network first for JS/CSS, cache for images
+// Fetch event - network only for HTML/JS/CSS, cache for images
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // Network-first strategy for HTML, JS, CSS
+  // Skip chrome-extension and other non-http(s) requests
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+  
+  // NEVER cache HTML, JS, CSS - always fetch from network
   if (url.pathname.endsWith('.html') || 
       url.pathname.endsWith('.js') || 
       url.pathname.endsWith('.css') ||
-      url.pathname === '/') {
+      url.pathname === '/' ||
+      url.pathname.includes('/assets/')) {
     event.respondWith(
       fetch(event.request)
-        .then((response) => {
-          // Clone the response before caching
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-          return response;
-        })
         .catch(() => {
-          // Fallback to cache if network fails
+          // Only fallback to cache if network completely fails
           return caches.match(event.request);
         })
     );
   } else {
-    // Cache-first for images and other assets
+    // Cache-first for images and static assets only
     event.respondWith(
       caches.match(event.request)
         .then((response) => {
@@ -72,10 +70,13 @@ self.addEventListener('fetch', (event) => {
             return response;
           }
           return fetch(event.request).then((response) => {
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
+            // Only cache successful responses
+            if (response && response.status === 200) {
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+            }
             return response;
           });
         })
