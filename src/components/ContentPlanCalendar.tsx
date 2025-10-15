@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
@@ -43,6 +43,14 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
   useEffect(() => {
     fetchPosts(artistId);
   }, [fetchPosts, artistId]);
+  
+  // Filter posts by artistId if provided
+  const filteredPosts = useMemo(() => {
+    if (artistId) {
+      return posts.filter(post => post.resourceId === artistId);
+    }
+    return posts;
+  }, [posts, artistId]);
   
   const handleSelectSlot = ({ start, action }: { start: Date; action: string }) => {
     // Only show add modal when clicking, not when dragging
@@ -254,7 +262,7 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
 
 
   
-  if (loading && posts.length === 0) {
+  if (loading && filteredPosts.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader className="h-8 w-8 animate-spin text-primary-500" />
@@ -403,7 +411,7 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
         {currentView === 'month' ? (
           <DragAndDropCalendar
             localizer={localizer}
-            events={posts}
+            events={filteredPosts}
             startAccessor={(event: any) => new Date(event.start)}
             endAccessor={(event: any) => new Date(event.end)}
             style={{ height: '100%' }}
@@ -468,14 +476,14 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {posts.length === 0 ? (
+                  {filteredPosts.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                         No scheduled posts found
                       </td>
                     </tr>
                   ) : (
-                    posts
+                    filteredPosts
                       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
                       .map((post) => (
                         <tr 

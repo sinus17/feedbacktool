@@ -2,21 +2,18 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Calendar, FileText } from 'lucide-react';
 import { useStore } from '../store';
-import { useContentPlanStore } from '../store/contentPlanStore';
 import { ContentPlanCalendar } from '../components/ContentPlanCalendar';
 import { useEffect } from 'react';
 
 export const ArtistContentPlan: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { artists, fetchArtists } = useStore();
-  const { fetchPosts } = useContentPlanStore();
   
   const artist = artists.find(a => a.id === id);
 
   useEffect(() => {
     if (id) {
       fetchArtists().catch(console.error);
-      fetchPosts().catch(console.error);
     }
   }, [id]);
   
