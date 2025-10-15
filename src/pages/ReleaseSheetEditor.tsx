@@ -99,11 +99,31 @@ export const ReleaseSheetEditor: React.FC = () => {
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = htmlContent;
           
-          // Remove ALL inline styles from all elements to ensure clean rendering
+          // Clean inline styles but preserve text-align and other formatting
           const allElements = tempDiv.querySelectorAll('*');
           allElements.forEach((el: any) => {
-            // Completely remove the style attribute
-            el.removeAttribute('style');
+            if (el.hasAttribute('style')) {
+              // Extract and preserve important styles
+              const textAlign = el.style.textAlign;
+              const width = el.style.width;
+              const height = el.style.height;
+              const transform = el.style.transform;
+              const backgroundColor = el.style.backgroundColor;
+              const color = el.style.color;
+              const fontSize = el.style.fontSize;
+              
+              // Remove all styles first
+              el.removeAttribute('style');
+              
+              // Re-apply preserved styles
+              if (textAlign) el.style.textAlign = textAlign;
+              if (width) el.style.width = width;
+              if (height) el.style.height = height;
+              if (transform) el.style.transform = transform;
+              if (backgroundColor) el.style.backgroundColor = backgroundColor;
+              if (color) el.style.color = color;
+              if (fontSize) el.style.fontSize = fontSize;
+            }
           });
           
           // Clean up image containers - remove any control buttons
@@ -143,6 +163,10 @@ export const ReleaseSheetEditor: React.FC = () => {
           // Initialize interact.js on images
           console.log('Initializing interact on images...');
           renderImages();
+          
+          // Make content blocks draggable
+          // console.log('Initializing draggable content blocks...');
+          // renderDraggableContent();
           
           // Render release link icon
           console.log('Rendering release link icon...');
@@ -241,6 +265,7 @@ export const ReleaseSheetEditor: React.FC = () => {
               // Re-render special elements
               renderSocialEmbeds();
               renderImages();
+              // renderDraggableContent();
               renderReleaseLinkIcon();
               
               // Restore cursor position if it was saved
@@ -795,6 +820,10 @@ export const ReleaseSheetEditor: React.FC = () => {
     
     // Skip if already initialized
     if ((htmlElement as any)._interactInitialized) return;
+    
+    // Never make the editor container itself draggable
+    if (htmlElement === editorRef.current || htmlElement.classList.contains('editor-container')) return;
+    
     (htmlElement as any)._interactInitialized = true;
     
     // Make element position relative if not already
@@ -923,8 +952,102 @@ export const ReleaseSheetEditor: React.FC = () => {
     
     const imageContainers = editorRef.current.querySelectorAll('.image-container');
     imageContainers.forEach((container) => {
+      const htmlElement = container as HTMLElement;
+      
+      // Remove any drag-related styling and classes
+      htmlElement.classList.remove('draggable-block');
+      htmlElement.style.cursor = '';
+      htmlElement.style.border = '';
+      htmlElement.style.transition = '';
+      htmlElement.style.position = '';
+      
+      // Remove interact.js if it was initialized
+      if ((htmlElement as any)._interactInitialized) {
+        interact(htmlElement).unset();
+        (htmlElement as any)._interactInitialized = false;
+      }
+      
       // Initialize interact.js for drag and resize
-      initializeInteract(container);
+      // Disabled for now - images should not be draggable
+      // initializeInteract(container);
+    });
+  };
+
+  const renderDraggableContent = () => {
+    if (!editorRef.current) return;
+    
+    // Make all direct block-level children draggable (excluding the editor itself)
+    const blockElements = Array.from(editorRef.current.children).filter((el) => {
+      const tagName = el.tagName;
+      return ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'BLOCKQUOTE', 'HR'].includes(tagName);
+    });
+    
+    blockElements.forEach((element) => {
+      const htmlElement = element as HTMLElement;
+      
+      // Skip if already initialized or if it's the editor itself
+      if ((htmlElement as any)._draggableInitialized || htmlElement === editorRef.current) return;
+      (htmlElement as any)._draggableInitialized = true;
+      
+      // Skip if element has contenteditable attribute
+      if (htmlElement.hasAttribute('contenteditable')) return;
+      
+      // Add draggable class for styling
+      htmlElement.classList.add('draggable-block');
+      
+      // Make element position relative if not already
+      if (!htmlElement.style.position || htmlElement.style.position === 'static') {
+        htmlElement.style.position = 'relative';
+      }
+      
+      // Initialize interact.js for dragging only (no resize for text blocks)
+      interact(htmlElement)
+        .draggable({
+          listeners: {
+            start(event) {
+              const target = event.target as HTMLElement;
+              target.style.cursor = 'grabbing';
+              target.style.zIndex = '1000';
+              target.style.opacity = '0.7';
+            },
+            move(event) {
+              const target = event.target as HTMLElement;
+              const x = (parseFloat(target.getAttribute('data-x') || '0')) + event.dx;
+              const y = (parseFloat(target.getAttribute('data-y') || '0')) + event.dy;
+              
+              target.style.transform = `translate(${x}px, ${y}px)`;
+              target.setAttribute('data-x', x.toString());
+              target.setAttribute('data-y', y.toString());
+            },
+            end(event) {
+              const target = event.target as HTMLElement;
+              target.style.cursor = 'grab';
+              target.style.zIndex = '';
+              target.style.opacity = '1';
+              handleContentChange();
+            }
+          },
+          modifiers: [
+            interact.modifiers.restrict({
+              restriction: 'parent',
+              endOnly: true
+            })
+          ]
+        })
+        .styleCursor(false);
+      
+      // Add visual indicator that element is draggable
+      htmlElement.style.cursor = 'grab';
+      htmlElement.style.border = '1px dashed transparent';
+      htmlElement.style.transition = 'border-color 0.2s, opacity 0.2s';
+      
+      // Show border on hover
+      htmlElement.addEventListener('mouseenter', () => {
+        htmlElement.style.borderColor = '#3b82f6';
+      });
+      htmlElement.addEventListener('mouseleave', () => {
+        htmlElement.style.borderColor = 'transparent';
+      });
     });
   };
 
@@ -1016,6 +1139,46 @@ export const ReleaseSheetEditor: React.FC = () => {
       }
     };
   }, []);
+
+  // Set up MutationObserver to make new content draggable
+  // useEffect(() => {
+  //   if (!editorRef.current) return;
+
+  //   const observer = new MutationObserver((mutations) => {
+  //     // Debounce the draggable rendering to avoid too many calls
+  //     let needsUpdate = false;
+      
+  //     mutations.forEach((mutation) => {
+  //       if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+  //         mutation.addedNodes.forEach((node) => {
+  //           if (node.nodeType === Node.ELEMENT_NODE) {
+  //             const element = node as HTMLElement;
+  //             // Check if it's a block-level element
+  //             if (['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'BLOCKQUOTE', 'HR'].includes(element.tagName)) {
+  //               needsUpdate = true;
+  //             }
+  //           }
+  //         });
+  //       }
+  //     });
+
+  //     if (needsUpdate) {
+  //       // Use a small timeout to batch updates
+  //       setTimeout(() => {
+  //         renderDraggableContent();
+  //       }, 100);
+  //     }
+  //   });
+
+  //   observer.observe(editorRef.current, {
+  //     childList: true,
+  //     subtree: false // Only watch direct children
+  //   });
+
+  //   return () => {
+  //     observer.disconnect();
+  //   };
+  // }, []);
 
 
   if (loading) {
@@ -1476,12 +1639,14 @@ export const ReleaseSheetEditor: React.FC = () => {
               }
             }
           }}
-          className="min-h-[600px] focus:outline-none prose prose-lg dark:prose-invert max-w-none text-gray-900 dark:text-white relative editor-links"
+          className="min-h-[600px] focus:outline-none prose prose-lg dark:prose-invert max-w-none text-gray-900 dark:text-white relative editor-links editor-container"
           style={{
             lineHeight: '1.7',
             fontSize: '18px',
             wordWrap: 'break-word',
-            overflowWrap: 'break-word'
+            overflowWrap: 'break-word',
+            cursor: 'text',
+            border: 'none'
           }}
           suppressContentEditableWarning={true}
           data-placeholder="Start writing your release sheet..."
@@ -1490,6 +1655,17 @@ export const ReleaseSheetEditor: React.FC = () => {
       </div>
 
       <style>{`
+        /* Ensure editor container itself is never draggable */
+        .editor-container {
+          cursor: text !important;
+          border: none !important;
+          position: static !important;
+        }
+        
+        .editor-container:hover {
+          border: none !important;
+        }
+        
         [contenteditable]:empty:before {
           content: attr(data-placeholder);
           color: #9ca3af;
