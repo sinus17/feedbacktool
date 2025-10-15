@@ -1,5 +1,5 @@
 // Service Worker for SwipeUp PWA
-const CACHE_NAME = 'swipeup-v5-20251012-clean';
+const CACHE_NAME = 'swipeup-v6-20251015-autoscroll';
 const urlsToCache = [
   '/plane_new.png',
   '/NEU_PSD_swipeup-marketing_2.png'
