@@ -40,6 +40,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const [showCopiedToast, setShowCopiedToast] = useState(false);
   const [showPlayOverlay, setShowPlayOverlay] = useState(true); // Show by default until autoplay succeeds
   const hasUserInteractedRef = useRef(false); // Track if user has interacted
+  const hasInteractedWithCurrentVideoRef = useRef(false); // Track interaction with current video for auto-scroll
   const [showPWAPrompt, setShowPWAPrompt] = useState(false);
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -246,6 +247,9 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         prev: prevVideo?.id || 'none',
         next: nextVideo?.id || 'none'
       });
+      // Reset interaction tracking when video changes
+      hasInteractedWithCurrentVideoRef.current = false;
+      console.log('🔄 Reset interaction tracking for new video');
     }
   }, [currentIndex]);
 
@@ -258,65 +262,114 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     }
   };
 
+  // Handle slideshow completion for auto-scroll
+  const handleSlideshowComplete = () => {
+    console.log('📸 Slideshow completed, checking if should auto-scroll');
+    if (!hasInteractedWithCurrentVideoRef.current && !showAnalysis) {
+      console.log('✅ Auto-scrolling to next video after slideshow');
+      setTimeout(() => navigateToNext(), 500);
+    } else {
+      console.log('❌ Not auto-scrolling - user has interacted');
+    }
+  };
+
+  // Handle user interaction with slideshow
+  const handleSlideshowInteraction = () => {
+    hasInteractedWithCurrentVideoRef.current = true;
+    console.log('🖱️ User interacted with slideshow - marked as interacted');
+  };
+
+  // Auto-scroll if Tap to Play overlay is shown for too long
+  useEffect(() => {
+    if (showPlayOverlay && !hasUserInteractedRef.current) {
+      console.log('⏱️ Starting auto-scroll timer for Tap to Play overlay');
+      const timer = setTimeout(() => {
+        console.log('⏭️ Auto-scrolling - user did not tap to play');
+        navigateToNext();
+      }, 5000); // 5 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showPlayOverlay, currentIndex]);
+
   // Auto-play current video
   useEffect(() => {
     const playVideo = async () => {
-      if (videoRef.current) {
-        // Reset playing state
-        setIsPlaying(true);
+      const video = videoRef.current;
+      if (!video) return;
+      
+      // Reset playing state
+      setIsPlaying(true);
+      
+      // Add ended event listener for auto-scroll
+      const handleVideoEnded = () => {
+        console.log('🎬 Video ended, checking if should auto-scroll');
+        if (!hasInteractedWithCurrentVideoRef.current && !showAnalysis) {
+          console.log('✅ Auto-scrolling to next video');
+          setTimeout(() => navigateToNext(), 500);
+        } else {
+          console.log('❌ Not auto-scrolling - user has interacted');
+        }
+      };
+      
+      video.addEventListener('ended', handleVideoEnded);
+      
+      // Always sync video element with user preference at start
+      video.muted = isMuted;
+      
+      try {
+        // Don't call load() - it interrupts playback
+        // Just play directly, browser will load automatically
+        await video.play();
+        console.log(`✅ Video autoplaying (${isMuted ? 'muted' : 'with sound'})`);
+        setShowPlayOverlay(false);
+        hasUserInteractedRef.current = true; // Mark as interacted
         
-        // Always sync video element with user preference at start
-        videoRef.current.muted = isMuted;
-        
-        try {
-          // Don't call load() - it interrupts playback
-          // Just play directly, browser will load automatically
-          await videoRef.current.play();
-          console.log(`✅ Video autoplaying (${isMuted ? 'muted' : 'with sound'})`);
-          setShowPlayOverlay(false);
-          hasUserInteractedRef.current = true; // Mark as interacted
-          
-          // Show tooltip on first video after 1 second
-          if (currentIndex === 0) {
-            setTimeout(() => setShowAnalysisTooltip(true), 1000);
-            // Auto-hide after 5 seconds
-            setTimeout(() => setShowAnalysisTooltip(false), 6000);
-          }
-        } catch (err) {
-          console.error('❌ Autoplay failed:', err);
-          // If unmuted autoplay fails, try muted
-          if (!isMuted) {
-            try {
-              videoRef.current.muted = true;
-              await videoRef.current.play();
-              console.log('⚠️ Video autoplaying muted (autoplay with sound failed)');
-              setShowPlayOverlay(false);
-              hasUserInteractedRef.current = true;
-              
-              // After successful muted play, try to unmute if user wants sound
-              setTimeout(() => {
-                if (videoRef.current && !isMuted) {
-                  videoRef.current.muted = false;
-                  console.log('🔊 Attempting to unmute after initial muted autoplay');
-                }
-              }, 500);
-            } catch (err2) {
-              console.error('❌ Muted autoplay also failed:', err2);
-              // Only show overlay if user hasn't interacted yet
-              if (!hasUserInteractedRef.current) {
-                setShowPlayOverlay(true);
-                setIsPlaying(false);
+        // Show tooltip on first video after 1 second
+        if (currentIndex === 0) {
+          setTimeout(() => setShowAnalysisTooltip(true), 1000);
+          // Auto-hide after 5 seconds
+          setTimeout(() => setShowAnalysisTooltip(false), 6000);
+        }
+      } catch (err) {
+        console.error('❌ Autoplay failed:', err);
+        // If unmuted autoplay fails, try muted
+        if (!isMuted) {
+          try {
+            video.muted = true;
+            await video.play();
+            console.log('⚠️ Video autoplaying muted (autoplay with sound failed)');
+            setShowPlayOverlay(false);
+            hasUserInteractedRef.current = true;
+            
+            // After successful muted play, try to unmute if user wants sound
+            setTimeout(() => {
+              if (videoRef.current && !isMuted) {
+                videoRef.current.muted = false;
+                console.log('🔊 Attempting to unmute after initial muted autoplay');
               }
-            }
-          } else {
+            }, 500);
+          } catch (err2) {
+            console.error('❌ Muted autoplay also failed:', err2);
             // Only show overlay if user hasn't interacted yet
             if (!hasUserInteractedRef.current) {
               setShowPlayOverlay(true);
               setIsPlaying(false);
             }
           }
+        } else {
+          // Only show overlay if user hasn't interacted yet
+          if (!hasUserInteractedRef.current) {
+            setShowPlayOverlay(true);
+            setIsPlaying(false);
+          }
         }
       }
+      
+      // Return cleanup function
+      return () => {
+        video.removeEventListener('ended', handleVideoEnded);
+      };
     };
 
     // Small delay to ensure video element is ready
@@ -324,8 +377,10 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
       playVideo();
     }, 50);
     
-    return () => clearTimeout(timer);
-  }, [currentIndex, isMuted]);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [currentIndex, isMuted, showAnalysis]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -482,6 +537,8 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     e.stopPropagation();
     setShowAnalysis(true);
     setShowAnalysisTooltip(false); // Hide tooltip when clicked
+    hasInteractedWithCurrentVideoRef.current = true; // Mark as interacted
+    console.log('👁️ User opened analysis - marked as interacted');
   };
 
   const handleShare = async (e: React.MouseEvent) => {
@@ -586,6 +643,8 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
               console.log('⏸️ Pausing video');
               videoElement.pause();
               setIsPlaying(false);
+              hasInteractedWithCurrentVideoRef.current = true; // Mark as interacted when paused
+              console.log('⏸️ User paused video - marked as interacted');
             }
           } else {
             console.error('❌ videoElement is null!');
@@ -599,6 +658,9 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   // Toggle like status
   const toggleLike = async () => {
     if (!currentUser || !currentVideo) return;
+    
+    hasInteractedWithCurrentVideoRef.current = true; // Mark as interacted when liked
+    console.log('❤️ User liked/unliked video - marked as interacted');
     
     if (isLiked) {
       // Unlike
@@ -713,13 +775,14 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                   images={currentVideo.imageUrls} 
                   onTap={handleVideoTap}
                   indicatorPosition="above-caption"
+                  onSlideshowComplete={handleSlideshowComplete}
+                  onUserInteraction={handleSlideshowInteraction}
                 />
               ) : (
                 <video
                   ref={videoRef}
                   src={currentVideo.videoUrl}
                   className="w-full h-full object-cover"
-                  loop
                   playsInline
                   autoPlay
                   muted
