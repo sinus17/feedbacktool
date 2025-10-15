@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Play, X, ArrowLeft, Download, ChevronRight, Bell } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Share2, Play, X, ArrowLeft, Download, ChevronRight, Bell, Maximize, Minimize } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -38,6 +38,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [showFullCaption, setShowFullCaption] = useState(false);
   const [showCopiedToast, setShowCopiedToast] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPlayOverlay, setShowPlayOverlay] = useState(true); // Show by default until autoplay succeeds
   const hasUserInteractedRef = useRef(false); // Track if user has interacted
   const hasInteractedWithCurrentVideoRef = useRef(false); // Track interaction with current video for auto-scroll
@@ -530,6 +531,37 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     hasInteractedWithCurrentVideoRef.current = true; // Mark as interacted
     console.log('👁️ User opened analysis - marked as interacted');
   };
+
+  // Handle fullscreen toggle
+  const handleFullscreen = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    try {
+      if (!document.fullscreenElement) {
+        // Enter fullscreen
+        await containerRef.current?.requestFullscreen();
+        setIsFullscreen(true);
+        console.log('✅ Entered fullscreen mode');
+      } else {
+        // Exit fullscreen
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+        console.log('✅ Exited fullscreen mode');
+      }
+    } catch (err) {
+      console.error('Fullscreen error:', err);
+    }
+  };
+
+  // Listen for fullscreen changes (e.g., user pressing ESC)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1209,6 +1241,17 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
           <span className="text-white text-[10px] font-semibold drop-shadow-lg">
             {formatNumber(currentVideo.sharesCount || 0)}
           </span>
+        </div>
+
+        {/* Fullscreen */}
+        <div className="flex flex-col items-center gap-0.5" onClick={handleFullscreen}>
+          <button className="p-2 transition-opacity hover:opacity-70">
+            {isFullscreen ? (
+              <Minimize className="w-5 h-5 text-white drop-shadow-lg" />
+            ) : (
+              <Maximize className="w-5 h-5 text-white drop-shadow-lg" />
+            )}
+          </button>
         </div>
 
         {/* Rotating Album Artwork with Sound Name */}
