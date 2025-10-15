@@ -279,18 +279,8 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     console.log('🖱️ User interacted with slideshow - marked as interacted');
   };
 
-  // Auto-scroll if Tap to Play overlay is shown for too long
-  useEffect(() => {
-    if (showPlayOverlay && !hasUserInteractedRef.current) {
-      console.log('⏱️ Starting auto-scroll timer for Tap to Play overlay');
-      const timer = setTimeout(() => {
-        console.log('⏭️ Auto-scrolling - user did not tap to play');
-        navigateToNext();
-      }, 5000); // 5 seconds
-      
-      return () => clearTimeout(timer);
-    }
-  }, [showPlayOverlay, currentIndex]);
+  // Note: Removed auto-scroll for Tap to Play overlay
+  // Users should manually interact to start playback
 
   // Auto-play current video
   useEffect(() => {
