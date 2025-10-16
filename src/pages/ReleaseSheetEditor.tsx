@@ -1230,7 +1230,7 @@ export const ReleaseSheetEditor: React.FC = () => {
           </div>
           
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center justify-between mt-4">
+          <div className="flex flex-wrap items-center justify-between mt-4" style={{ display: 'none' }}>
             <div className="flex flex-wrap items-center gap-1">
             <div className="flex items-center border-r border-gray-200 dark:border-gray-700 pr-2 mr-2">
               <button 

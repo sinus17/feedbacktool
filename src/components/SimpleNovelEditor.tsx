@@ -10,8 +10,8 @@ import {
 } from 'novel';
 import { defaultExtensions } from './simple-novel-extensions';
 import { NodeSelector } from './bubble-menu/NodeSelector';
-import { LinkSelector } from './bubble-menu/LinkSelector';
 import { TextButtons } from './bubble-menu/TextButtons';
+import { LinkSelector } from './bubble-menu/LinkSelector';
 
 interface SimpleNovelEditorProps {
   initialContent?: JSONContent;
@@ -35,7 +35,7 @@ export const SimpleNovelEditor: React.FC<SimpleNovelEditorProps> = ({
         <EditorContent
           initialContent={initialContent}
           extensions={defaultExtensions}
-          className="relative min-h-[500px] w-full bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg p-12"
+          className="relative min-h-[500px] w-full bg-transparent p-0"
           editorProps={{
             attributes: {
               class: 'prose prose-lg dark:prose-invert focus:outline-none max-w-full',
