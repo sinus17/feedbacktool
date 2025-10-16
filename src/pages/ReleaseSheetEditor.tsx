@@ -6,6 +6,8 @@ import { ReleaseService, ReleaseSheet } from '../services/releaseService';
 import { SocialEmbed } from '../components/SocialEmbed';
 import { ReleaseSheetEditModal } from '../components/ReleaseSheetEditModal';
 import { VersionHistoryDropdown } from '../components/VersionHistoryDropdown';
+import { SimpleNovelEditor } from '../components/SimpleNovelEditor';
+import type { JSONContent } from 'novel';
 import { supabase } from '../lib/supabase';
 
 export const ReleaseSheetEditor: React.FC = () => {
@@ -739,81 +741,6 @@ export const ReleaseSheetEditor: React.FC = () => {
 
 
   // Social media URL detection
-  const detectSocialMediaUrl = (text: string): { platform: 'instagram' | 'tiktok' | 'youtube'; url: string } | null => {
-    const instagramRegex = /https?:\/\/(www\.)?(instagram\.com\/(p|reel)\/[^\/\s]+)/i;
-    const tiktokRegex = /https?:\/\/(www\.)?(tiktok\.com\/@[^\/]+\/video\/\d+)/i;
-    const youtubeRegex = /https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[^\/\s]+/i;
-
-    if (instagramRegex.test(text)) {
-      const match = text.match(instagramRegex);
-      return match ? { platform: 'instagram', url: match[0] } : null;
-    }
-    
-    if (tiktokRegex.test(text)) {
-      const match = text.match(tiktokRegex);
-      return match ? { platform: 'tiktok', url: match[0] } : null;
-    }
-    
-    if (youtubeRegex.test(text)) {
-      const match = text.match(youtubeRegex);
-      return match ? { platform: 'youtube', url: match[0] } : null;
-    }
-    
-    return null;
-  };
-
-  const insertSocialEmbed = (url: string, platform: 'instagram' | 'tiktok' | 'youtube') => {
-    const embedId = `social-${Date.now()}`;
-    const embedHTML = `
-      <div class="social-embed-container" data-url="${url}" data-platform="${platform}" data-embed-id="${embedId}">
-        <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 my-4 border border-gray-200 dark:border-gray-700">
-          <div class="flex items-center space-x-2">
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">🔗 ${platform.charAt(0).toUpperCase() + platform.slice(1)} Post</span>
-          </div>
-          <p class="text-xs text-gray-500 mt-1">Social embed will load when viewing</p>
-        </div>
-      </div>
-    `;
-
-    // Insert at cursor position
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const div = document.createElement('div');
-      div.innerHTML = embedHTML;
-      const frag = document.createDocumentFragment();
-      let node;
-      while ((node = div.firstChild)) {
-        frag.appendChild(node);
-      }
-      range.insertNode(frag);
-      handleContentChange();
-      
-      // Immediately render the social embed
-      setTimeout(() => {
-        renderSocialEmbeds();
-      }, 100);
-    } else {
-      execCommand('insertHTML', embedHTML);
-      // Immediately render the social embed
-      setTimeout(() => {
-        renderSocialEmbeds();
-      }, 100);
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const pastedText = e.clipboardData.getData('text');
-    const socialMedia = detectSocialMediaUrl(pastedText);
-    
-    if (socialMedia) {
-      e.preventDefault();
-      insertSocialEmbed(socialMedia.url, socialMedia.platform);
-    }
-  };
-
-
-
   // Initialize interact.js for draggable and resizable elements
   const initializeInteract = (element: Element) => {
     const htmlElement = element as HTMLElement;
@@ -973,82 +900,128 @@ export const ReleaseSheetEditor: React.FC = () => {
     });
   };
 
-  const renderDraggableContent = () => {
-    if (!editorRef.current) return;
-    
-    // Make all direct block-level children draggable (excluding the editor itself)
-    const blockElements = Array.from(editorRef.current.children).filter((el) => {
-      const tagName = el.tagName;
-      return ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'BLOCKQUOTE', 'HR'].includes(tagName);
-    });
-    
-    blockElements.forEach((element) => {
-      const htmlElement = element as HTMLElement;
-      
-      // Skip if already initialized or if it's the editor itself
-      if ((htmlElement as any)._draggableInitialized || htmlElement === editorRef.current) return;
-      (htmlElement as any)._draggableInitialized = true;
-      
-      // Skip if element has contenteditable attribute
-      if (htmlElement.hasAttribute('contenteditable')) return;
-      
-      // Add draggable class for styling
-      htmlElement.classList.add('draggable-block');
-      
-      // Make element position relative if not already
-      if (!htmlElement.style.position || htmlElement.style.position === 'static') {
-        htmlElement.style.position = 'relative';
+  // Convert HTML to Novel JSON format
+  const htmlToNovelJson = (html: string): JSONContent => {
+    if (!html || html.trim() === '') {
+      return {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [] }],
+      };
+    }
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const content: any[] = [];
+
+    const parseNode = (node: Node): any => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || '';
+        if (text.trim()) {
+          return { type: 'text', text };
+        }
+        return null;
       }
-      
-      // Initialize interact.js for dragging only (no resize for text blocks)
-      interact(htmlElement)
-        .draggable({
-          listeners: {
-            start(event) {
-              const target = event.target as HTMLElement;
-              target.style.cursor = 'grabbing';
-              target.style.zIndex = '1000';
-              target.style.opacity = '0.7';
-            },
-            move(event) {
-              const target = event.target as HTMLElement;
-              const x = (parseFloat(target.getAttribute('data-x') || '0')) + event.dx;
-              const y = (parseFloat(target.getAttribute('data-y') || '0')) + event.dy;
-              
-              target.style.transform = `translate(${x}px, ${y}px)`;
-              target.setAttribute('data-x', x.toString());
-              target.setAttribute('data-y', y.toString());
-            },
-            end(event) {
-              const target = event.target as HTMLElement;
-              target.style.cursor = 'grab';
-              target.style.zIndex = '';
-              target.style.opacity = '1';
-              handleContentChange();
-            }
-          },
-          modifiers: [
-            interact.modifiers.restrict({
-              restriction: 'parent',
-              endOnly: true
-            })
-          ]
-        })
-        .styleCursor(false);
-      
-      // Add visual indicator that element is draggable
-      htmlElement.style.cursor = 'grab';
-      htmlElement.style.border = '1px dashed transparent';
-      htmlElement.style.transition = 'border-color 0.2s, opacity 0.2s';
-      
-      // Show border on hover
-      htmlElement.addEventListener('mouseenter', () => {
-        htmlElement.style.borderColor = '#3b82f6';
-      });
-      htmlElement.addEventListener('mouseleave', () => {
-        htmlElement.style.borderColor = 'transparent';
-      });
+
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node as HTMLElement;
+        const tagName = element.tagName.toLowerCase();
+
+        if (tagName === 'p') {
+          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
+          return { type: 'paragraph', content: childContent.length > 0 ? childContent : [] };
+        }
+        if (tagName === 'h1') {
+          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
+          return { type: 'heading', attrs: { level: 1 }, content: childContent };
+        }
+        if (tagName === 'h2') {
+          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
+          return { type: 'heading', attrs: { level: 2 }, content: childContent };
+        }
+        if (tagName === 'h3') {
+          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
+          return { type: 'heading', attrs: { level: 3 }, content: childContent };
+        }
+        if (tagName === 'strong' || tagName === 'b') {
+          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean);
+          return childContent.map(c => ({ ...c, marks: [...(c.marks || []), { type: 'bold' }] }));
+        }
+        if (tagName === 'em' || tagName === 'i') {
+          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean);
+          return childContent.map(c => ({ ...c, marks: [...(c.marks || []), { type: 'italic' }] }));
+        }
+        if (tagName === 'u') {
+          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean);
+          return childContent.map(c => ({ ...c, marks: [...(c.marks || []), { type: 'underline' }] }));
+        }
+        if (tagName === 'div') {
+          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
+          return { type: 'paragraph', content: childContent.length > 0 ? childContent : [] };
+        }
+        if (tagName === 'img') {
+          return { type: 'image', attrs: { src: element.getAttribute('src'), alt: element.getAttribute('alt') } };
+        }
+      }
+
+      return null;
+    };
+
+    Array.from(tempDiv.childNodes).forEach((node) => {
+      const parsed = parseNode(node);
+      if (parsed) {
+        if (Array.isArray(parsed)) {
+          content.push(...parsed);
+        } else {
+          content.push(parsed);
+        }
+      }
     });
+
+    if (content.length === 0) {
+      content.push({ type: 'paragraph', content: [] });
+    }
+
+    return { type: 'doc', content };
+  };
+
+  // Convert Novel JSON to HTML
+  const novelJsonToHtml = (json: JSONContent): string => {
+    if (!json || !json.content) return '';
+
+    const renderNode = (node: any): string => {
+      if (node.type === 'text') {
+        let text = node.text || '';
+        if (node.marks) {
+          node.marks.forEach((mark: any) => {
+            if (mark.type === 'bold') text = `<strong>${text}</strong>`;
+            if (mark.type === 'italic') text = `<em>${text}</em>`;
+            if (mark.type === 'underline') text = `<u>${text}</u>`;
+          });
+        }
+        return text;
+      }
+
+      if (node.type === 'paragraph') {
+        const content = node.content?.map(renderNode).join('') || '';
+        return `<p>${content}</p>`;
+      }
+
+      if (node.type === 'heading') {
+        const level = node.attrs?.level || 1;
+        const content = node.content?.map(renderNode).join('') || '';
+        return `<h${level}>${content}</h${level}>`;
+      }
+
+      if (node.type === 'image') {
+        const src = node.attrs?.src || '';
+        const alt = node.attrs?.alt || '';
+        return `<img src="${src}" alt="${alt}" />`;
+      }
+
+      return '';
+    };
+
+    return json.content.map(renderNode).join('');
   };
 
   const renderReleaseLinkIcon = () => {
@@ -1622,34 +1595,50 @@ export const ReleaseSheetEditor: React.FC = () => {
 
       {/* Editor Content */}
       <div className="mx-auto max-w-5xl px-8" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
+        {sheet && sheet.content && (
+          <SimpleNovelEditor
+            key={`${sheet.id}-${sheet.updated_at}`} // Force re-render when sheet or content changes
+            initialContent={(() => {
+              // Get all blocks and join them
+              const blocks = sheet.content?.blocks || [];
+              const htmlContent = blocks
+                .map((block: any) => block.content || '')
+                .join('');
+              
+              console.log('📄 Loading content for sheet:', sheet.id);
+              console.log('📄 Number of blocks:', blocks.length);
+              console.log('📄 HTML content length:', htmlContent?.length);
+              console.log('📄 HTML content preview:', htmlContent?.substring(0, 300));
+              
+              if (htmlContent && htmlContent.trim()) {
+                const json = htmlToNovelJson(htmlContent);
+                console.log('📄 Converted to JSON:', JSON.stringify(json, null, 2));
+                return json;
+              }
+              
+              console.log('⚠️ No content found, using empty document');
+              return {
+                type: 'doc',
+                content: [{ type: 'paragraph', content: [] }],
+              };
+            })()}
+            onChange={(json) => {
+              if (!sheet || !editorRef.current) return;
+              // Convert JSON back to HTML and update the hidden div
+              const html = novelJsonToHtml(json);
+              console.log('💾 Saving HTML:', html?.substring(0, 200));
+              editorRef.current.innerHTML = html;
+              handleContentChange();
+            }}
+            onBlur={handleEditorBlur}
+            editable={true}
+          />
+        )}
+        {/* Hidden div to maintain compatibility with existing save logic */}
         <div
           ref={editorRef}
-          contentEditable
-          onInput={handleContentChange}
-          onBlur={handleEditorBlur}
-          onPaste={handlePaste}
-          onClick={(e) => {
-            // Make links clickable
-            const target = e.target as HTMLElement;
-            if (target.tagName === 'A') {
-              e.preventDefault();
-              const href = target.getAttribute('href');
-              if (href) {
-                window.open(href, '_blank', 'noopener,noreferrer');
-              }
-            }
-          }}
-          className="min-h-[600px] focus:outline-none prose prose-lg dark:prose-invert max-w-none text-gray-900 dark:text-white relative editor-links editor-container"
-          style={{
-            lineHeight: '1.7',
-            fontSize: '18px',
-            wordWrap: 'break-word',
-            overflowWrap: 'break-word',
-            cursor: 'text',
-            border: 'none'
-          }}
+          style={{ display: 'none' }}
           suppressContentEditableWarning={true}
-          data-placeholder="Start writing your release sheet..."
         >
         </div>
       </div>
