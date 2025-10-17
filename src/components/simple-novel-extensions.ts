@@ -5,6 +5,7 @@ import {
   TaskItem,
   StarterKit,
 } from 'novel';
+import { slashCommand } from './slash-command.tsx';
 
 // Configure extensions with basic settings following Novel docs
 const tiptapLink = TiptapLink.configure({
@@ -83,4 +84,5 @@ export const defaultExtensions = [
   tiptapImage,
   taskList,
   taskItem,
+  slashCommand,
 ];

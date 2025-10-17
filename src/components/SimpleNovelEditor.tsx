@@ -6,12 +6,14 @@ import {
   EditorCommand,
   EditorCommandEmpty,
   EditorCommandList,
+  EditorCommandItem,
   EditorBubble,
 } from 'novel';
+import { suggestionItems } from './slash-command';
 import { defaultExtensions } from './simple-novel-extensions';
 import { NodeSelector } from './bubble-menu/NodeSelector';
 import { TextButtons } from './bubble-menu/TextButtons';
-import { LinkSelector } from './bubble-menu/LinkSelector';
+import { LinkSelector } from './bubble-menu/LinkSelector.tsx';
 
 interface SimpleNovelEditorProps {
   initialContent?: JSONContent;
@@ -53,7 +55,21 @@ export const SimpleNovelEditor: React.FC<SimpleNovelEditorProps> = ({
           <EditorCommand className="z-50 h-auto max-h-[330px] overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-1 py-2 shadow-md transition-all">
             <EditorCommandEmpty className="px-2 text-gray-500">No results</EditorCommandEmpty>
             <EditorCommandList>
-              {/* Command items will be added via slash command extension */}
+              {suggestionItems.map((item) => (
+                <EditorCommandItem
+                  key={item.title}
+                  onCommand={(val) => item.command?.(val)}
+                  className="flex w-full items-center space-x-2 rounded-md px-2 py-1 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 aria-selected:bg-gray-100 dark:aria-selected:bg-gray-700"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    {item.icon}
+                  </div>
+                  <div>
+                    <p className="font-medium">{item.title}</p>
+                    <p className="text-xs text-gray-500">{item.description}</p>
+                  </div>
+                </EditorCommandItem>
+              ))}
             </EditorCommandList>
           </EditorCommand>
 

@@ -1,17 +1,14 @@
-import React from 'react';
-import { Command, createSuggestionItems, renderItems } from 'novel/extensions';
+import { Command, createSuggestionItems, renderItems } from 'novel';
 import { 
   Heading1, 
   Heading2, 
   Heading3, 
   List, 
   ListOrdered, 
-  MessageSquarePlus, 
   Text, 
   TextQuote,
   Code,
   CheckSquare,
-  Image as ImageIcon,
 } from 'lucide-react';
 
 export const suggestionItems = createSuggestionItems([

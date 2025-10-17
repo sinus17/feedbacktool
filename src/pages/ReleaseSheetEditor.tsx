@@ -932,15 +932,21 @@ export const ReleaseSheetEditor: React.FC = () => {
         }
         if (tagName === 'h1') {
           const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
-          return { type: 'heading', attrs: { level: 1 }, content: childContent };
+          // Filter out any paragraph nodes - headings can only contain inline content
+          const inlineContent = childContent.filter((node: any) => node.type !== 'paragraph');
+          return { type: 'heading', attrs: { level: 1 }, content: inlineContent.length > 0 ? inlineContent : [] };
         }
         if (tagName === 'h2') {
           const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
-          return { type: 'heading', attrs: { level: 2 }, content: childContent };
+          // Filter out any paragraph nodes - headings can only contain inline content
+          const inlineContent = childContent.filter((node: any) => node.type !== 'paragraph');
+          return { type: 'heading', attrs: { level: 2 }, content: inlineContent.length > 0 ? inlineContent : [] };
         }
         if (tagName === 'h3') {
           const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
-          return { type: 'heading', attrs: { level: 3 }, content: childContent };
+          // Filter out any paragraph nodes - headings can only contain inline content
+          const inlineContent = childContent.filter((node: any) => node.type !== 'paragraph');
+          return { type: 'heading', attrs: { level: 3 }, content: inlineContent.length > 0 ? inlineContent : [] };
         }
         if (tagName === 'strong' || tagName === 'b') {
           const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean);
