@@ -1,5 +1,5 @@
 // Service Worker for SwipeUp PWA
-const CACHE_NAME = 'swipeup-v7-20251015-fullscreen';
+const CACHE_NAME = 'swipeup-v8-20251021-fetch-fix';
 const urlsToCache = [
   '/plane_new.png',
   '/NEU_PSD_swipeup-marketing_2.png'
@@ -66,7 +66,17 @@ self.addEventListener('fetch', (event) => {
       url.pathname.includes('/assets/') ||
       url.pathname.includes('/rest/') ||
       url.pathname.includes('/storage/')) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(
+      fetch(event.request).catch((error) => {
+        console.error('Fetch failed for:', event.request.url, error);
+        // Return a basic error response instead of letting the promise reject
+        return new Response('Network error', {
+          status: 408,
+          statusText: 'Request Timeout',
+          headers: new Headers({ 'Content-Type': 'text/plain' })
+        });
+      })
+    );
   } else {
     // Cache-first for fonts and static images only
     event.respondWith(
@@ -86,6 +96,14 @@ self.addEventListener('fetch', (event) => {
               });
             }
             return response;
+          }).catch((error) => {
+            console.error('Fetch failed for cached resource:', event.request.url, error);
+            // Return a basic error response
+            return new Response('Network error', {
+              status: 408,
+              statusText: 'Request Timeout',
+              headers: new Headers({ 'Content-Type': 'text/plain' })
+            });
           });
         })
     );
