@@ -1,0 +1,99 @@
+/**
+ * @license
+ * MyFonts Webfont Build ID 3867246, 2020-12-16T11:57:38-0500
+ * 
+ * The fonts listed in this notice are subject to the End User License
+ * Agreement(s) entered into by the website owner. All other parties are 
+ * explicitly restricted from using the Licensed Webfonts(s).
+ * 
+ * You may obtain a valid license at the URLs below.
+ * 
+ * Webfont: Brandon Grotesque Thin by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Thin Italic by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Light by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Light Italic by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Regular by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Italic by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Medium by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Medium Italic by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Bold by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Bold Italic by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Black by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+
+ * Webfont: Brandon Grotesque Black Italic by HVD Fonts
+ * URL: https://www.myfonts.com/collections/hvd-fonts-foundry
+ 
+ * © 2025 MyFonts Inc. */
+
+
+  
+@font-face {
+  font-family: "BrandonGrotesqueBlackItalic";
+  src: url('webFonts/BrandonGrotesqueBlackItalic/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueBlackItalic/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueRegular";
+  src: url('webFonts/BrandonGrotesqueRegular/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueRegular/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueBold";
+  src: url('webFonts/BrandonGrotesqueBold/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueBold/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueMedium";
+  src: url('webFonts/BrandonGrotesqueMedium/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueMedium/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueThin";
+  src: url('webFonts/BrandonGrotesqueThin/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueThin/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueLightItalic";
+  src: url('webFonts/BrandonGrotesqueLightItalic/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueLightItalic/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueBlack";
+  src: url('webFonts/BrandonGrotesqueBlack/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueBlack/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueItalic";
+  src: url('webFonts/BrandonGrotesqueItalic/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueItalic/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueMediumItalic";
+  src: url('webFonts/BrandonGrotesqueMediumItalic/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueMediumItalic/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueLight";
+  src: url('webFonts/BrandonGrotesqueLight/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueLight/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueThinItalic";
+  src: url('webFonts/BrandonGrotesqueThinItalic/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueThinItalic/font.woff') format('woff');
+}
+@font-face {
+  font-family: "BrandonGrotesqueBoldItalic";
+  src: url('webFonts/BrandonGrotesqueBoldItalic/font.woff2') format('woff2'), url('webFonts/BrandonGrotesqueBoldItalic/font.woff') format('woff');
+}
+

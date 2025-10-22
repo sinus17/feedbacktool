@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Work Sans', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'Work Sans', 'system-ui', 'sans-serif'],
       },
       colors: {
         primary: {
@@ -13,12 +13,12 @@ export default {
           100: '#e0edff',
           200: '#c7ddff',
           300: '#a5c8ff',
-          400: '#75a8ff',
-          500: '#002a88',
-          600: '#1a5fff',
-          700: '#0047ff',
-          800: '#0036cc',
-          900: '#002a99',
+          400: '#0000fe',
+          500: '#0000fe',
+          600: '#0000e6',
+          700: '#0000cc',
+          800: '#0000b3',
+          900: '#000099',
         },
         dark: {
           50: '#F3F4F6',

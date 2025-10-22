@@ -579,11 +579,11 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold text-white">Video Details</h2>
             {!canEdit && (video as any).music_adaptation_score !== undefined && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-[#202a82]/20 border border-[#202a82]/40 rounded-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" style={{ color: '#202a82' }}>
+              <div className="flex items-center gap-2 px-3 py-1 bg-[#0000fe]/20 border border-[#0000fe]/40 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" style={{ color: '#0000fe' }}>
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                 </svg>
-                <span className="text-sm font-semibold" style={{ color: '#202a82' }}>
+                <span className="text-sm font-semibold" style={{ color: '#0000fe' }}>
                   {(video as any).music_adaptation_score}/10
                 </span>
                 <span className="text-xs text-gray-400">Adaptation Score</span>
@@ -689,17 +689,17 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                   <div className="relative w-full h-full overflow-hidden">
                     {/* Animated Laser Beam */}
                     <div className="absolute inset-0">
-                      <div className="absolute w-full h-1 bg-gradient-to-r from-transparent to-transparent shadow-[0_0_20px_rgba(32,42,130,0.8)]" 
+                      <div className="absolute w-full h-1 bg-gradient-to-r from-transparent to-transparent shadow-[0_0_20px_rgba(0,0,254,0.8)]" 
                            style={{ 
                              animation: 'scan 2s ease-in-out infinite',
-                             background: 'linear-gradient(to right, transparent, #202a82, transparent)'
+                             background: 'linear-gradient(to right, transparent, #0000fe, transparent)'
                            }}>
                       </div>
                     </div>
                     
                     {/* Scanning Text */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor" className="h-12 w-12 mb-4 animate-pulse" style={{ color: '#202a82' }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor" className="h-12 w-12 mb-4 animate-pulse" style={{ color: '#0000fe' }}>
                         <path d="M423.5 117.2C419 118.9 416 123.2 416 128C416 132.8 419 137.1 423.5 138.8L480 160L501.2 216.5C502.9 221 507.2 224 512 224C516.8 224 521.1 221 522.8 216.5L544 160L600.5 138.8C605 137.1 608 132.8 608 128C608 123.2 605 118.9 600.5 117.2L544 96L522.8 39.5C521.1 35 516.8 32 512 32C507.2 32 502.9 35 501.2 39.5L480 96L423.5 117.2zM238.5 137.3C235.9 131.6 230.2 128 224 128C217.8 128 212.1 131.6 209.5 137.3L156.4 252.3L41.4 305.4C35.6 308.1 32 313.8 32 320C32 326.2 35.6 331.9 41.3 334.5L156.3 387.6L209.4 502.6C212 508.3 217.7 511.9 223.9 511.9C230.1 511.9 235.8 508.3 238.4 502.6L291.5 387.6L406.5 334.5C412.2 331.9 415.8 326.2 415.8 320C415.8 313.8 412.2 308.1 406.5 305.5L291.5 252.4L238.4 137.4zM448 480L391.5 501.2C387 502.9 384 507.2 384 512C384 516.8 387 521.1 391.5 522.8L448 544L469.2 600.5C470.9 605 475.2 608 480 608C484.8 608 489.1 605 490.8 600.5L512 544L568.5 522.8C573 521.1 576 516.8 576 512C576 507.2 573 502.9 568.5 501.2L512 480L490.8 423.5C489.1 419 484.8 416 480 416C475.2 416 470.9 419 469.2 423.5L448 480z"/>
                       </svg>
                       <p className="text-lg font-semibold mb-2">Analyzing Video with Gemini AI</p>
@@ -1195,7 +1195,7 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                 <div className="space-y-4">
                   {geminiAnalysis ? (
                     <>
-                      <div className="space-y-4 p-4 bg-[#222d8c]/10 border border-[#3b81f6]/20 rounded-lg">
+                      <div className="space-y-4 p-4 bg-[#0000fe]/10 border border-[#3b81f6]/20 rounded-lg">
                         <div className="flex items-center justify-between">
                           <h4 className="text-sm font-semibold text-[#3b81f6] flex items-center gap-2">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor" className="h-4 w-4">
@@ -1320,7 +1320,7 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                                     )}
                                     
                                     {analysis.music_adaptation && (
-                                      <div className="col-span-full bg-[#222d8c]/20 p-4 rounded-lg border border-[#3b81f6]/30">
+                                      <div className="col-span-full bg-[#0000fe]/20 p-4 rounded-lg border border-[#3b81f6]/30">
                                         <h6 className="text-sm font-semibold text-[#3b81f6] mb-3">🎵 Music Adaptation Strategy</h6>
                                         
                                         {analysis.music_adaptation.core_mechanic && (
@@ -1519,9 +1519,9 @@ export const VideoDetailModal: React.FC<VideoDetailModalProps> = ({ video: initi
                         onClick={handleAnalyze}
                         disabled={isAnalyzing}
                         className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-                        style={{ backgroundColor: '#222d8c' }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1a2370'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#222d8c'}
+                        style={{ backgroundColor: '#0000fe' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0000cc'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0000fe'}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" fill="currentColor" className="h-4 w-4">
                           <path d="M423.5 117.2C419 118.9 416 123.2 416 128C416 132.8 419 137.1 423.5 138.8L480 160L501.2 216.5C502.9 221 507.2 224 512 224C516.8 224 521.1 221 522.8 216.5L544 160L600.5 138.8C605 137.1 608 132.8 608 128C608 123.2 605 118.9 600.5 117.2L544 96L522.8 39.5C521.1 35 516.8 32 512 32C507.2 32 502.9 35 501.2 39.5L480 96L423.5 117.2zM238.5 137.3C235.9 131.6 230.2 128 224 128C217.8 128 212.1 131.6 209.5 137.3L156.4 252.3L41.4 305.4C35.6 308.1 32 313.8 32 320C32 326.2 35.6 331.9 41.3 334.5L156.3 387.6L209.4 502.6C212 508.3 217.7 511.9 223.9 511.9C230.1 511.9 235.8 508.3 238.4 502.6L291.5 387.6L406.5 334.5C412.2 331.9 415.8 326.2 415.8 320C415.8 313.8 412.2 308.1 406.5 305.5L291.5 252.4L238.4 137.4zM448 480L391.5 501.2C387 502.9 384 507.2 384 512C384 516.8 387 521.1 391.5 522.8L448 544L469.2 600.5C470.9 605 475.2 608 480 608C484.8 608 489.1 605 490.8 600.5L512 544L568.5 522.8C573 521.1 576 516.8 576 512C576 507.2 573 502.9 568.5 501.2L512 480L490.8 423.5C489.1 419 484.8 416 480 416C475.2 416 470.9 419 469.2 423.5L448 480z"/>

@@ -1162,7 +1162,7 @@ export const ReleaseSheetEditor: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#000000]">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
       </div>
     );
@@ -1170,7 +1170,7 @@ export const ReleaseSheetEditor: React.FC = () => {
 
   if (!sheet) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#000000]">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Sheet not found
@@ -1190,7 +1190,7 @@ export const ReleaseSheetEditor: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
+    <div className="min-h-screen bg-white dark:bg-[#000000]">
       {/* Custom styles for editor links */}
       <style>{`
         .editor-links a {
@@ -1215,7 +1215,7 @@ export const ReleaseSheetEditor: React.FC = () => {
       `}</style>
       
       {/* Combined Sticky Header */}
-      <div className="sticky top-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="sticky top-0 z-50 bg-white/95 dark:bg-[#000000]/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
         {/* Sheet Title */}
         <div className="mx-auto py-4" style={{ paddingLeft: '10%', paddingRight: '10%' }}>
           <div className="flex items-center space-x-4">

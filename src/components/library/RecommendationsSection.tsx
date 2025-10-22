@@ -397,7 +397,7 @@ export const RecommendationsSection: React.FC = () => {
                             className="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                             style={{
                               width: `${((post as any)._musicAdaptationScore / 10) * 100}%`,
-                              background: `linear-gradient(to right, #222d8c, #3b81f6)`
+                              background: `linear-gradient(to right, #0000fe, #3b81f6)`
                             }}
                           />
                         </div>

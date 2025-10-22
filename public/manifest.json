@@ -5,17 +5,17 @@
   "start_url": "/library?tab=feed&public=true",
   "display": "standalone",
   "background_color": "#111111",
-  "theme_color": "#222d8c",
+  "theme_color": "#0000fe",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/plane_new.png",
+      "src": "/favicons/web-app-manifest-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/plane_new.png",
+      "src": "/favicons/web-app-manifest-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

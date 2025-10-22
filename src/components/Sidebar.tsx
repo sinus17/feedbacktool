@@ -109,7 +109,7 @@ export function Sidebar() {
                   to={item.path}
                   className={`flex items-center px-4 py-2 text-sm ${
                     isActive(item.path, item.exact)
-                      ? 'text-primary-400 bg-dark-700/50'
+                      ? 'text-white bg-[#0000fe]'
                       : 'text-gray-300 hover:bg-dark-700/50 hover:text-white'
                   } cursor-pointer`}
                 >
