@@ -51,6 +51,13 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
   const [showBrowserInstructions, setShowBrowserInstructions] = useState(false);
   const [showAnalysisTooltip, setShowAnalysisTooltip] = useState(false);
   const [language, setLanguage] = useState<'de' | 'en'>(() => {
+    // Check URL parameter first
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlLanguage = urlParams.get('language');
+    if (urlLanguage === 'en' || urlLanguage === 'de') {
+      return urlLanguage as 'de' | 'en';
+    }
+    // Fall back to localStorage
     const saved = localStorage.getItem('analysisLanguage');
     return (saved === 'en' ? 'en' : 'de') as 'de' | 'en';
   });
