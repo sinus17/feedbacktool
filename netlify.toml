@@ -47,6 +47,7 @@
   from = "/*"
   to = "/index.html"
   status = 200
+  conditions = {path = "!/.+\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|webp|mp4|webm|ogg|mp3|wav|flac|aac|xml|txt)$"}
 
 [build.environment]
   NODE_VERSION = "20"
