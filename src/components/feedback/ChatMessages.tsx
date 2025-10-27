@@ -27,20 +27,12 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   };
 
   const getMessageSenderInfo = (message: Message) => {
-    console.log('=== AVATAR DEBUG ===');
-    console.log('Message userId:', message.userId);
-    console.log('Message isAdmin:', message.isAdmin);
-    console.log('Available profiles:', profiles.map(p => ({ id: p.id, name: p.name, avatar_url: p.avatar_url })));
-    
     if (message.isAdmin) {
       // If we have a userId, try to find the specific admin profile
       if (message.userId) {
         const adminProfile = profiles.find(p => p.id === message.userId);
-        console.log('Found matching profile:', adminProfile);
         
         if (adminProfile) {
-          console.log('Admin profile found:', adminProfile.name);
-          
           // Map admin names to their specific avatars based on their actual profile name
           const adminAvatarMap: Record<string, string> = {
             'philipp lützenburger': '/avatars/philipp.png',
@@ -52,14 +44,12 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
           
           // Use the profile's actual name and map to corresponding avatar
           const nameKey = adminProfile.name.toLowerCase().trim();
-          console.log('Looking up avatar for name key:', nameKey);
           
           // Prioritize database avatar_url, then try name mapping, then fallback
           let avatarUrl;
           
           if (adminProfile.avatar_url) {
             avatarUrl = adminProfile.avatar_url;
-            console.log('Using database avatar_url:', avatarUrl);
           } else {
             // Try exact name match in avatar mapping
             avatarUrl = adminAvatarMap[nameKey];
@@ -67,40 +57,31 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
             // Try partial match for names containing 'lukas'
             if (!avatarUrl && nameKey.includes('lukas')) {
               avatarUrl = '/avatars/lukas.png';
-              console.log('Using Lukas avatar for name containing "lukas"');
             }
             
             // Final fallback to generic admin avatar
             avatarUrl = avatarUrl || '/plane_white.png';
           }
           
-          const result = {
+          return {
             name: adminProfile.name, // Use actual profile name
             avatarUrl: avatarUrl
           };
-          console.log('Final result for admin message:', result);
-          return result;
-        } else {
-          console.log('No profile found for userId:', message.userId);
         }
       }
       
       // Fallback for admin messages without userId or profile not found
-      const adminFallback = {
+      return {
         name: 'Admin',
         avatarUrl: '/plane_white.png' // generic admin avatar (paperplane logo)
       };
-      console.log('Using admin fallback:', adminFallback);
-      return adminFallback;
     }
     
     // For artist messages
-    const artistFallback = {
+    return {
       name: 'Artist',
       avatarUrl: artistAvatar || '/avatars/default-artist.png'
     };
-    console.log('Using artist fallback:', artistFallback);
-    return artistFallback;
   };
 
   // Sort messages by creation date (oldest first)

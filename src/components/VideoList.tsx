@@ -30,7 +30,9 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
     updateSubmission, 
     fetchAdCreatives, 
     adCreatives,
-    handleMoveToAdCreatives 
+    handleMoveToAdCreatives,
+    fetchSubmissions,
+    submissionsPagination
   } = useStore();
   
   // Ensure ad creatives are loaded
@@ -456,6 +458,15 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
         <FeedbackModal
           submission={selectedVideo}
           onClose={() => setSelectedVideo(null)}
+          onUpdate={async () => {
+            // Refresh the list with current filters, skip cache to get fresh data
+            await fetchSubmissions(
+              submissionsPagination.currentPage,
+              submissionsPagination.pageSize,
+              filters,
+              true // skipCache - force fresh data
+            );
+          }}
         />
       )}
 

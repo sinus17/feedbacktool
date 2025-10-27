@@ -54,7 +54,7 @@ interface StoreState {
     artistId?: string;
     type?: string;
     status?: string;
-  }) => Promise<void>;
+  }, skipCache?: boolean) => Promise<void>;
   fetchArtists: () => Promise<void>;
   fetchAdCreatives: (page?: number, limit?: number, filters?: {
     artistId?: string;
@@ -111,21 +111,28 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Fetch submissions
-  fetchSubmissions: async (page = 1, limit = 20, filters = {}) => {
+  fetchSubmissions: async (page = 1, limit = 20, filters = {}, skipCache = false) => {
     try {
       set({ loading: true, error: null });
 
       // Create cache key based on filters
       const cacheKey = `submissions_${page}_${limit}_${JSON.stringify(filters)}`;
-      const cached = cache.get<any>(cacheKey);
       
-      if (cached) {
-        set({
-          submissions: cached.submissions,
-          submissionsPagination: cached.pagination,
-          loading: false
-        });
-        return;
+      // Skip cache if explicitly requested (e.g., after status updates)
+      if (!skipCache) {
+        const cached = cache.get<any>(cacheKey);
+        
+        if (cached) {
+          set({
+            submissions: cached.submissions,
+            submissionsPagination: cached.pagination,
+            loading: false
+          });
+          return;
+        }
+      } else {
+        // Invalidate cache when skipping
+        cache.invalidate(cacheKey);
       }
 
       // Optimized query - only select necessary fields including messages

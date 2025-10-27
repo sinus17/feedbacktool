@@ -11,9 +11,10 @@ import type { VideoSubmission } from '../types';
 interface FeedbackModalProps {
   submission: VideoSubmission;
   onClose: () => void;
+  onUpdate?: () => Promise<void>;
 }
 
-export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initialSubmission, onClose }) => {
+export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initialSubmission, onClose, onUpdate }) => {
   const [newMessage, setNewMessage] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -261,6 +262,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
 
       setNewMessage('');
       setNotes('');
+      
+      // Refresh the submissions list to show updated status
+      if (onUpdate) {
+        await onUpdate();
+      }
     } catch (err) {
       console.error('❌ Feedback: Error in feedback submission:', err);
       console.error('Error in feedback submission:', err);
@@ -318,6 +324,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
         }
       } catch (notifyError) {
         console.error('Error sending ready notification:', notifyError);
+      }
+      
+      // Refresh the submissions list to show updated status
+      if (onUpdate) {
+        await onUpdate();
       }
 
       onClose();
