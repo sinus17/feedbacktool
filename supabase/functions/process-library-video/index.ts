@@ -893,9 +893,9 @@ async function processInstagramReel(
         image_urls: uploadedImageUrls.length > 0 ? uploadedImageUrls : (imageUrls.length > 0 ? imageUrls : null),
         
         // Creator stats
-        follower_count: 0, // Not provided in new API
+        follower_count: owner.edge_followed_by?.count || owner.follower_count || 0,
         creator_heart_count: 0,
-        creator_video_count: 0, // Not provided in new API
+        creator_video_count: owner.edge_owner_to_timeline_media?.count || 0,
         creator_avatar_url: owner.profile_pic_url || '',
         creator_avatar_storage_url: avatarStorageUrl,
         

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Play, X, ArrowLeft, Download, ChevronRight, Bell, Maximize, Minimize } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Play, X, ArrowLeft, Download, ChevronRight, Bell, Maximize, Minimize } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -292,16 +292,16 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
 
   // Auto-play current video
   useEffect(() => {
-    const playVideo = async () => {
-      const video = videoRef.current;
-      if (!video) return;
+    const playMedia = async () => {
+      const media = videoRef.current;
+      if (!media) return;
       
       // Reset playing state
       setIsPlaying(true);
       
       // Add ended event listener for auto-scroll
-      const handleVideoEnded = () => {
-        console.log('🎬 Video ended, checking if should auto-scroll');
+      const handleMediaEnded = () => {
+        console.log('🎬 Media ended, checking if should auto-scroll');
         if (!hasInteractedWithCurrentVideoRef.current && !showAnalysis) {
           console.log('✅ Auto-scrolling to next video');
           setTimeout(() => navigateToNext(), 500);
@@ -310,16 +310,18 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         }
       };
       
-      video.addEventListener('ended', handleVideoEnded);
+      media.addEventListener('ended', handleMediaEnded);
       
-      // Always sync video element with user preference at start
-      video.muted = isMuted;
+      // Always sync media element with user preference at start (only for video elements)
+      if (media instanceof HTMLVideoElement) {
+        media.muted = isMuted;
+      }
       
       try {
         // Don't call load() - it interrupts playback
         // Just play directly, browser will load automatically
-        await video.play();
-        console.log(`✅ Video autoplaying (${isMuted ? 'muted' : 'with sound'})`);
+        await media.play();
+        console.log(`✅ Media autoplaying (${isMuted ? 'muted' : 'with sound'})`);
         setShowPlayOverlay(false);
         hasUserInteractedRef.current = true; // Mark as interacted
         
@@ -331,18 +333,18 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         }
       } catch (err) {
         console.error('❌ Autoplay failed:', err);
-        // If unmuted autoplay fails, try muted
-        if (!isMuted) {
+        // If unmuted autoplay fails, try muted (only for video elements)
+        if (!isMuted && media instanceof HTMLVideoElement) {
           try {
-            video.muted = true;
-            await video.play();
+            media.muted = true;
+            await media.play();
             console.log('⚠️ Video autoplaying muted (autoplay with sound failed)');
             setShowPlayOverlay(false);
             hasUserInteractedRef.current = true;
             
             // After successful muted play, try to unmute if user wants sound
             setTimeout(() => {
-              if (videoRef.current && !isMuted) {
+              if (videoRef.current && !isMuted && videoRef.current instanceof HTMLVideoElement) {
                 videoRef.current.muted = false;
                 console.log('🔊 Attempting to unmute after initial muted autoplay');
               }
@@ -366,13 +368,13 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
       
       // Return cleanup function
       return () => {
-        video.removeEventListener('ended', handleVideoEnded);
+        media.removeEventListener('ended', handleMediaEnded);
       };
     };
 
-    // Small delay to ensure video element is ready
+    // Small delay to ensure media element is ready
     const timer = setTimeout(() => {
-      playVideo();
+      playMedia();
     }, 50);
     
     return () => {
@@ -653,30 +655,35 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
       // Wait to see if it's a double tap
       setTimeout(() => {
         if (lastTapRef.current === tapTime) {
-          // Find the video element - use ref or query selector as fallback
-          const videoElement = videoRef.current || (e.target as HTMLElement).querySelector('video') || document.querySelector('video');
+          // Find the media element (video or audio) - use ref or query selector as fallback
+          const mediaElement = videoRef.current || 
+                               (e.target as HTMLElement).querySelector('video') || 
+                               (e.target as HTMLElement).querySelector('audio') ||
+                               document.querySelector('video') || 
+                               document.querySelector('audio');
           
           // Still a single tap after delay - toggle play/pause
           console.log('⏯️ Confirmed single tap - Toggle play/pause', { 
             isPlaying, 
-            hasVideoElement: !!videoElement,
-            videoPaused: videoElement?.paused 
+            hasMediaElement: !!mediaElement,
+            mediaPaused: mediaElement?.paused,
+            mediaType: mediaElement?.tagName
           });
           
-          if (videoElement) {
-            if (videoElement.paused) {
-              console.log('▶️ Playing video');
-              videoElement.play().catch(err => console.error('Play error:', err));
+          if (mediaElement) {
+            if (mediaElement.paused) {
+              console.log('▶️ Playing media');
+              mediaElement.play().catch(err => console.error('Play error:', err));
               setIsPlaying(true);
             } else {
-              console.log('⏸️ Pausing video');
-              videoElement.pause();
+              console.log('⏸️ Pausing media');
+              mediaElement.pause();
               setIsPlaying(false);
               hasInteractedWithCurrentVideoRef.current = true; // Mark as interacted when paused
-              console.log('⏸️ User paused video - marked as interacted');
+              console.log('⏸️ User paused media - marked as interacted');
             }
           } else {
-            console.error('❌ videoElement is null!');
+            console.error('❌ mediaElement is null!');
           }
           lastTapRef.current = 0; // Reset after handling
         }
@@ -828,24 +835,6 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                   autoPlay
                   muted
                   poster={currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Toggle play/pause on single click
-                    if (videoRef.current) {
-                      if (videoRef.current.paused) {
-                        videoRef.current.play().then(() => {
-                          setIsPlaying(true);
-                          console.log('▶️ Video resumed');
-                        }).catch(err => {
-                          console.error('Failed to play:', err);
-                        });
-                      } else {
-                        videoRef.current.pause();
-                        setIsPlaying(false);
-                        console.log('⏸️ Video paused');
-                      }
-                    }
-                  }}
                 />
               )}
               
@@ -1153,9 +1142,11 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                 </svg>
               )}
             </div>
-            <p className="text-gray-300 text-sm">
-              {formatNumber(currentVideo.followerCount || 0)} followers
-            </p>
+            {currentVideo.followerCount != null && currentVideo.followerCount > 0 && (
+              <p className="text-gray-300 text-sm">
+                {formatNumber(currentVideo.followerCount)} followers
+              </p>
+            )}
           </div>
         </div>
 
@@ -1175,16 +1166,60 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         </div>
       </div>
 
+      {/* Analysis Button - Top Right */}
+      <div 
+        className={`absolute top-5 right-3 md:right-4 z-10 transition-all duration-300 ${
+          showAnalysisTooltip ? 'bg-white/10 rounded-full p-1 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : ''
+        }`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowAnalysis(true);
+          setShowAnalysisTooltip(false);
+        }}
+      >
+        <button className="p-2 transition-opacity hover:opacity-70">
+          <span className="text-3xl drop-shadow-lg">🧪</span>
+        </button>
+        
+        {/* Tooltip with arrow */}
+        <AnimatePresence>
+          {showAnalysisTooltip && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+              className="absolute right-16 top-1/2 -translate-y-1/2 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAnalysis(true);
+                setShowAnalysisTooltip(false);
+              }}
+            >
+              {/* Tooltip text with arrow inside */}
+              <div className="bg-[#0000fe] backdrop-blur-sm text-white px-3 py-2 rounded-lg text-sm font-bold shadow-lg whitespace-nowrap flex items-center gap-2 hover:bg-[#0000cc] transition-colors">
+                Click to open analysis
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" className="w-4 h-4 fill-current">
+                  <path d="M566.6 342.6C579.1 330.1 579.1 309.8 566.6 297.3L406.6 137.3C394.1 124.8 373.8 124.8 361.3 137.3C348.8 149.8 348.8 170.1 361.3 182.6L466.7 288L96 288C78.3 288 64 302.3 64 320C64 337.7 78.3 352 96 352L466.7 352L361.3 457.4C348.8 469.9 348.8 490.2 361.3 502.7C373.8 515.2 394.1 515.2 406.6 502.7L566.6 342.7z"/>
+                </svg>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
       {/* Right side: Stats */}
       <div className="absolute right-3 md:right-4 bottom-5 flex flex-col gap-5 z-10 items-end">
         {/* Views/Plays */}
-        <div className="flex flex-col items-center gap-0.5" onClick={handleStatsClick}>
+        <div className="flex flex-col items-center gap-0.5">
           <button className="p-2 transition-opacity hover:opacity-70">
             <Play className="w-5 h-5 text-white drop-shadow-lg" />
           </button>
-          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
-            {formatNumber(currentVideo.viewsCount || 0)}
-          </span>
+          {(currentVideo.viewsCount !== undefined && currentVideo.viewsCount !== null && currentVideo.viewsCount > 0) && (
+            <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+              {formatNumber(currentVideo.viewsCount)}
+            </span>
+          )}
         </div>
 
         {/* Like */}
@@ -1196,70 +1231,37 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
               }`} 
             />
           </button>
-          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
-            {formatNumber(currentVideo.likesCount || 0)}
-          </span>
+          {(currentVideo.likesCount !== undefined && currentVideo.likesCount !== null && currentVideo.likesCount > 0) && (
+            <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+              {formatNumber(currentVideo.likesCount)}
+            </span>
+          )}
         </div>
 
         {/* Comment */}
-        <div 
-          className={`flex flex-col items-center gap-0.5 relative transition-all duration-300 ${
-            showAnalysisTooltip ? 'bg-white/10 rounded-full p-1 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : ''
-          }`}
-          onClick={handleStatsClick}
-        >
+        <div className="flex flex-col items-center gap-0.5">
           <button className="p-2 transition-opacity hover:opacity-70">
             <MessageCircle className="w-5 h-5 text-white drop-shadow-lg" />
           </button>
-          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
-            {formatNumber(currentVideo.commentsCount || 0)}
-          </span>
-          
-          {/* Tooltip with arrow */}
-          <AnimatePresence>
-            {showAnalysisTooltip && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3 }}
-                className="absolute right-16 top-1/2 -translate-y-1/2 cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAnalysis(true);
-                  setShowAnalysisTooltip(false);
-                }}
-              >
-                {/* Tooltip text with arrow inside */}
-                <div className="bg-[#0000fe] backdrop-blur-sm text-white px-3 py-2 rounded-lg text-sm font-bold shadow-lg whitespace-nowrap flex items-center gap-2 hover:bg-[#0000cc] transition-colors">
-                  Click to open analysis
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" className="w-4 h-4 fill-current">
-                    <path d="M566.6 342.6C579.1 330.1 579.1 309.8 566.6 297.3L406.6 137.3C394.1 124.8 373.8 124.8 361.3 137.3C348.8 149.8 348.8 170.1 361.3 182.6L466.7 288L96 288C78.3 288 64 302.3 64 320C64 337.7 78.3 352 96 352L466.7 352L361.3 457.4C348.8 469.9 348.8 490.2 361.3 502.7C373.8 515.2 394.1 515.2 406.6 502.7L566.6 342.7z"/>
-                  </svg>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {(currentVideo.commentsCount !== undefined && currentVideo.commentsCount !== null && currentVideo.commentsCount > 0) && (
+            <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+              {formatNumber(currentVideo.commentsCount)}
+            </span>
+          )}
         </div>
 
-        {/* Save */}
-        <div className="flex flex-col items-center gap-0.5" onClick={handleStatsClick}>
-          <button className="p-2 transition-opacity hover:opacity-70">
-            <Bookmark className="w-5 h-5 text-white drop-shadow-lg" />
-          </button>
-          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
-            {formatNumber(currentVideo.collectCount || 0)}
-          </span>
-        </div>
+        {/* Save - Hidden for all videos */}
 
         {/* Share */}
         <div className="flex flex-col items-center gap-0.5" onClick={handleShare}>
           <button className="p-2 transition-opacity hover:opacity-70">
             <Share2 className="w-5 h-5 text-white drop-shadow-lg" />
           </button>
-          <span className="text-white text-[10px] font-semibold drop-shadow-lg">
-            {formatNumber(currentVideo.sharesCount || 0)}
-          </span>
+          {(currentVideo.sharesCount !== undefined && currentVideo.sharesCount !== null && currentVideo.sharesCount > 0) && (
+            <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+              {formatNumber(currentVideo.sharesCount)}
+            </span>
+          )}
         </div>
 
         {/* Fullscreen */}
@@ -1274,7 +1276,18 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         </div>
 
         {/* Rotating Album Artwork with Sound Name */}
-        <div className="flex items-center gap-2 justify-end">
+        <div 
+          className="flex items-center gap-2 justify-end cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation();
+            // Open the original sound/video URL on the platform
+            if (currentVideo.musicUrl) {
+              window.open(currentVideo.musicUrl, '_blank');
+            } else if (currentVideo.sourceUrl) {
+              window.open(currentVideo.sourceUrl, '_blank');
+            }
+          }}
+        >
           {/* Sound Name - Scrolling if too long */}
           <div className="max-w-[100px] overflow-hidden text-right">
             {(() => {

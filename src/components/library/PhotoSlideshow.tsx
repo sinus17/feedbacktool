@@ -132,7 +132,7 @@ export const PhotoSlideshow = ({ images, onTap, indicatorPosition = 'bottom', on
             x: { type: "spring", stiffness: 300, damping: 30 },
             opacity: { duration: 0.2 }
           }}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-contain"
           alt={`Slide ${currentIndex + 1}`}
         />
       </AnimatePresence>

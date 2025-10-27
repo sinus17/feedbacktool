@@ -145,10 +145,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onClick }) => {
         {/* Stats - always visible */}
         <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/50 to-transparent">
           <div className="flex items-center gap-3 text-xs text-white">
-            {(video.viewsCount !== undefined && video.viewsCount !== null) && (
+            {(video.viewsCount !== undefined && video.viewsCount !== null && video.viewsCount > 0) && (
               <div className="flex items-center gap-1">
                 <EyeIcon />
-                <span className="font-medium">{video.viewsCount > 0 ? formatNumber(video.viewsCount) : 'N/A'}</span>
+                <span className="font-medium">{formatNumber(video.viewsCount)}</span>
               </div>
             )}
             {video.likesCount && (
