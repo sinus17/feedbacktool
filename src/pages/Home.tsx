@@ -17,7 +17,7 @@ export const Home: React.FC = () => {
     fetchArtists, 
     setSubmissionsPage, 
     submissionsPagination,
-    loading 
+    loading
   } = useStore();
   const { currentUser } = useAuth();
 
@@ -49,7 +49,7 @@ export const Home: React.FC = () => {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-semibold">Video Submissions</h2>
+          <h2 className="text-2xl font-semibold">Video Submissions ({submissionsPagination.totalCount})</h2>
           <p className="text-sm text-gray-600 mt-1">
             Manage and review video feedback
           </p>

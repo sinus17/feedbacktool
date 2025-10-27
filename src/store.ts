@@ -489,65 +489,9 @@ const useStore = create<StoreState>((set, get) => ({
         loading: false
       }));
 
-      // Automatically create ad creative if song-specific video is set to ready
+      // Refresh ad creatives if status changed to ready (database trigger handles creation)
       if (updates.status === 'ready' && transformedSubmission.type === 'song-specific') {
-        try {
-          console.log('🎯 Auto-creating ad creative for song-specific video:', transformedSubmission.projectName);
-          
-          // Check if ad creative already exists for this submission
-          const existingAdCreative = get().adCreatives.find(ac => ac.submissionId === transformedSubmission.id.toString());
-          
-          if (!existingAdCreative) {
-            const { data: adCreativeData, error: adCreativeError } = await supabase
-              .from('ad_creatives')
-              .insert({
-                artists_id: transformedSubmission.artistId,
-                platform: transformedSubmission.videoUrl.includes('supabase.co/storage/v1/object/public/') ? 'direct_upload' : 'dropbox',
-                content: transformedSubmission.videoUrl,
-                status: 'pending',
-                video_name: transformedSubmission.projectName,
-                submission_id: transformedSubmission.id,
-              } as any)
-              .select()
-              .single();
-
-            if (adCreativeError) {
-              if (adCreativeError.code === '23505' || adCreativeError.code === '23514') {
-                console.log('Ad creative already exists for this submission (created by trigger)');
-              } else {
-                throw adCreativeError;
-              }
-            } else if (adCreativeData) {
-              console.log('✅ Successfully created ad creative:', (adCreativeData as any).id);
-              
-              const transformedCreative: AdCreative = {
-                id: (adCreativeData as any).id,
-                createdAt: (adCreativeData as any).created_at,
-                artists_id: (adCreativeData as any).artists_id,
-                platform: (adCreativeData as any).platform,
-                content: (adCreativeData as any).content,
-                status: (adCreativeData as any).status,
-                rejectionReason: (adCreativeData as any).rejection_reason,
-                updatedAt: (adCreativeData as any).updated_at,
-                videoName: (adCreativeData as any).video_name,
-                mergedInstagramReelUrl: (adCreativeData as any).merged_instagram_reel_url,
-                mergedTiktokAuthCode: (adCreativeData as any).merged_tiktok_auth_code,
-                submissionId: (adCreativeData as any).submission_id,
-                thumbnail_url: (adCreativeData as any).thumbnail_url,
-                instagram_thumbnail_url: (adCreativeData as any).instagram_thumbnail_url,
-                tiktok_thumbnail_url: (adCreativeData as any).tiktok_thumbnail_url
-              };
-
-              set(state => ({
-                adCreatives: [transformedCreative, ...state.adCreatives]
-              }));
-            }
-          } else {
-            console.log('Ad creative already exists for this submission');
-          }
-        } catch (adCreativeError) {
-          console.error('Error auto-creating ad creative:', adCreativeError);
-        }
+        console.log('🎯 Video set to ready, database trigger will handle ad creative creation:', transformedSubmission.projectName);
         
         // Refresh ad creatives to show any created by database trigger
         try {
@@ -1100,6 +1044,11 @@ const useStore = create<StoreState>((set, get) => ({
   // Move video to ad creatives
   handleMoveToAdCreatives: async (submission: VideoSubmission) => {
     try {
+      // Only allow song-specific videos to be moved to ad creatives
+      if (submission.type !== 'song-specific') {
+        throw new Error('Only song-specific videos can be moved to Ad Creatives');
+      }
+
       const { data, error } = await supabase
         .from('ad_creatives')
         .insert({

@@ -438,7 +438,7 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-semibold dark:text-white">
-            {isArtistView ? `${getArtistName(artistId)}'s Ad Creatives` : 'Ad Creatives'}
+            {isArtistView ? `${getArtistName(artistId)}'s Ad Creatives` : 'Ad Creatives'} ({adCreativesPagination.totalCount})
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Manage Instagram Reels and TikTok URLs
