@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Share2, Play, X, ArrowLeft, Download, ChevronRight, Bell, Maximize, Minimize } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Play, X, ArrowLeft, Download, ChevronRight, Bell, Maximize, Minimize, Disc3, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -1201,6 +1201,35 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
 
       {/* Right side: Stats */}
       <div className="absolute right-3 md:right-4 bottom-5 flex flex-col gap-5 z-10 items-end">
+        {/* Mute/Unmute */}
+        <div 
+          className="flex flex-col items-center gap-0.5"
+          onClick={(e) => {
+            e.stopPropagation();
+            const newMutedState = !isMuted;
+            setIsMuted(newMutedState);
+            
+            // Find the current video element (use ref or query selector as fallback)
+            const videoElement = videoRef.current || document.querySelector('video');
+            
+            // Directly mute/unmute the video element
+            if (videoElement) {
+              videoElement.muted = newMutedState;
+              console.log(newMutedState ? '🔇 Video muted' : '🔊 Video unmuted');
+            } else {
+              console.error('❌ No video element found for mute toggle');
+            }
+          }}
+        >
+          <button className="p-2 transition-opacity hover:opacity-70">
+            {isMuted ? (
+              <VolumeX className="w-5 h-5 text-white drop-shadow-lg" />
+            ) : (
+              <Volume2 className="w-5 h-5 text-white drop-shadow-lg" />
+            )}
+          </button>
+        </div>
+
         {/* Views/Plays */}
         <div className="flex flex-col items-center gap-0.5">
           <button className="p-2 transition-opacity hover:opacity-70">
@@ -1315,10 +1344,25 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                 src={currentVideo.musicCoverThumb || currentVideo.musicCoverMedium || currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl}
                 alt="Sound"
                 className="w-full h-full rounded-full object-cover border-2 border-white"
+                onError={(e) => {
+                  // If music cover fails to load (expired TikTok URL), use video thumbnail as fallback
+                  const target = e.target as HTMLImageElement;
+                  const fallbackUrl = currentVideo.thumbnailStorageUrl || currentVideo.thumbnailUrl;
+                  if (fallbackUrl && target.src !== fallbackUrl) {
+                    target.src = fallbackUrl;
+                  } else {
+                    // If thumbnail also fails, hide the image and show CD icon
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = '<div class="w-full h-full rounded-full bg-gradient-to-br from-gray-700 to-gray-900 border-2 border-white flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></div>';
+                    }
+                  }
+                }}
               />
             ) : (
-              <div className="w-full h-full rounded-full bg-gradient-to-br from-pink-500 to-purple-500 border-2 border-white flex items-center justify-center">
-                <Play className="w-4 h-4 text-white" />
+              <div className="w-full h-full rounded-full bg-gradient-to-br from-gray-700 to-gray-900 border-2 border-white flex items-center justify-center">
+                <Disc3 className="w-5 h-5 text-white" />
               </div>
             )}
           </motion.div>
