@@ -257,6 +257,7 @@ export const Library: React.FC = () => {
         suggested_words: v.suggested_words,
         musicTitle: v.music_title,
         musicAuthor: v.music_author,
+        musicUrl: v.music_url,
         isOriginalSound: v.is_original_sound,
         musicCoverThumb: v.music_cover_thumb,
         musicVideoCount: v.music_video_count,

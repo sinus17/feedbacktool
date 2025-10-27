@@ -107,6 +107,7 @@ export interface LibraryVideo {
   musicTitle?: string;
   musicAuthor?: string;
   musicAlbum?: string;
+  musicUrl?: string;
   musicCoverLarge?: string;
   musicCoverMedium?: string;
   musicCoverThumb?: string;

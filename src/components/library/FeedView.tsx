@@ -800,13 +800,25 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
               onTouchEnd={handleVideoTap}
             >
               {currentVideo.isPhotoPost && currentVideo.imageUrls && currentVideo.imageUrls.length > 0 ? (
-                <PhotoSlideshow 
-                  images={currentVideo.imageUrls} 
-                  onTap={handleVideoTap}
-                  indicatorPosition="above-caption"
-                  onSlideshowComplete={handleSlideshowComplete}
-                  onUserInteraction={handleSlideshowInteraction}
-                />
+                <>
+                  <PhotoSlideshow 
+                    images={currentVideo.imageUrls} 
+                    onTap={handleVideoTap}
+                    indicatorPosition="above-caption"
+                    onSlideshowComplete={handleSlideshowComplete}
+                    onUserInteraction={handleSlideshowInteraction}
+                  />
+                  {/* Audio for photo posts */}
+                  {currentVideo.musicUrl && (
+                    <audio
+                      ref={videoRef as any}
+                      src={currentVideo.musicUrl}
+                      loop
+                      autoPlay
+                      className="hidden"
+                    />
+                  )}
+                </>
               ) : (
                 <video
                   ref={videoRef}
