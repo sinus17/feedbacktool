@@ -187,6 +187,53 @@ async function getInstagramReelDetails(shortcode: string): Promise<any> {
   return result;
 }
 
+async function getInstagramPostDetails(shortcode: string): Promise<any> {
+  const rapidApiKey = Deno.env.get('RAPIDAPI_KEY');
+  if (!rapidApiKey) {
+    throw new Error('RAPIDAPI_KEY environment variable is not set');
+  }
+
+  const url = 'https://instagram-media-api.p.rapidapi.com/media/shortcode';
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'x-rapidapi-key': rapidApiKey,
+      'x-rapidapi-host': 'instagram-media-api.p.rapidapi.com',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      shortcode: shortcode,
+      proxy: ''
+    })
+  });
+
+  console.log('Instagram Post API Response status:', response.status, response.statusText);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Instagram Post API Error Response:', errorText);
+    throw new Error(`Failed to fetch Instagram post details: ${response.statusText} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  console.log('Instagram Post API Response keys:', Object.keys(result));
+  
+  if (result.error) {
+    console.error('Instagram Post API Error Details:', JSON.stringify(result, null, 2));
+    const errorMessage = result.message || result.error || 'Unknown Instagram API error';
+    throw new Error(`Instagram API error: ${errorMessage} (Status: ${result.status || 'unknown'})`);
+  }
+  
+  // Feed post structure: data.xdt_shortcode_media
+  if (!result.data || !result.data.xdt_shortcode_media) {
+    console.error('Instagram Post API Response:', JSON.stringify(result, null, 2));
+    throw new Error('No data returned from Instagram Post API');
+  }
+
+  return result;
+}
+
 async function uploadVideoToStorage(
   supabase: any,
   videoUrl: string,
@@ -618,18 +665,66 @@ async function processInstagramReel(
       .update({ status: 'processing', updated_at: new Date().toISOString() })
       .eq('id', queueId);
 
-    // Get reel details
-    console.log('Fetching Instagram reel details...');
-    const apiResponse = await getInstagramReelDetails(shortcode);
-    console.log('Details fetched successfully');
+    // Determine if it's a reel or feed post based on URL
+    const isReel = sourceUrl.includes('/reel/');
+    const isFeedPost = sourceUrl.includes('/p/');
+    
+    let apiResponse;
+    let media;
+    let isPhotoPost = false;
+    let imageUrls: string[] = [];
+    
+    if (isReel) {
+      // Get reel details
+      console.log('Fetching Instagram reel details...');
+      apiResponse = await getInstagramReelDetails(shortcode);
+      console.log('Reel details fetched successfully');
+      
+      // Extract data from reel API response structure
+      const items = apiResponse.data.xdt_api__v1__media__shortcode__web_info.items;
+      media = items[0];
+    } else if (isFeedPost) {
+      // Get feed post details
+      console.log('Fetching Instagram feed post details...');
+      apiResponse = await getInstagramPostDetails(shortcode);
+      console.log('Feed post details fetched successfully');
+      
+      // Extract data from feed post API response structure
+      media = apiResponse.data.xdt_shortcode_media;
+      
+      // Check if it's a photo post or carousel
+      isPhotoPost = !media.is_video;
+      
+      if (isPhotoPost) {
+        console.log('Detected photo post/carousel');
+        
+        // Check if it's a carousel (sidecar)
+        if (media.__typename === 'XDTGraphSidecar' && media.edge_sidecar_to_children) {
+          console.log('Processing carousel with', media.edge_sidecar_to_children.edges.length, 'images');
+          // Extract all image URLs from carousel
+          imageUrls = media.edge_sidecar_to_children.edges.map((edge: any) => edge.node.display_url);
+        } else {
+          // Single image post
+          console.log('Processing single image post');
+          imageUrls = [media.display_url];
+        }
+      }
+    } else {
+      throw new Error('Unsupported Instagram URL type');
+    }
 
-    // Extract data from new Instagram API response structure
-    const items = apiResponse.data.xdt_api__v1__media__shortcode__web_info.items;
-    const media = items[0];
+    // Extract owner info (different structure for reels vs posts)
     const owner = media.user || media.owner || {};
     
-    // Extract caption text
-    const caption = media.caption?.text || '';
+    // Extract caption text (different structure for reels vs posts)
+    let caption = '';
+    if (isReel) {
+      caption = media.caption?.text || '';
+    } else if (isFeedPost) {
+      // Feed posts have caption in edge_media_to_caption
+      const captionEdges = media.edge_media_to_caption?.edges || [];
+      caption = captionEdges.length > 0 ? captionEdges[0].node.text : '';
+    }
     
     // Extract hashtags from caption
     let hashtags: string[] = [];
@@ -639,23 +734,55 @@ async function processInstagramReel(
       hashtags = captionHashtags.map((tag: string) => tag.replace('#', ''));
     }
 
-    // Get video URL from video_versions array (highest quality)
-    const videoVersions = media.video_versions || [];
-    const videoDownloadUrl = videoVersions.length > 0 ? videoVersions[0].url : null;
-    if (!videoDownloadUrl) {
-      throw new Error('No video URL found in Instagram API response');
+    // Get video URL or handle photo post
+    let videoDownloadUrl = null;
+    let videoStorageUrl = null;
+    
+    if (!isPhotoPost) {
+      // Get video URL from video_versions array (highest quality)
+      const videoVersions = media.video_versions || [];
+      videoDownloadUrl = videoVersions.length > 0 ? videoVersions[0].url : null;
+      if (!videoDownloadUrl) {
+        throw new Error('No video URL found in Instagram API response');
+      }
+      console.log('Video download URL from Instagram API:', videoDownloadUrl);
+      
+      // Upload video to Supabase storage
+      console.log('Uploading video to storage...');
+      videoStorageUrl = await uploadVideoToStorage(
+        supabase,
+        videoDownloadUrl,
+        shortcode,
+        'instagram'
+      );
+    } else {
+      console.log('Photo post detected, skipping video upload');
     }
-
-    console.log('Video download URL from Instagram API:', videoDownloadUrl);
 
     // Calculate duration from video_dash_manifest or use default
     let duration = 0;
-    if (media.video_dash_manifest) {
+    if (!isPhotoPost && media.video_dash_manifest) {
       // Try to extract duration from manifest
       const durationMatch = media.video_dash_manifest.match(/mediaPresentationDuration="PT([\d.]+)S"/);
       if (durationMatch) {
         duration = Math.round(parseFloat(durationMatch[1]));
       }
+    }
+
+    // Extract like count (different structure for reels vs posts)
+    let likesCount = 0;
+    if (isReel) {
+      likesCount = media.like_count || 0;
+    } else if (isFeedPost) {
+      likesCount = media.edge_media_preview_like?.count || media.edge_liked_by?.count || 0;
+    }
+    
+    // Extract comment count (different structure for reels vs posts)
+    let commentsCount = 0;
+    if (isReel) {
+      commentsCount = media.comment_count || 0;
+    } else if (isFeedPost) {
+      commentsCount = media.edge_media_to_parent_comment?.count || media.edge_media_to_comment?.count || 0;
     }
 
     // Extract data
@@ -667,32 +794,29 @@ async function processInstagramReel(
       accountName: owner.full_name || owner.username || '',
       title: caption.substring(0, 100) || '', // First 100 chars as title
       description: caption || '',
-      uploadDate: media.taken_at ? new Date(media.taken_at * 1000).toISOString() : null,
+      uploadDate: media.taken_at_timestamp ? new Date(media.taken_at_timestamp * 1000).toISOString() : (media.taken_at ? new Date(media.taken_at * 1000).toISOString() : null),
       duration: duration,
       // Instagram API doesn't provide view counts - try multiple possible fields
       viewsCount: media.view_count || media.play_count || media.video_view_count || 0,
-      likesCount: media.like_count || 0,
-      commentsCount: media.comment_count || 0,
+      likesCount: likesCount,
+      commentsCount: commentsCount,
       sharesCount: 0, // Instagram doesn't provide share count
-      thumbnailUrl: media.image_versions2?.candidates?.[0]?.url || media.display_uri || '',
+      thumbnailUrl: media.image_versions2?.candidates?.[0]?.url || media.display_url || media.thumbnail_src || '',
     };
 
-    // Upload video to Supabase storage
-    console.log('Uploading video to storage...');
-    const videoStorageUrl = await uploadVideoToStorage(
-      supabase,
-      videoDownloadUrl,
-      shortcode,
-      'instagram'
-    );
-
-    videoData.videoUrl = videoStorageUrl;
+    if (videoStorageUrl) {
+      videoData.videoUrl = videoStorageUrl;
+    }
 
     // Upload thumbnail and avatar images
     console.log('Uploading thumbnail and avatar images...');
+    const thumbnailUrl = isPhotoPost 
+      ? (imageUrls.length > 0 ? imageUrls[0] : media.display_url || media.thumbnail_src)
+      : (media.image_versions2?.candidates?.[0]?.url || media.display_uri || '');
+    
     const thumbnailStorageUrl = await uploadImageToStorage(
       supabase,
-      media.image_versions2?.candidates?.[0]?.url || media.display_uri || '',
+      thumbnailUrl,
       shortcode,
       'instagram',
       'thumbnail'
@@ -705,6 +829,29 @@ async function processInstagramReel(
       'instagram',
       'avatar'
     );
+
+    // Upload all carousel images to Supabase Storage to avoid CORS issues
+    let uploadedImageUrls: string[] = [];
+    if (isPhotoPost && imageUrls.length > 0) {
+      console.log(`Uploading ${imageUrls.length} carousel images to storage...`);
+      for (let i = 0; i < imageUrls.length; i++) {
+        try {
+          const imageStorageUrl = await uploadImageToStorage(
+            supabase,
+            imageUrls[i],
+            `${shortcode}-img-${i}`,
+            'instagram',
+            'carousel'
+          );
+          uploadedImageUrls.push(imageStorageUrl);
+          console.log(`Uploaded image ${i + 1}/${imageUrls.length}`);
+        } catch (error) {
+          console.error(`Failed to upload image ${i}:`, error);
+          // Continue with other images even if one fails
+        }
+      }
+      console.log(`Successfully uploaded ${uploadedImageUrls.length}/${imageUrls.length} images`);
+    }
 
     // Extract music info from clips_metadata
     const clipsMetadata = media.clips_metadata || {};
@@ -738,8 +885,12 @@ async function processInstagramReel(
         video_url: videoData.videoUrl,
         thumbnail_url: videoData.thumbnailUrl,
         thumbnail_storage_url: thumbnailStorageUrl,
-        cover_image_url: media.display_uri || '',
+        cover_image_url: media.display_url || media.display_uri || '',
         dynamic_cover_url: '',
+        
+        // Photo post data
+        is_photo_post: isPhotoPost,
+        image_urls: uploadedImageUrls.length > 0 ? uploadedImageUrls : (imageUrls.length > 0 ? imageUrls : null),
         
         // Creator stats
         follower_count: 0, // Not provided in new API
