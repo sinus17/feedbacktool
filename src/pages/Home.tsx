@@ -9,9 +9,17 @@ import { useAuth } from '../contexts/AuthContext';
 
 export const Home: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
-  const [selectedArtist, setSelectedArtist] = useState('');
-  const [selectedType, setSelectedType] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  
+  // Load filters from localStorage on mount
+  const [selectedArtist, setSelectedArtist] = useState(() => {
+    return localStorage.getItem('filter_artist') || '';
+  });
+  const [selectedType, setSelectedType] = useState(() => {
+    return localStorage.getItem('filter_type') || '';
+  });
+  const [selectedStatus, setSelectedStatus] = useState(() => {
+    return localStorage.getItem('filter_status') || '';
+  });
   const { 
     fetchSubmissions, 
     fetchArtists, 
@@ -24,6 +32,13 @@ export const Home: React.FC = () => {
   const isAdmin = currentUser?.email === 'admin@videofeedback.com' || 
                  currentUser?.user_metadata?.team === 'management' ||
                  currentUser?.user_metadata?.team === 'admin';
+
+  // Save filters to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem('filter_artist', selectedArtist);
+    localStorage.setItem('filter_type', selectedType);
+    localStorage.setItem('filter_status', selectedStatus);
+  }, [selectedArtist, selectedType, selectedStatus]);
 
   // Fetch data when component mounts
   useEffect(() => {
