@@ -1,0 +1,122 @@
+/* Editor.js Styles */
+.editorjs-wrapper {
+  @apply w-full;
+}
+
+.editorjs-holder {
+  @apply prose prose-invert max-w-none;
+}
+
+/* Editor.js custom styling */
+.codex-editor {
+  @apply text-white;
+}
+
+.codex-editor__redactor {
+  @apply pb-64;
+}
+
+.ce-block__content {
+  @apply max-w-none;
+}
+
+.ce-toolbar__content {
+  @apply max-w-none;
+}
+
+/* Paragraph */
+.ce-paragraph {
+  @apply text-gray-200 leading-relaxed;
+}
+
+/* Headers */
+.ce-header {
+  @apply font-bold text-white;
+}
+
+/* Lists */
+.cdx-list {
+  @apply text-gray-200;
+}
+
+/* Code blocks */
+.ce-code__textarea {
+  @apply bg-gray-800 text-gray-200 font-mono;
+}
+
+/* Quotes */
+.cdx-quote {
+  @apply border-l-4 border-blue-500 pl-4 italic text-gray-300;
+}
+
+/* Inline code */
+.ce-inline-code {
+  @apply bg-gray-800 text-blue-400 px-1 rounded;
+}
+
+/* Links */
+.ce-inline-tool--link {
+  @apply text-blue-400 underline;
+}
+
+/* Placeholder */
+.codex-editor--empty .ce-block:first-child .ce-paragraph[data-placeholder]:empty::before {
+  @apply text-gray-500;
+}
+
+/* Toolbar */
+.ce-toolbar__actions {
+  @apply text-gray-400;
+}
+
+.ce-toolbar__plus,
+.ce-toolbar__settings-btn {
+  @apply text-gray-400 hover:text-white;
+}
+
+/* Inline toolbar */
+.ce-inline-toolbar {
+  @apply bg-gray-800 border border-gray-700 rounded-lg shadow-lg;
+}
+
+.ce-inline-tool {
+  @apply text-gray-300 hover:text-white hover:bg-gray-700;
+}
+
+/* Conversion toolbar */
+.ce-conversion-toolbar {
+  @apply bg-gray-800 border border-gray-700 rounded-lg shadow-lg;
+}
+
+.ce-conversion-tool {
+  @apply text-gray-300 hover:text-white hover:bg-gray-700;
+}
+
+/* Settings */
+.ce-settings {
+  @apply bg-gray-800 border border-gray-700 rounded-lg shadow-lg;
+}
+
+.ce-settings__button {
+  @apply text-gray-300 hover:text-white hover:bg-gray-700;
+}
+
+/* Popover */
+.ce-popover {
+  @apply bg-gray-800 border border-gray-700 rounded-lg shadow-lg;
+}
+
+.ce-popover-item {
+  @apply text-gray-300 hover:text-white hover:bg-gray-700;
+}
+
+.ce-popover-item__icon {
+  @apply text-gray-400;
+}
+
+/* Block tune menu */
+.ce-tune-move-up,
+.ce-tune-move-down,
+.ce-tune-delete {
+  @apply text-gray-400 hover:text-white;
+}

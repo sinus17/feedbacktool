@@ -18,9 +18,11 @@ const localizer = momentLocalizer(moment);
 
 interface ContentPlanCalendarProps {
   artistId?: string;
+  embedded?: boolean;
+  releaseDate?: string; // ISO date string
 }
 
-export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artistId }) => {
+export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artistId, embedded = false, releaseDate }) => {
   const { 
     posts, 
     loading, 
@@ -36,7 +38,15 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
   const [draggedPost, setDraggedPost] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'month' | 'agenda'>('month');
   const [downloadingVideos, setDownloadingVideos] = useState<Set<string>>(new Set());
-  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // Initialize currentDate with releaseDate if provided, otherwise use today
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (releaseDate) {
+      const date = new Date(releaseDate);
+      return isNaN(date.getTime()) ? new Date() : date;
+    }
+    return new Date();
+  });
   
   useEffect(() => {
     fetchPosts(artistId);
@@ -121,7 +131,7 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
     return null; // We'll render our own header outside the calendar
   };
   
-  // Custom date cell component to highlight today
+  // Custom date cell component to highlight today and release date
   const CustomDateCell = ({ value, children }: any) => {
     const today = new Date();
     const isToday = 
@@ -129,9 +139,21 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
       value.getMonth() === today.getMonth() &&
       value.getFullYear() === today.getFullYear();
     
+    // Check if this is the release date
+    let isReleaseDate = false;
+    if (releaseDate) {
+      const relDate = new Date(releaseDate);
+      isReleaseDate = 
+        value.getDate() === relDate.getDate() &&
+        value.getMonth() === relDate.getMonth() &&
+        value.getFullYear() === relDate.getFullYear();
+    }
+    
     return (
       <div className={`h-full w-full flex items-center justify-center ${
         isToday ? 'bg-red-500/10 dark:bg-red-500/20 font-bold' : ''
+      } ${
+        isReleaseDate ? 'ring-2 ring-inset ring-green-500' : ''
       }`}>
         {children}
       </div>
@@ -269,54 +291,55 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
   }
   
   return (
-    <div className="space-y-4">
-      <AnimatePresence>
-        {error && (
-          <motion.div 
-            className="flex items-center gap-2 text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded-md"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3 }}
-          >
-            <AlertCircle className="h-5 w-5 flex-shrink-0" />
-            <p>{error}</p>
-            <motion.button
-              onClick={() => fetchPosts(artistId)}
-              className="ml-auto text-sm text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+    <>
+      {!embedded && (
+        <AnimatePresence>
+          {error && (
+            <motion.div 
+              className="flex items-center gap-2 text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded-md mb-4"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
             >
-              Try Again
-            </motion.button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <AlertCircle className="h-5 w-5 flex-shrink-0" />
+              <p>{error}</p>
+              <motion.button
+                onClick={() => fetchPosts(artistId)}
+                className="ml-auto text-sm text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Try Again
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
       
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold dark:text-white">
-          {artistId ? `${artists.find(a => a.id === artistId)?.name}'s Content Plan` : 'Content Plan'}
-        </h2>
-        
-        <div className="flex gap-2">
-          <motion.button
-            onClick={() => {
-              setSelectedPost(null);
-              setShowPostModal(true);
-            }}
-            className="btn flex items-center gap-1"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Post</span>
-          </motion.button>
+      {!embedded && (
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-semibold dark:text-white">
+            {artistId ? `${artists.find(a => a.id === artistId)?.name}'s Content Plan` : 'Content Plan'}
+          </h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setSelectedDate(new Date());
+                setSelectedPost(null);
+                setShowPostModal(true);
+              }}
+              className="btn flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Post</span>
+            </button>
+          </div>
         </div>
-      </div>
-      
+      )}
       
       {/* Navigation Header - Always Visible */}
-      <div className="flex justify-between items-center mb-4">
+      <div className={`flex justify-between items-center ${embedded ? 'mb-2' : 'mb-4'}`}>
         <div className="flex items-center space-x-2">
           <motion.button
             type="button"
@@ -379,7 +402,7 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
       </div>
       
       <motion.div 
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 h-[600px]"
+        className={`${embedded ? 'bg-gray-800' : 'bg-white dark:bg-gray-800'} rounded-lg shadow-md ${embedded ? 'h-[420px] p-2' : 'h-[600px] p-4'}`}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
@@ -532,6 +555,6 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
           />
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 };

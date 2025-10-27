@@ -21,21 +21,44 @@ export const CreateReleaseSheetModal: React.FC<CreateReleaseSheetModalProps> = (
   const [releases, setReleases] = useState<Release[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [creating, setCreating] = useState(false);
+  const [artistSearch, setArtistSearch] = useState('');
+  const [showArtistDropdown, setShowArtistDropdown] = useState(false);
 
   // Get filtered releases for the selected artist
   const filteredReleases = releases.filter(release => {
     if (!artistId) return false;
-    const selectedArtist = artists.find(a => a.id === artistId);
-    if (!selectedArtist) return false;
-    return release.artist_name?.toLowerCase() === selectedArtist.name.toLowerCase();
+    return release.artist_id === artistId;
   });
 
-  // Load releases
+  // Load releases from local database
   useEffect(() => {
     const loadReleases = async () => {
       try {
-        const data = await ReleaseService.getReleases();
-        setReleases(data);
+        const { data, error } = await supabase
+          .from('releases')
+          .select(`
+            id,
+            name,
+            artist_id,
+            release_date,
+            artists (
+              name
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Transform data to match expected format
+        const transformedReleases = (data || []).map((release: any) => ({
+          id: release.id,
+          title: release.name,
+          artist_name: release.artists?.name || '',
+          artist_id: release.artist_id,
+          release_date: release.release_date
+        }));
+
+        setReleases(transformedReleases as any);
       } catch (error) {
         console.error('Error loading releases:', error);
       }
@@ -232,27 +255,58 @@ export const CreateReleaseSheetModal: React.FC<CreateReleaseSheetModalProps> = (
 
             {templateId !== '__create_template__' && (
               <>
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Artist *
                   </label>
-                  <select
-                    value={artistId}
+                  <input
+                    type="text"
+                    value={artistSearch}
                     onChange={(e) => {
-                      setArtistId(e.target.value);
-                      setReleaseId(''); // Reset release when artist changes
+                      setArtistSearch(e.target.value);
+                      setShowArtistDropdown(true);
+                      if (!e.target.value) {
+                        setArtistId('');
+                        setReleaseId('');
+                      }
                     }}
+                    onFocus={() => setShowArtistDropdown(true)}
+                    placeholder="Search for an artist..."
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                     disabled={!templateId || templateId === '__create_template__'}
-                  >
-                    <option value="">Select an artist</option>
-                    {artists.map((artist) => (
-                      <option key={artist.id} value={artist.id}>
-                        {artist.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                  {showArtistDropdown && artistSearch && (
+                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {artists
+                        .filter(artist => 
+                          artist.name.toLowerCase().includes(artistSearch.toLowerCase())
+                        )
+                        .slice(0, 50)
+                        .map((artist) => (
+                          <button
+                            key={artist.id}
+                            type="button"
+                            onClick={() => {
+                              setArtistId(artist.id);
+                              setArtistSearch(artist.name);
+                              setShowArtistDropdown(false);
+                              setReleaseId('');
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-white"
+                          >
+                            {artist.name}
+                          </button>
+                        ))}
+                      {artists.filter(artist => 
+                        artist.name.toLowerCase().includes(artistSearch.toLowerCase())
+                      ).length === 0 && (
+                        <div className="px-3 py-2 text-gray-500 dark:text-gray-400">
+                          No artists found
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { Calendar, FileText } from 'lucide-react';
 import { useStore } from '../store';
 import { ContentPlanCalendar } from '../components/ContentPlanCalendar';
@@ -7,6 +7,9 @@ import { useEffect } from 'react';
 
 export const ArtistContentPlan: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const isEmbedded = searchParams.get('embedded') === 'true';
+  const releaseDate = searchParams.get('releaseDate') || undefined;
   const { artists, fetchArtists } = useStore();
   
   const artist = artists.find(a => a.id === id);
@@ -32,6 +35,26 @@ export const ArtistContentPlan: React.FC = () => {
     );
   }
   
+  // If embedded, only show the calendar without header
+  if (isEmbedded) {
+    return (
+      <>
+        <style>{`
+          body, #root, #root > div {
+            min-height: auto !important;
+            height: auto !important;
+            overflow: hidden !important;
+          }
+        `}</style>
+        <div className="bg-black" style={{ minHeight: 'auto', height: 'auto', overflow: 'hidden' }}>
+          <div className="mx-auto px-2 pt-2 pb-0" style={{ maxWidth: '100%' }}>
+            <ContentPlanCalendar artistId={id} embedded={true} releaseDate={releaseDate} />
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <header className="bg-primary-500 text-white shadow-lg">

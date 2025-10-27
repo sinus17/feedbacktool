@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { User, Building, Calendar, DollarSign, Target, Upload, Music, Mail, Phone, MapPin } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { User, Building, Calendar, DollarSign, Target, Upload, Music, Mail, Phone, MapPin, Loader, CreditCard, AlertCircle } from 'lucide-react';
 
 interface CampaignSubmissionData {
   // Step 1: User type
@@ -44,6 +43,8 @@ interface CampaignSubmissionData {
   billing_telefon: string;
   
   // Release information
+  release_published: string; // 'yes' | 'no' | ''
+  spotify_track_url: string; // For published releases
   release_name: string;
   release_date: string;
   master_datei_link: string;
@@ -51,7 +52,12 @@ interface CampaignSubmissionData {
   cover_link: string;
   cover_file?: File;
   spotify_uri: string;
+  
+  // Artist Socials (Step 5)
+  instagram_url: string;
+  tiktok_url: string;
   facebook_page_url: string;
+  
   content_ordner: string;
   
   // Budget & services
@@ -105,17 +111,24 @@ const NewCampaignSubmission: React.FC = () => {
     billing_telefon: '',
     
     // Release information
+    release_published: '',
+    spotify_track_url: '',
     release_name: '',
     release_date: '',
     master_datei_link: '',
     cover_link: '',
     spotify_uri: '',
+    
+    // Artist Socials
+    instagram_url: '',
+    tiktok_url: '',
     facebook_page_url: '',
+    
     content_ordner: '',
     
     // Budget & services
     werbebudget_netto: 650,
-    content_strategy_upsell: false,
+    content_strategy_upsell: true,
     voucher_promocode: '',
     
     // Final confirmation
@@ -124,9 +137,52 @@ const NewCampaignSubmission: React.FC = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isLoadingArtists, setIsLoadingArtists] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
   const [associatedArtists, setAssociatedArtists] = useState<any[]>([]);
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 5;
+  const totalSteps = 6;
+  const [fetchingSpotifyTrack, setFetchingSpotifyTrack] = useState(false);
+  const [spotifyTrackData, setSpotifyTrackData] = useState<any>(null);
+  const [showConfirmationWarning, setShowConfirmationWarning] = useState(false);
+  const [submissionSuccess, setSubmissionSuccess] = useState(false);
+  const [submittedData, setSubmittedData] = useState<any>(null);
+
+  // Load cached verification state on mount
+  useEffect(() => {
+    const cachedVerification = sessionStorage.getItem('phone_verification');
+    console.log('🔍 Checking cache:', cachedVerification);
+    
+    if (cachedVerification) {
+      try {
+        const { phone, verified, artists } = JSON.parse(cachedVerification);
+        console.log('📦 Cache data:', { phone, verified, artistsCount: artists?.length });
+        
+        if (verified && phone) {
+          setFormData(prev => ({
+            ...prev,
+            verification_phone: phone,
+            is_phone_verified: true
+          }));
+          setCodeSent(true);
+          
+          if (artists && artists.length > 0) {
+            console.log('✅ Restoring artists from cache:', artists);
+            setAssociatedArtists(artists);
+          } else {
+            console.log('⚠️ No artists in cache, fetching from database...');
+            // If no artists in cache, fetch them
+            lookupArtistsByWhatsAppGroups(phone);
+          }
+          
+          console.log('✅ Restored verification from cache:', phone);
+        }
+      } catch (error) {
+        console.error('Error loading cached verification:', error);
+        sessionStorage.removeItem('phone_verification');
+      }
+    }
+  }, []);
 
   // Country mapping from English to German names
   const mapCountryToGerman = (englishName: string): string => {
@@ -257,15 +313,32 @@ const NewCampaignSubmission: React.FC = () => {
         throw new Error('Fehler beim Senden des Codes');
       }
 
-      await response.json(); // Consume response
+      await response.json();
+      setCodeSent(true);
       toast.success('Verifikationscode wurde per WhatsApp gesendet!');
-      
     } catch (error) {
       console.error('Error sending WhatsApp verification:', error);
       toast.error('Fehler beim Senden des WhatsApp-Codes. Bitte versuche es erneut.');
     } finally {
       setIsSendingWhatsApp(false);
     }
+  };
+
+  const verifyCodeWithValue = async (code: string) => {
+    console.log('🔐 verifyCodeWithValue called with code:', code);
+    console.log('🔐 Generated code:', formData.generated_code);
+    
+    if (!code || code.length !== 6) {
+      toast.error('Bitte gib einen 6-stelligen Code ein');
+      return;
+    }
+
+    if (code !== formData.generated_code) {
+      toast.error('Ungültiger Code. Bitte versuche es erneut.');
+      return;
+    }
+
+    await verifyCode();
   };
 
   const verifyCode = async () => {
@@ -297,11 +370,20 @@ const NewCampaignSubmission: React.FC = () => {
         });
       });
       
-      console.log('🔐 Looking up artists...');
-      // Look up artists associated with this phone number
-      await lookupArtistsByPhone(formData.verification_phone);
+      console.log('🔐 Looking up artists via WhatsApp groups...');
+      // Look up artists via WhatsApp group membership
+      await lookupArtistsByWhatsAppGroups(formData.verification_phone);
       
       console.log('🔐 Verification complete!');
+      
+      // Cache verification in sessionStorage
+      sessionStorage.setItem('phone_verification', JSON.stringify({
+        phone: formData.verification_phone,
+        verified: true,
+        artists: associatedArtists,
+        timestamp: new Date().toISOString()
+      }));
+      
       toast.success('Code erfolgreich verifiziert!');
     } catch (error) {
       console.error('Error verifying code:', error);
@@ -309,86 +391,33 @@ const NewCampaignSubmission: React.FC = () => {
     }
   };
 
-  const lookupArtistsByPhone = async (phone: string) => {
+  const lookupArtistsByWhatsAppGroups = async (phone: string) => {
+    setIsLoadingArtists(true);
     try {
-      console.log('🔍 Looking up artists for phone:', phone);
-      console.log('🔍 Form data phone:', formData.verification_phone);
-      console.log('🔍 Phone verified status:', formData.is_phone_verified);
+      console.log('🔍 Looking up artists via WhatsApp groups for phone:', phone);
       
-      // Clean and format phone number for search
-      const cleanPhone = formData.verification_phone.replace(/[\s\-\(\)]/g, '');
-      let searchPhones = [cleanPhone];
-      
-      // Add variations for German numbers
-      if (cleanPhone.startsWith('+49')) {
-        searchPhones.push(cleanPhone.substring(3)); // Remove +49
-        searchPhones.push('0' + cleanPhone.substring(3)); // Add 0 prefix
-      } else if (cleanPhone.startsWith('49')) {
-        searchPhones.push('+' + cleanPhone); // Add + prefix
-        searchPhones.push('0' + cleanPhone.substring(2)); // Replace 49 with 0
-      } else if (cleanPhone.startsWith('0')) {
-        searchPhones.push('49' + cleanPhone.substring(1)); // Replace 0 with 49
-        searchPhones.push('+49' + cleanPhone.substring(1)); // Replace 0 with +49
+      // Call the edge function to check WhatsApp group membership
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lookup-whatsapp-groups`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          phone: phone
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Fehler beim Abrufen der WhatsApp-Gruppen');
       }
+
+      const data = await response.json();
+      console.log('🎯 WhatsApp group lookup response:', data);
       
-      console.log('Searching for phone variations:', searchPhones);
+      const artists = data.artists || [];
       
-      // Search for contacts with matching phone numbers
-      const { data: contacts, error: contactError } = await (supabase as any)
-        .from('contacts')
-        .select(`
-          id,
-          first_name,
-          last_name,
-          email,
-          phone,
-          customer_id,
-          customers!inner(id, name)
-        `)
-        .or(searchPhones.map(phone => `phone.eq.${phone}`).join(','));
-      
-      if (contactError) {
-        console.error('Error searching contacts:', contactError);
-        throw contactError;
-      }
-      
-      console.log('Found contacts:', contacts);
-      
-      // Get associated artists for found contacts
-      let artists: any[] = [];
-      
-      if (contacts && contacts.length > 0) {
-        const contactIds = contacts.map((c: any) => c.id);
-        
-        const { data: artistContacts, error: artistError } = await (supabase as any)
-          .from('artist_contacts')
-          .select(`
-            artist_id,
-            artists!inner(
-              id,
-              name,
-              spotify_url,
-              instagram_url,
-              tiktok_url
-            )
-          `)
-          .in('contact_id', contactIds);
-        
-        if (artistError) {
-          console.error('Error searching artists:', artistError);
-        } else if (artistContacts) {
-          artists = artistContacts.map((ac: any) => ({
-            id: ac.artists.id,
-            name: ac.artists.name,
-            spotify_url: ac.artists.spotify_url,
-            instagram_url: ac.artists.instagram_url,
-            tiktok_url: ac.artists.tiktok_url,
-            contact: contacts.find((c: any) => contactIds.includes(c.id))
-          }));
-        }
-      }
-      
-      console.log('🎯 Found artists:', artists);
+      console.log('🎯 Found artists via WhatsApp groups:', artists);
       console.log('🎯 Setting associated artists, length:', artists.length);
       setAssociatedArtists(artists);
       
@@ -398,6 +427,14 @@ const NewCampaignSubmission: React.FC = () => {
         console.log('🎯 Phone verified:', formData.is_phone_verified);
       }, 100);
       
+      // Update cache with artists
+      sessionStorage.setItem('phone_verification', JSON.stringify({
+        phone: formData.verification_phone,
+        verified: formData.is_phone_verified,
+        artists: artists,
+        timestamp: new Date().toISOString()
+      }));
+      
       if (artists.length === 0) {
         // No artists found - show option to create new artist
         toast.success(`Keine Künstler für Nummer ${formData.verification_phone} gefunden. Du kannst einen neuen Künstler anlegen.`);
@@ -406,34 +443,139 @@ const NewCampaignSubmission: React.FC = () => {
         toast.success(`${artists.length} Künstler für diese Nummer gefunden.`);
       }
     } catch (error) {
-      console.error('Error looking up artists:', error);
+      console.error('Error looking up artists via WhatsApp groups:', error);
       toast.error('Fehler beim Laden der Künstlerdaten');
+    } finally {
+      setIsLoadingArtists(false);
     }
   };
 
-  const selectExistingArtist = (artist: any) => {
+  const selectExistingArtist = async (artist: any) => {
     console.log('🎯 Selecting existing artist:', artist);
-    // Pre-fill form data with selected artist information
-    setFormData((prev: CampaignSubmissionData) => ({
-      ...prev,
-      kuenstlername: artist.name,
-      vorname: artist.contact?.first_name || '',
-      nachname: artist.contact?.last_name || '',
-      email: artist.contact?.email || '',
-      telefon: artist.contact?.phone || formData.verification_phone,
-      // Mark as existing artist
-      selected_artist_id: artist.id
-    }));
+    
+    try {
+      // Fetch full artist and contact data from database
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/artists?id=eq.${artist.id}&select=*,customer_id,contacts:artist_contacts(contact_id,contacts(*))`, {
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        }
+      });
+
+      if (response.ok) {
+        const artistData = await response.json();
+        const fullArtist = artistData[0];
+        const contact = fullArtist?.contacts?.[0]?.contacts;
+
+        console.log('📊 Full artist data:', fullArtist);
+        console.log('📊 Contact data:', contact);
+
+        // Pre-fill form data with all available information
+        setFormData((prev: CampaignSubmissionData) => ({
+          ...prev,
+          kuenstlername: fullArtist.name || artist.name,
+          vorname: contact?.first_name || '',
+          nachname: contact?.last_name || '',
+          firma: contact?.company || '',
+          email: contact?.email || '',
+          telefon: contact?.phone || formData.verification_phone,
+          // Address data
+          strasse: contact?.street || '',
+          plz: contact?.zip || '',
+          ort: contact?.city || '',
+          land: contact?.country || 'Deutschland',
+          // Social media URLs
+          instagram_url: fullArtist.instagram_url || '',
+          tiktok_url: fullArtist.tiktok_url || '',
+          facebook_page_url: fullArtist.facebook_page_url || '',
+          // Mark as existing artist
+          selected_artist_id: artist.id
+        }));
+
+        toast.success(`Künstler "${artist.name}" ausgewählt - Daten werden geladen`);
+      } else {
+        // Fallback to basic data if fetch fails
+        setFormData((prev: CampaignSubmissionData) => ({
+          ...prev,
+          kuenstlername: artist.name,
+          vorname: artist.contact?.first_name || '',
+          nachname: artist.contact?.last_name || '',
+          email: artist.contact?.email || '',
+          telefon: artist.contact?.phone || formData.verification_phone,
+          selected_artist_id: artist.id
+        }));
+        toast.success(`Künstler "${artist.name}" ausgewählt`);
+      }
+    } catch (error) {
+      console.error('Error fetching artist details:', error);
+      // Fallback to basic data
+      setFormData((prev: CampaignSubmissionData) => ({
+        ...prev,
+        kuenstlername: artist.name,
+        telefon: formData.verification_phone,
+        selected_artist_id: artist.id
+      }));
+      toast.success(`Künstler "${artist.name}" ausgewählt`);
+    }
     
     // Proceed to step 2 (contact data will be pre-filled)
     setCurrentStep(2);
-    toast.success(`Künstler "${artist.name}" ausgewählt`);
   };
 
   const createNewArtist = () => {
     // Skip artist selection and proceed to contact data entry
     setCurrentStep(2);
     toast.success('Neuer Künstler wird angelegt');
+  };
+
+  const fetchSpotifyTrackData = async (trackUrl: string) => {
+    if (!trackUrl || !trackUrl.includes('spotify.com/track/')) {
+      return;
+    }
+
+    setFetchingSpotifyTrack(true);
+    setSpotifyTrackData(null);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-spotify-track`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({ 
+            spotify_track_url: trackUrl
+          })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Fehler beim Abrufen der Track-Daten');
+      }
+
+      const result = await response.json();
+      const trackData = result.data;
+
+      setSpotifyTrackData(trackData);
+
+      // Auto-fill form data
+      setFormData(prev => ({
+        ...prev,
+        release_name: trackData.name,
+        release_date: trackData.release_date || '',
+        cover_link: trackData.cover_image || '',
+        spotify_uri: trackData.spotify_uri || ''
+      }));
+
+      toast.success(`Track "${trackData.name}" erfolgreich geladen!`);
+    } catch (error) {
+      console.error('Error fetching Spotify track:', error);
+      toast.error('Fehler beim Laden der Track-Daten. Bitte überprüfe die URL.');
+    } finally {
+      setFetchingSpotifyTrack(false);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -443,6 +585,13 @@ const NewCampaignSubmission: React.FC = () => {
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
     }));
+    
+    // Auto-verify when 6-digit code is entered
+    if (name === 'verification_code' && value.length === 6) {
+      setTimeout(() => {
+        verifyCodeWithValue(value);
+      }, 500);
+    }
     
     // Auto-advance to customer status step when user_type is selected
     if (name === 'user_type' && (value === 'artist' || value === 'manager')) {
@@ -491,9 +640,17 @@ const NewCampaignSubmission: React.FC = () => {
         return addressFieldsValid && vatIdValid;
       case 4:
         // Step 4: Release-Informationen
-        return !!(formData.release_name && formData.release_date);
+        if (!formData.release_published) return false;
+        if (formData.release_published === 'yes') {
+          return !!formData.spotify_track_url;
+        } else {
+          return !!(formData.release_name && formData.release_date);
+        }
       case 5:
-        // Step 5: Budget & Zusatzleistungen
+        // Step 5: Artist Socials - Instagram required, others optional
+        return !!formData.instagram_url;
+      case 6:
+        // Step 6: Budget & Zusatzleistungen
         return formData.werbebudget_netto >= 650;
       default:
         return true;
@@ -548,8 +705,8 @@ const NewCampaignSubmission: React.FC = () => {
       }
     }
     
-    // Check final confirmation
     if (!formData.final_confirmation) {
+      setShowConfirmationWarning(true);
       toast.error('Bitte bestätige die Kampagnenbuchung');
       return;
     }
@@ -573,66 +730,21 @@ const NewCampaignSubmission: React.FC = () => {
         throw new Error('Fehler beim Senden der Kampagne');
       }
 
-      toast.success('Kampagne erfolgreich eingereicht! Wir melden uns in Kürze bei dir.');
+      const result = await response.json();
       
-      setFormData({
-        // Step 1: User type
-        user_type: '',
-        
-        // Step 1.5: Customer status
-        customer_status: '',
-        
-        // Step 1.7: Phone verification (for existing customers)
-        verification_phone: '',
-        verification_code: '',
-        generated_code: '',
-        is_phone_verified: false,
-        
-        // Artist/Contact data
-        kuenstlername: '',
-        vorname: '',
-        nachname: '',
-        firma: '',
-        email: '',
-        telefon: '',
-        
-        // Artist address
-        strasse: '',
-        plz: '',
-        ort: '',
-        land: 'Deutschland',
-        vat_id: '',
-        
-        // Billing address (if different)
-        billing_same_as_artist: true,
-        billing_vorname: '',
-        billing_nachname: '',
-        billing_firma: '',
-        billing_strasse: '',
-        billing_plz: '',
-        billing_ort: '',
-        billing_land: 'Deutschland',
-        billing_email: '',
-        billing_telefon: '',
-        
-        // Release information
-        release_name: '',
-        release_date: '',
-        master_datei_link: '',
-        cover_link: '',
-        spotify_uri: '',
-        facebook_page_url: '',
-        content_ordner: '',
-        
-        // Budget & services
-        werbebudget_netto: 650,
-        content_strategy_upsell: false,
-        voucher_promocode: '',
-        
-        // Final confirmation
-        final_confirmation: false,
+      // Store submitted data and show success screen
+      setSubmittedData({
+        release_id: result.release_id,
+        artist_id: result.artist_id,
+        artist_name: formData.kuenstlername,
+        release_name: formData.release_name,
+        release_date: formData.release_date,
+        total_amount: 400 + (formData.content_strategy_upsell ? 400 : 0) + formData.werbebudget_netto,
+        email: formData.email
       });
-      setCurrentStep(1);
+      setSubmissionSuccess(true);
+      
+      // Don't reset form, keep data for reference
       
     } catch (error) {
       console.error('Error submitting campaign:', error);
@@ -641,6 +753,83 @@ const NewCampaignSubmission: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  // Show success screen if submission was successful
+  if (submissionSuccess && submittedData) {
+    return (
+      <div className="min-h-screen bg-black font-sans flex items-center justify-center">
+        <div className="container mx-auto px-4 py-8 max-w-2xl">
+          <div className="bg-black backdrop-blur-lg rounded-3xl p-12 border border-gray-800 shadow-2xl text-center">
+            {/* Success Icon */}
+            <div className="mb-8">
+              <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-12 h-12 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h1 className="text-4xl font-bold text-white mb-4">Kampagne erfolgreich eingereicht!</h1>
+              <p className="text-xl text-gray-300 mb-8">
+                Vielen Dank für deine Buchung. Wir haben deine Kampagne erhalten und melden uns in Kürze bei dir.
+              </p>
+            </div>
+
+            {/* Submission Details */}
+            <div className="bg-[#0000fe]/10 border border-[#0000fe]/20 rounded-lg p-6 mb-8 text-left">
+              <h2 className="text-lg font-semibold text-white mb-4">Deine Kampagnen-Details:</h2>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Künstler:</span>
+                  <span className="text-white font-medium">{submittedData.artist_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Release:</span>
+                  <span className="text-white font-medium">{submittedData.release_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Release-Datum:</span>
+                  <span className="text-white font-medium">
+                    {new Date(submittedData.release_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-gray-700 pt-3 mt-3">
+                  <span className="text-gray-400">Gesamtbetrag (netto):</span>
+                  <span className="text-green-400 font-bold text-lg">{submittedData.total_amount.toLocaleString('de-DE')}€</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Next Steps */}
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-6 mb-8 text-left">
+              <h3 className="text-lg font-semibold text-white mb-3">Wie geht es weiter?</h3>
+              <ul className="space-y-2 text-sm text-gray-300">
+                <li className="flex items-start">
+                  <span className="text-yellow-400 mr-2">1.</span>
+                  <span>Du erhältst eine Bestätigungs-E-Mail an <strong>{submittedData.email}</strong></span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-yellow-400 mr-2">2.</span>
+                  <span>Unser Team prüft deine Kampagne und meldet sich innerhalb von 24 Stunden</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-yellow-400 mr-2">3.</span>
+                  <span>Nach Freigabe starten wir mit dem Kampagnen-Setup</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Action Button */}
+            <button
+              onClick={() => window.location.href = '/'}
+              className="px-8 py-4 text-white font-medium rounded-lg transition-colors hover:opacity-90"
+              style={{ backgroundColor: '#0000fe' }}
+            >
+              Zurück zur Startseite
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black font-sans">
@@ -818,6 +1007,7 @@ const NewCampaignSubmission: React.FC = () => {
               {/* Step 1.7: Phone Verification (for existing customers) */}
               {currentStep === 1.7 && (
                 <div className="space-y-6">
+                  {!formData.is_phone_verified && (
                   <div className="text-center mb-8">
                     <svg className="w-12 h-12 text-green-400 mx-auto mb-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
@@ -825,8 +1015,10 @@ const NewCampaignSubmission: React.FC = () => {
                     <h2 className="text-2xl font-bold text-white mb-2">WhatsApp Verifizierung</h2>
                     <p className="text-sm text-white">Bitte gib deine Handynummer ein, damit wir dir einen Bestätigungscode per WhatsApp senden können</p>
                   </div>
+                  )}
 
                   <div className="space-y-6">
+                    {!codeSent && (
                     <div>
                       <label className="block text-sm font-medium text-white mb-2">
                         <svg className="w-4 h-4 inline mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -847,8 +1039,9 @@ const NewCampaignSubmission: React.FC = () => {
                         Wir senden dir einen Bestätigungscode per WhatsApp
                       </p>
                     </div>
+                    )}
 
-                    {!formData.is_phone_verified && formData.verification_phone && (
+                    {!formData.is_phone_verified && formData.verification_phone && !codeSent && (
                       <div className="text-center">
                         <button
                           type="button"
@@ -861,7 +1054,7 @@ const NewCampaignSubmission: React.FC = () => {
                       </div>
                     )}
 
-                    {formData.verification_phone && (
+                    {codeSent && !formData.is_phone_verified && (
                       <div>
                         <label className="block text-sm font-medium text-white mb-2">
                           Bestätigungscode
@@ -882,11 +1075,18 @@ const NewCampaignSubmission: React.FC = () => {
                       </div>
                     )}
 
-                    {(formData.is_phone_verified || associatedArtists.length > 0) && (
+                    {(formData.is_phone_verified || associatedArtists.length > 0 || isLoadingArtists) && (
                       <div className="space-y-6 mt-6">
                         <div className="text-center p-6 bg-[#0000fe]/10 border border-[#0000fe]/20 rounded-lg">
                           <h3 className="text-lg font-semibold text-white mb-2">Künstler auswählen</h3>
                           
+                          {isLoadingArtists ? (
+                            <div className="flex flex-col items-center justify-center py-8">
+                              <Loader className="w-12 h-12 text-[#0000fe] animate-spin mb-4" />
+                              <p className="text-white">Lade zugehörige Künstler...</p>
+                              <p className="text-sm text-gray-400 mt-2">Prüfe WhatsApp-Gruppenmitgliedschaften</p>
+                            </div>
+                          ) : (
                           <div className="space-y-4">
                             <p className="text-white">Wähle einen Künstler aus oder lege einen neuen an:</p>
                             
@@ -916,6 +1116,7 @@ const NewCampaignSubmission: React.FC = () => {
                               Neuen Künstler & Release anlegen
                             </button>
                           </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1218,6 +1419,111 @@ const NewCampaignSubmission: React.FC = () => {
                     <p className="text-white">Alle Informationen zu deiner Veröffentlichung</p>
                   </div>
 
+                  {/* Question: Is release already published? */}
+                  <div className="mb-8">
+                    <label className="block text-sm font-medium text-white mb-4">
+                      Ist das Release bereits veröffentlicht? *
+                    </label>
+                    <div className="flex gap-6">
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          name="release_published"
+                          value="yes"
+                          checked={formData.release_published === 'yes'}
+                          onChange={handleInputChange}
+                          className="w-5 h-5 text-[#0000fe] bg-gray-900 border-gray-800 focus:ring-[#0000fe]"
+                        />
+                        <span className="ml-3 text-white">Ja, bereits veröffentlicht</span>
+                      </label>
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          name="release_published"
+                          value="no"
+                          checked={formData.release_published === 'no'}
+                          onChange={handleInputChange}
+                          className="w-5 h-5 text-[#0000fe] bg-gray-900 border-gray-800 focus:ring-[#0000fe]"
+                        />
+                        <span className="ml-3 text-white">Nein, noch nicht veröffentlicht</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* If published: Show Spotify Track URL field */}
+                  {formData.release_published === 'yes' && (
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-medium text-white mb-2">
+                          <Music className="w-4 h-4 inline mr-2" />
+                          Spotify Track URL *
+                        </label>
+                        <input
+                          type="url"
+                          name="spotify_track_url"
+                          value={formData.spotify_track_url}
+                          onChange={handleInputChange}
+                          onPaste={(e) => {
+                            setTimeout(() => {
+                              const url = (e.target as HTMLInputElement).value;
+                              fetchSpotifyTrackData(url);
+                            }, 100);
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value && !spotifyTrackData) {
+                              fetchSpotifyTrackData(e.target.value);
+                            }
+                          }}
+                          className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2" 
+                          style={{ '--tw-ring-color': '#0000fe' } as React.CSSProperties}
+                          placeholder="https://open.spotify.com/track/..."
+                          required
+                          disabled={fetchingSpotifyTrack}
+                        />
+                        <p className="text-xs text-gray-400 mt-1">
+                          {fetchingSpotifyTrack ? 'Lade Track-Daten...' : 'Füge die Spotify Track URL ein - Daten werden automatisch geladen'}
+                        </p>
+                      </div>
+
+                      {/* Display fetched track data */}
+                      {spotifyTrackData && (
+                        <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                          <h3 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-3 flex items-center">
+                            <Music className="h-4 w-4 mr-2" />
+                            Track-Informationen
+                          </h3>
+                          <div className="flex gap-4">
+                            {spotifyTrackData.cover_image && (
+                              <img 
+                                src={spotifyTrackData.cover_image} 
+                                alt="Cover" 
+                                className="w-24 h-24 rounded-lg object-cover"
+                              />
+                            )}
+                            <div className="flex-1 space-y-2">
+                              <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Track Name:</p>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white">{spotifyTrackData.name}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Artist:</p>
+                                <p className="text-sm text-gray-900 dark:text-white">{spotifyTrackData.artist}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Release-Datum:</p>
+                                <p className="text-sm text-gray-900 dark:text-white">
+                                  {new Date(spotifyTrackData.release_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* If not published: Show all release fields */}
+                  {formData.release_published === 'no' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-white mb-2">
@@ -1244,21 +1550,21 @@ const NewCampaignSubmission: React.FC = () => {
                         Release-Datum *
                       </label>
                       <input
-                        type="text"
+                        type="date"
                         name="release_date"
                         value={formData.release_date}
                         onChange={(e) => {
-                          let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
-                          if (value.length >= 2) value = value.slice(0, 2) + '/' + value.slice(2);
-                          if (value.length >= 5) value = value.slice(0, 5) + '/' + value.slice(5, 9);
-                          setFormData(prev => ({ ...prev, release_date: value }));
+                          setFormData(prev => ({ ...prev, release_date: e.target.value }));
                         }}
-                        className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2" style={{ '--tw-ring-color': '#0000fe' } as React.CSSProperties}
-                        pattern="\d{2}/\d{2}/\d{4}"
-                        placeholder="dd/mm/yyyy"
-                        maxLength={10}
+                        className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2 [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert" 
+                        style={{ '--tw-ring-color': '#0000fe' } as React.CSSProperties}
                         required
                       />
+                      {formData.release_date && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          Ausgewähltes Datum: {new Date(formData.release_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </p>
+                      )}
                     </div>
 
 
@@ -1331,7 +1637,7 @@ const NewCampaignSubmission: React.FC = () => {
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-white mb-2">
                         <Music className="w-4 h-4 inline mr-2" />
-                        Spotify URI
+                        Spotify URI (optional)
                       </label>
                       <input
                         type="text"
@@ -1345,34 +1651,85 @@ const NewCampaignSubmission: React.FC = () => {
                         Die Spotify URI deines Releases (falls bereits verfügbar)
                       </p>
                     </div>
+                  </div>
+                  )}
+                </div>
+              )}
 
-                    <div className="md:col-span-2">
+              {/* Step 5: Artist Socials */}
+              {currentStep === 5 && (
+                <div className="space-y-6">
+                  <div className="text-center mb-8">
+                    <Music className="w-12 h-12 text-[#0000fe] mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-white mb-2">Social Media Profile</h2>
+                    <p className="text-white">Deine Social Media Kanäle für die Kampagne</p>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div>
                       <label className="block text-sm font-medium text-white mb-2">
-                        Facebook Page URL
+                        Instagram Profil URL *
+                      </label>
+                      <input
+                        type="url"
+                        name="instagram_url"
+                        value={formData.instagram_url}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2" 
+                        style={{ '--tw-ring-color': '#0000fe' } as React.CSSProperties}
+                        placeholder="https://instagram.com/deinprofil"
+                        required
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Dein Instagram Profil für die Kampagne
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-white mb-2">
+                        TikTok Profil URL
+                      </label>
+                      <input
+                        type="url"
+                        name="tiktok_url"
+                        value={formData.tiktok_url}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2" 
+                        style={{ '--tw-ring-color': '#0000fe' } as React.CSSProperties}
+                        placeholder="https://tiktok.com/@deinprofil"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Optional: Dein TikTok Profil
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-white mb-2">
+                        Facebook Fan Page URL
                       </label>
                       <input
                         type="url"
                         name="facebook_page_url"
                         value={formData.facebook_page_url}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2" style={{ '--tw-ring-color': '#0000fe' } as React.CSSProperties}
+                        className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2" 
+                        style={{ '--tw-ring-color': '#0000fe' } as React.CSSProperties}
                         placeholder="https://facebook.com/deinepage"
                       />
                       <p className="text-xs text-gray-400 mt-1">
-                        Damit wir Dir eine Anfrage für den Werbezugriff bei Instagram senden können.
+                        Benötigt für Instagram Werbezugriff. Falls du noch keine hast, erstelle bitte eine Facebook Fan Page.
                         <br />⚠️ Bitte teile niemals Login-Informationen (Passwörter, etc.) mit Dritten!
                       </p>
                     </div>
-
-
                   </div>
                 </div>
               )}
 
-              {currentStep === 5 && (
+              {/* Step 6: Budget & Services */}
+              {currentStep === 6 && (
                 <div className="space-y-6">
                   <div className="text-center mb-8">
-                    <DollarSign className="w-12 h-12 text-[#0000fe] mx-auto mb-4" />
+                    <CreditCard className="w-12 h-12 text-[#0000fe] mx-auto mb-4" />
                     <h2 className="text-2xl font-bold text-white mb-2">Budget & Leistungen</h2>
                     <p className="text-white">Konfiguriere dein Kampagnen-Paket</p>
                   </div>
@@ -1426,12 +1783,12 @@ const NewCampaignSubmission: React.FC = () => {
                     )}
 
                     {/* Total Package Display */}
-                    <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+                    <div className="bg-[#0000fe]/10 border border-[#0000fe]/20 rounded-lg p-4">
                       <div className="flex items-center justify-between">
                         <span className="text-lg font-semibold text-white">
                           Gesamt-Paket
                         </span>
-                        <span className="text-xl font-bold text-green-400">
+                        <span className="text-xl font-bold text-[#0000fe]">
                           {400 + (formData.content_strategy_upsell ? 400 : 0)}€
                         </span>
                       </div>
@@ -1449,12 +1806,24 @@ const NewCampaignSubmission: React.FC = () => {
                       </label>
                       <div className="relative">
                         <input
-                          type="number"
+                          type="text"
                           name="werbebudget_netto"
                           value={formData.werbebudget_netto}
-                          onChange={handleInputChange}
-                          min="650"
-                          className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2" style={{ '--tw-ring-color': '#0000fe' } as React.CSSProperties}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/[^0-9]/g, '');
+                            if (value === '' || !isNaN(Number(value))) {
+                              setFormData(prev => ({ ...prev, werbebudget_netto: value === '' ? 0 : Number(value) }));
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = Number(e.target.value);
+                            if (value < 650) {
+                              setFormData(prev => ({ ...prev, werbebudget_netto: 650 }));
+                              toast.error('Mindest-Werbebudget ist 650€');
+                            }
+                          }}
+                          className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white focus:outline-none focus:ring-2" 
+                          style={{ '--tw-ring-color': '#0000fe' } as React.CSSProperties}
                           placeholder="650"
                           required
                         />
@@ -1465,6 +1834,31 @@ const NewCampaignSubmission: React.FC = () => {
                       </p>
                     </div>
 
+                    {/* Total Amount Display */}
+                    <div className="bg-[#0000fe]/10 border border-[#0000fe]/20 rounded-lg p-6 mt-8">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-xl font-bold text-white">Gesamtbetrag (netto)</span>
+                        <span className="text-2xl font-bold text-green-400">
+                          {(400 + (formData.content_strategy_upsell ? 400 : 0) + formData.werbebudget_netto).toLocaleString('de-DE')}€
+                        </span>
+                      </div>
+                      <div className="space-y-2 text-sm text-white">
+                        <div className="flex justify-between">
+                          <span>Kampagnen-Management</span>
+                          <span>400€</span>
+                        </div>
+                        {formData.content_strategy_upsell && (
+                          <div className="flex justify-between">
+                            <span>Content-Strategie & Feedback</span>
+                            <span>400€</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span>Werbebudget</span>
+                          <span>{formData.werbebudget_netto.toLocaleString('de-DE')}€</span>
+                        </div>
+                      </div>
+                    </div>
                     
                     <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-6 mt-8">
                       <div className="flex items-start space-x-3">
@@ -1472,7 +1866,12 @@ const NewCampaignSubmission: React.FC = () => {
                           type="checkbox"
                           id="final_confirmation"
                           checked={formData.final_confirmation}
-                          onChange={(e) => handleCheckboxChange('final_confirmation', e.target.checked)}
+                          onChange={(e) => {
+                            handleCheckboxChange('final_confirmation', e.target.checked);
+                            if (e.target.checked) {
+                              setShowConfirmationWarning(false);
+                            }
+                          }}
                           className="w-5 h-5 text-blue-600 bg-gray-900 border-gray-800 rounded focus:ring-[#0000fe] mt-1"
                           required
                         />
@@ -1484,6 +1883,14 @@ const NewCampaignSubmission: React.FC = () => {
                           </p>
                         </label>
                       </div>
+                      {showConfirmationWarning && !formData.final_confirmation && (
+                        <div className="mt-4 p-3 bg-orange-500/20 border border-orange-500/50 rounded-lg flex items-start gap-2">
+                          <AlertCircle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-sm text-orange-200">
+                            Please check this box if you want to proceed.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1524,7 +1931,7 @@ const NewCampaignSubmission: React.FC = () => {
                         backgroundColor: isSubmitting ? undefined : '#0000fe'
                       }}
                     >
-                      {isSubmitting ? 'Wird gesendet...' : 'Bitte bestätige die Kampagnenbuchung'}
+                      {isSubmitting ? 'Wird gesendet...' : 'Kampagne verbindlich buchen'}
                     </button>
                   )}
                 </div>

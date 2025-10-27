@@ -21,7 +21,7 @@ const tiptapImage = TiptapImage.extend({
 }).configure({
   allowBase64: true,
   HTMLAttributes: {
-    class: 'rounded-lg border border-gray-200',
+    class: 'rounded-lg border border-gray-200 max-w-xs',
   },
 });
 

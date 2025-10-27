@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   EditorRoot,
   EditorContent,
@@ -14,12 +14,17 @@ import { defaultExtensions } from './simple-novel-extensions';
 import { NodeSelector } from './bubble-menu/NodeSelector';
 import { TextButtons } from './bubble-menu/TextButtons';
 import { LinkSelector } from './bubble-menu/LinkSelector.tsx';
+import { LockButton } from './bubble-menu/LockButton';
+import { PlaceholderMenu } from './PlaceholderCommand';
 
 interface SimpleNovelEditorProps {
   initialContent?: JSONContent;
   onChange?: (content: JSONContent) => void;
   onBlur?: () => void;
   editable?: boolean;
+  isTemplate?: boolean;
+  lockedNodes?: number[];
+  onLockToggle?: (position: number, isLocked: boolean) => void;
 }
 
 export const SimpleNovelEditor: React.FC<SimpleNovelEditorProps> = ({
@@ -27,9 +32,28 @@ export const SimpleNovelEditor: React.FC<SimpleNovelEditorProps> = ({
   onChange,
   onBlur,
   editable = true,
+  isTemplate = false,
+  lockedNodes = [],
+  onLockToggle = () => {},
 }) => {
+  console.log('📝 SimpleNovelEditor - isTemplate:', isTemplate);
   const [openNode, setOpenNode] = useState(false);
   const [openLink, setOpenLink] = useState(false);
+  const [showPlaceholderMenu, setShowPlaceholderMenu] = useState(false);
+  const [placeholderMenuData, setPlaceholderMenuData] = useState<any>(null);
+
+  // Listen for placeholder menu open event
+  useEffect(() => {
+    const handleOpenPlaceholderMenu = (event: any) => {
+      setPlaceholderMenuData(event.detail);
+      setShowPlaceholderMenu(true);
+    };
+
+    window.addEventListener('openPlaceholderMenu', handleOpenPlaceholderMenu);
+    return () => {
+      window.removeEventListener('openPlaceholderMenu', handleOpenPlaceholderMenu);
+    };
+  }, []);
 
   return (
     <div className="relative w-full">
@@ -84,9 +108,29 @@ export const SimpleNovelEditor: React.FC<SimpleNovelEditorProps> = ({
             <LinkSelector open={openLink} onOpenChange={setOpenLink} />
             <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1" />
             <TextButtons />
+            {isTemplate && (
+              <LockButton 
+                isTemplate={isTemplate} 
+                lockedNodes={lockedNodes}
+                onLockToggle={onLockToggle}
+              />
+            )}
           </EditorBubble>
         </EditorContent>
       </EditorRoot>
+
+      {/* Placeholder Menu Modal */}
+      {showPlaceholderMenu && placeholderMenuData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="relative">
+            <PlaceholderMenu
+              editor={placeholderMenuData.editor}
+              range={placeholderMenuData.range}
+              onClose={() => setShowPlaceholderMenu(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -16,6 +16,7 @@ import { ArtistContentPlan } from './pages/ArtistContentPlan';
 import { ArtistReleaseSheets } from './pages/ArtistReleaseSheets';
 import { ReleaseSheetEditor } from './pages/ReleaseSheetEditor';
 import { ReleaseSheets } from './pages/ReleaseSheets';
+import Releases from './pages/Releases';
 import { PreviewArtistView } from './pages/PreviewArtistView';
 import { Library } from './pages/Library';
 import { Login } from './pages/Login';
@@ -23,6 +24,7 @@ import { Signup } from './pages/Signup';
 import { PushNotifications } from './pages/PushNotifications';
 import { NovelTest } from './pages/NovelTest';
 import NewCampaignSubmission from './pages/NewCampaignSubmission';
+import { ComponentLibrary } from './pages/ComponentLibrary';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -195,6 +197,7 @@ function App() {
               <Route path="/artist/:id/release-sheets/:sheetId" element={<ReleaseSheetEditor />} />
               <Route path="/artist/:id/release-sheets/:sheetId/edit" element={<ReleaseSheetEditor />} />
               <Route path="/release-sheets/templates/:templateId/edit" element={<ReleaseSheetEditor />} />
+              <Route path="/release-sheets/components" element={<ComponentLibrary />} />
               <Route path="/novel-test" element={<NovelTest />} />
               <Route path="/preview/:id" element={<PreviewArtistView />} />
               <Route path="/new-campaign" element={<NewCampaignSubmission />} />
@@ -232,6 +235,7 @@ function App() {
                             <Route path="ad-creatives" element={<AdCreatives />} />
                             <Route path="content-plan" element={<ContentPlan />} />
                             <Route path="release-sheets" element={<ReleaseSheets />} />
+                            <Route path="releases" element={<Releases />} />
                             <Route path="artists" element={<Artists />} />
                             <Route path="whatsapp" element={<WhatsAppLogs />} />
                             <Route path="archive" element={<Archive />} />

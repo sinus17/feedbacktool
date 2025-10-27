@@ -1,0 +1,116 @@
+/* TipTap Editor Styles */
+.tiptap-editor-wrapper {
+  @apply w-full;
+}
+
+.ProseMirror {
+  @apply min-h-[200px] focus:outline-none;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #6b7280;
+  pointer-events: none;
+  height: 0;
+}
+
+.ProseMirror h1 {
+  @apply text-3xl font-bold mb-4;
+}
+
+.ProseMirror h2 {
+  @apply text-2xl font-bold mb-3;
+}
+
+.ProseMirror h3 {
+  @apply text-xl font-bold mb-2;
+}
+
+.ProseMirror p {
+  @apply mb-2;
+}
+
+.ProseMirror strong {
+  @apply font-bold;
+}
+
+.ProseMirror em {
+  @apply italic;
+}
+
+.ProseMirror u {
+  @apply underline;
+}
+
+.ProseMirror ul {
+  @apply list-disc pl-6 mb-2;
+}
+
+.ProseMirror ol {
+  @apply list-decimal pl-6 mb-2;
+}
+
+.ProseMirror a {
+  @apply text-blue-500 underline cursor-pointer;
+}
+
+.ProseMirror img {
+  @apply max-w-full h-auto rounded-lg my-4;
+}
+
+.ProseMirror blockquote {
+  @apply border-l-4 border-gray-400 pl-4 italic my-4;
+}
+
+.ProseMirror code {
+  @apply bg-gray-800 px-2 py-1 rounded text-sm font-mono;
+}
+
+.ProseMirror pre {
+  @apply bg-gray-800 p-4 rounded my-4 overflow-x-auto;
+}
+
+.ProseMirror pre code {
+  @apply bg-transparent p-0;
+}
+
+/* Artist Favorites Node Styling */
+.artist-favorites-node {
+  @apply my-4 block w-full;
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.artist-favorites-node:focus,
+.artist-favorites-node:focus-visible,
+.artist-favorites-node:focus-within {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Selection styling - but not for artist favorites */
+.ProseMirror .ProseMirror-selectednode:not(.artist-favorites-node) {
+  @apply outline outline-2 outline-blue-500 outline-offset-2;
+}
+
+/* Remove ALL selection styling from artist favorites */
+.ProseMirror .ProseMirror-selectednode.artist-favorites-node,
+.ProseMirror-selectednode.artist-favorites-node,
+.artist-favorites-node.ProseMirror-selectednode {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Prevent selection on any child elements */
+.artist-favorites-node * {
+  outline: none !important;
+}
+
+.artist-favorites-node *:focus {
+  outline: none !important;
+}

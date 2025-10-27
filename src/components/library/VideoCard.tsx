@@ -188,7 +188,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onClick }) => {
       </div>
 
       {/* Video Info */}
-      <div className="mt-2 space-y-1">
+      <div className="mt-2 space-y-2">
         {video.accountUsername && (
           <div className="flex items-center gap-2">
             {/* Profile Picture - Only use storage URL to prevent external CDN requests */}
@@ -238,6 +238,34 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onClick }) => {
             </a>
           </div>
         )}
+        
+        {/* Stats below thumbnail */}
+        <div className="flex items-center gap-3 text-xs text-gray-400">
+          {(video.viewsCount !== undefined && video.viewsCount !== null && video.viewsCount > 0) && (
+            <div className="flex items-center gap-1">
+              <EyeIcon />
+              <span>{formatNumber(video.viewsCount)}</span>
+            </div>
+          )}
+          {video.likesCount && (
+            <div className="flex items-center gap-1">
+              <HeartIcon />
+              <span>{formatNumber(video.likesCount)}</span>
+            </div>
+          )}
+          {video.commentsCount && (
+            <div className="flex items-center gap-1">
+              <CommentIcon />
+              <span>{formatNumber(video.commentsCount)}</span>
+            </div>
+          )}
+          {video.sharesCount && (
+            <div className="flex items-center gap-1">
+              <ShareIcon />
+              <span>{formatNumber(video.sharesCount)}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

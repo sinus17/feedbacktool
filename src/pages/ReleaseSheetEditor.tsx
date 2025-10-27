@@ -6,9 +6,20 @@ import { ReleaseService, ReleaseSheet } from '../services/releaseService';
 import { SocialEmbed } from '../components/SocialEmbed';
 import { ReleaseSheetEditModal } from '../components/ReleaseSheetEditModal';
 import { VersionHistoryDropdown } from '../components/VersionHistoryDropdown';
-import { SimpleNovelEditor } from '../components/SimpleNovelEditor';
-import type { JSONContent } from 'novel';
+import { EditorJSWrapper } from '../components/editorjs/EditorJSWrapper';
+import { htmlToEditorJS, editorJSToHTML } from '../utils/htmlToEditorJS';
+import { OutputData } from '@editorjs/editorjs';
+import { PlaceholderHelper } from '../components/PlaceholderHelper';
 import { supabase } from '../lib/supabase';
+
+// Helper function to format date as DD.MM.YYYY
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}.${month}.${year}`;
+};
 
 export const ReleaseSheetEditor: React.FC = () => {
   const { id: artistId, sheetId, templateId } = useParams<{ id: string; sheetId: string; templateId: string }>();
@@ -21,19 +32,95 @@ export const ReleaseSheetEditor: React.FC = () => {
   const backPath = fromAdmin ? '/release-sheets' : (artistId === 'template' ? '/release-sheets' : `/artist/${artistId}/release-sheets`);
   
   const [sheet, setSheet] = useState<ReleaseSheet | null>(null);
+  const [editorData, setEditorData] = useState<OutputData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSizePicker, setShowSizePicker] = useState(false);
-  const [linkedRelease, setLinkedRelease] = useState<any>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [artists, setArtists] = useState<{ id: string; name: string }[]>([]);
   const [realtimeUpdate, setRealtimeUpdate] = useState(false);
+  const [lockedNodes, setLockedNodes] = useState<number[]>([]);
+  const [linkedRelease, setLinkedRelease] = useState<any>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   
   const editorRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedTimestampRef = useRef<string | null>(null);
+  
+  // Add CSS for placeholder styling in templates
+  useEffect(() => {
+    if (isTemplate && editorRef.current) {
+      // Add a function to wrap placeholders with styled spans
+      const stylePlaceholders = () => {
+        if (!editorRef.current) return;
+        
+        const walker = document.createTreeWalker(
+          editorRef.current,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+        
+        const placeholderPattern = /\$[a-z_]+\/[a-z_]+\$/g;
+        let node;
+        const nodesToReplace: { node: Text; matches: RegExpMatchArray }[] = [];
+        
+        while (node = walker.nextNode() as Text) {
+          const matches = node.textContent?.match(placeholderPattern);
+          if (matches && matches.length > 0) {
+            nodesToReplace.push({ node, matches });
+          }
+        }
+        
+        nodesToReplace.forEach(({ node }) => {
+          const text = node.textContent || '';
+          const parent = node.parentElement;
+          if (!parent || parent.querySelector('.placeholder-styled')) return;
+          
+          const fragment = document.createDocumentFragment();
+          let lastIndex = 0;
+          
+          text.replace(placeholderPattern, (match, offset) => {
+            // Add text before placeholder
+            if (offset > lastIndex) {
+              fragment.appendChild(document.createTextNode(text.slice(lastIndex, offset)));
+            }
+            
+            // Create styled span for placeholder
+            const span = document.createElement('span');
+            span.className = 'placeholder-styled';
+            span.style.cssText = `
+              background-color: #e5e7eb;
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-family: 'Courier New', monospace;
+              font-size: 0.9em;
+              color: #374151;
+            `;
+            span.textContent = match;
+            fragment.appendChild(span);
+            
+            lastIndex = offset + match.length;
+            return match;
+          });
+          
+          // Add remaining text
+          if (lastIndex < text.length) {
+            fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+          }
+          
+          if (fragment.childNodes.length > 0) {
+            parent.replaceChild(fragment, node);
+          }
+        });
+      };
+      
+      // Run after content loads
+      const timer = setTimeout(stylePlaceholders, 200);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isTemplate, sheet]);
 
   const loadSheet = useCallback(async () => {
     console.log('🔄 loadSheet() called - itemId:', itemId, 'isTemplate:', isTemplate);
@@ -54,6 +141,12 @@ export const ReleaseSheetEditor: React.FC = () => {
         
         if (error) throw error;
         const template: any = data;
+        
+        // Load locked nodes if available
+        if (template.locked_nodes) {
+          setLockedNodes(template.locked_nodes);
+        }
+        
         // Map template structure to sheet structure
         sheetData = {
           ...template,
@@ -79,6 +172,16 @@ export const ReleaseSheetEditor: React.FC = () => {
       
       setSheet(sheetData);
       console.log('Sheet state set');
+      
+      // Convert HTML to Editor.js format
+      if (sheetData?.content?.blocks) {
+        const htmlContent = sheetData.content.blocks
+          .map((block: any) => block.content || '')
+          .join('');
+        const editorJSData = htmlToEditorJS(htmlContent, sheetData.artist_id || artistId);
+        console.log('📝 Converted HTML to Editor.js:', editorJSData);
+        setEditorData(editorJSData);
+      }
       
       // Set lastSaved to the sheet's updated_at timestamp
       if (sheetData?.updated_at) {
@@ -146,13 +249,63 @@ export const ReleaseSheetEditor: React.FC = () => {
             }
           });
           
+          // Convert [LIBRARY_COMPONENT] text to marker element
+          const libraryMarkerText = tempDiv.textContent?.includes('[LIBRARY_COMPONENT]');
+          if (libraryMarkerText) {
+            const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null);
+            let textNode;
+            while (textNode = walker.nextNode()) {
+              if (textNode.textContent?.includes('[LIBRARY_COMPONENT]')) {
+                const marker = document.createElement('div');
+                marker.setAttribute('data-library-marker', 'true');
+                marker.className = 'library-component-marker';
+                marker.textContent = '[LIBRARY_COMPONENT]';
+                marker.style.display = 'block';
+                marker.style.minHeight = '50px';
+                marker.style.padding = '1rem';
+                marker.style.margin = '1rem 0';
+                textNode.parentNode?.replaceChild(marker, textNode);
+                console.log('🔄 Converted [LIBRARY_COMPONENT] text to marker element');
+                break;
+              }
+            }
+          }
+          
           htmlContent = tempDiv.innerHTML;
           
           console.log('=== SETTING INNERHTML ===');
           console.log('HTML content length:', htmlContent.length);
           console.log('Current innerHTML length before:', editorRef.current.innerHTML.length);
           
+          // Remove the artist favorites container before setting innerHTML (to preserve the React component)
+          const artistFavoritesContainer = editorRef.current.querySelector('#artist-favorites-legacy-container') as HTMLElement;
+          let savedContainer: HTMLElement | null = null;
+          if (artistFavoritesContainer) {
+            savedContainer = artistFavoritesContainer;
+            artistFavoritesContainer.remove();
+            console.log('🔄 Temporarily removed artist favorites container');
+          }
+          
           editorRef.current.innerHTML = htmlContent;
+          
+          // Re-append the artist favorites container after setting innerHTML
+          if (savedContainer) {
+            const favoritesHeading = Array.from(editorRef.current.querySelectorAll('h2')).find(
+              h => h.textContent?.includes('Deine 5 Favoriten') || h.textContent?.includes('⭐')
+            );
+            if (favoritesHeading) {
+              let insertAfter = favoritesHeading.nextElementSibling;
+              if (insertAfter && insertAfter.tagName === 'P') {
+                insertAfter = insertAfter.nextElementSibling;
+              }
+              if (insertAfter) {
+                insertAfter.parentNode?.insertBefore(savedContainer, insertAfter);
+              } else {
+                favoritesHeading.parentNode?.appendChild(savedContainer);
+              }
+              console.log('✅ Re-appended artist favorites container (React component preserved)');
+            }
+          }
           
           console.log('Current innerHTML length after:', editorRef.current.innerHTML.length);
           console.log('=== INNERHTML SET ===');
@@ -173,6 +326,13 @@ export const ReleaseSheetEditor: React.FC = () => {
           // Render release link icon
           console.log('Rendering release link icon...');
           renderReleaseLinkIcon();
+          
+          // Render dynamic release data fields
+          console.log('Rendering dynamic release data fields...');
+          renderReleaseDataFields();
+          updateDynamicFieldStyling();
+          
+          // Note: Artist favorites are now handled by TipTap extension
           
           console.log('=== ALL RENDERING COMPLETE ===');
         } else {
@@ -366,17 +526,156 @@ export const ReleaseSheetEditor: React.FC = () => {
         console.log('🔗 Sheet has release_id:', sheet.release_id);
         setLinkedRelease({ id: sheet.release_id });
         
-        // Wait a bit for content to be loaded
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Wait longer for content to be fully loaded and rendered
+        await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Fetch full release data from reporting database
+        // Fetch full release data from local database
         try {
-          const releases = await ReleaseService.getReleases();
-          const release = releases.find(r => r.id === sheet.release_id);
+          const { data, error } = await supabase
+            .from('releases')
+            .select(`
+              id,
+              name,
+              release_date,
+              artist_id,
+              spotify_url,
+              master_file_url,
+              cover_url,
+              artists (
+                name,
+                instagram_url,
+                tiktok_url,
+                spotify_url
+              )
+            `)
+            .eq('id', sheet.release_id as any)
+            .single();
+
+          if (error) throw error;
+
+          const releaseData = data as any;
+          const release = releaseData ? {
+            id: releaseData.id,
+            title: releaseData.name,
+            release_date: releaseData.release_date,
+            artist_name: releaseData.artists?.name || '',
+            spotify_url: releaseData.spotify_url || '',
+            master_file_url: releaseData.master_file_url || '',
+            cover_url: releaseData.cover_url || '',
+            artist_instagram: releaseData.artists?.instagram_url || '',
+            artist_tiktok: releaseData.artists?.tiktok_url || '',
+            artist_spotify: releaseData.artists?.spotify_url || ''
+          } : null;
           
-          console.log('🔗 Found release:', release?.title);
+          console.log('🔗 Found release from local DB:', release?.title);
           
           if (release && editorRef.current) {
+            let content = editorRef.current.innerHTML;
+            
+            // Ensure content is actually loaded
+            if (!content || content.length < 50) {
+              console.log('⚠️ Content not ready yet, length:', content.length);
+              return;
+            }
+            
+            let contentUpdated = false;
+            
+            // Replace placeholders with actual data
+            const placeholders: Record<string, string> = {
+              '$releases/name$': release.title,
+              '$releases/release_date$': release.release_date ? formatDate(release.release_date) : '',
+              '$artists/name$': release.artist_name,
+              '$artists/instagram_url$': release.artist_instagram,
+              '$artists/tiktok_url$': release.artist_tiktok,
+              '$artists/spotify_url$': release.artist_spotify,
+              '$releases/spotify_url$': release.spotify_url,
+              '$releases/master_file_url$': release.master_file_url
+            };
+            
+            // Replace all placeholders
+            Object.entries(placeholders).forEach(([placeholder, value]) => {
+              if (value && content.includes(placeholder)) {
+                content = content.split(placeholder).join(value);
+                contentUpdated = true;
+                console.log(`✅ Replaced placeholder ${placeholder} with ${value}`);
+              }
+            });
+
+            console.log('🔍 Current content length:', content.length);
+            console.log('🔍 Release data:', { 
+              artist: release.artist_name, 
+              title: release.title, 
+              date: release.release_date,
+              spotify: release.spotify_url || release.artist_spotify,
+              instagram: release.artist_instagram,
+              tiktok: release.artist_tiktok,
+              master: release.master_file_url
+            });
+            console.log('🔍 Content preview (first 500 chars):', content.substring(0, 500));
+
+            // Auto-fill artist name - check multiple patterns
+            if (release.artist_name) {
+              console.log('🎤 Attempting to auto-fill artist name:', release.artist_name);
+              
+              // Check if artist name is already filled
+              const hasArtistName = content.includes(release.artist_name) && 
+                                   (content.includes('👤') || content.toLowerCase().includes('artist'));
+              
+              if (!hasArtistName) {
+                // Try multiple patterns - be very flexible
+                const artistPatterns = [
+                  /(👤[^:]*Artist[^:]*:?\s*)(<[^>]*>)*(\s|&nbsp;|<br[^>]*>)*/gi,
+                  /(Artist[^:]*:?\s*)(<[^>]*>)*(\s|&nbsp;|<br[^>]*>)*/gi
+                ];
+                
+                for (const pattern of artistPatterns) {
+                  const matches = content.match(pattern);
+                  if (matches) {
+                    console.log('🔍 Found artist pattern:', matches[0]);
+                    content = content.replace(pattern, `$1 ${release.artist_name}<br><br>`);
+                    contentUpdated = true;
+                    console.log('✅ Artist name filled');
+                    break;
+                  }
+                }
+                if (!contentUpdated) {
+                  console.log('⚠️ No artist pattern found in content');
+                }
+              } else {
+                console.log('ℹ️ Artist name already present');
+              }
+            }
+
+            // Auto-fill song name - check multiple patterns
+            if (release.title) {
+              console.log('🎵 Attempting to auto-fill song name:', release.title);
+              
+              // Check if song name is already filled
+              const hasSongName = content.includes(release.title) && 
+                                 (content.includes('🎵') || content.toLowerCase().includes('songname'));
+              
+              if (!hasSongName) {
+                // Simple approach: find "Songname:" and add the value after it
+                const songnameIndex = content.search(/Songname\s*:/i);
+                if (songnameIndex !== -1) {
+                  console.log('🔍 Found Songname at index:', songnameIndex);
+                  // Find the end of "Songname:" including any whitespace and HTML tags
+                  const afterLabel = content.substring(songnameIndex);
+                  const colonMatch = afterLabel.match(/Songname\s*:\s*(<[^>]*>|\s|&nbsp;)*/i);
+                  if (colonMatch) {
+                    const insertPos = songnameIndex + colonMatch[0].length;
+                    content = content.substring(0, insertPos) + ` ${release.title}` + content.substring(insertPos);
+                    contentUpdated = true;
+                    console.log('✅ Song name filled at position', insertPos);
+                  }
+                } else {
+                  console.log('⚠️ Songname label not found in content');
+                }
+              } else {
+                console.log('ℹ️ Song name already present');
+              }
+            }
+
             // Auto-fill release date if found
             if (release.release_date) {
               const dateStr = new Date(release.release_date).toLocaleDateString('de-DE', {
@@ -385,37 +684,151 @@ export const ReleaseSheetEditor: React.FC = () => {
                 day: '2-digit'
               });
               
-              console.log('📅 Auto-filling release date:', dateStr);
+              console.log('📅 Attempting to auto-fill release date:', dateStr);
               
-              // Find and update the Release Date field in the editor
-              let content = editorRef.current.innerHTML;
+              // Check if date is already filled (look for the formatted date near Release Date text)
+              const hasReleaseDate = content.includes(dateStr) && 
+                                    (content.includes('📆') || content.toLowerCase().includes('release date'));
               
-              // First, check if the date is already there to avoid duplicates
-              if (content.includes(`📆 Release Date: ${dateStr}`) || 
-                  content.includes(`📆&nbsp;Release Date:&nbsp;${dateStr}`)) {
-                console.log('📅 Release date already present, skipping');
-                return;
-              }
-              
-              // Remove any existing dates after "Release Date:" to clean up duplicates
-              content = content.replace(
-                /(📆[^>]*Release Date:[^<]*<[^>]*>)([^<]*<br[^>]*>[^<]*<br[^>]*>)*/gi,
-                '$1'
-              );
-              
-              // Now add the date once
-              const updatedContent = content.replace(
-                /(📆\s*Release Date:?\s*)(<[^>]*>)*(\s|&nbsp;)*/i,
-                `$1 ${dateStr}<br><br>`
-              );
-              
-              if (content !== updatedContent) {
-                console.log('📅 Updating content with release date');
-                editorRef.current.innerHTML = updatedContent;
-                scheduleAutoSave();
+              if (!hasReleaseDate) {
+                // Simple approach: find "Release Date:" and add the value after it
+                const releaseDateIndex = content.search(/Release\s+Date\s*:/i);
+                if (releaseDateIndex !== -1) {
+                  console.log('🔍 Found Release Date at index:', releaseDateIndex);
+                  const afterLabel = content.substring(releaseDateIndex);
+                  const colonMatch = afterLabel.match(/Release\s+Date\s*:\s*(<[^>]*>|\s|&nbsp;)*/i);
+                  if (colonMatch) {
+                    const insertPos = releaseDateIndex + colonMatch[0].length;
+                    content = content.substring(0, insertPos) + ` ${dateStr}` + content.substring(insertPos);
+                    contentUpdated = true;
+                    console.log('✅ Release date filled at position', insertPos);
+                  }
+                } else {
+                  console.log('⚠️ Release Date label not found in content');
+                }
               } else {
-                console.log('📅 Content already has release date or pattern not found');
+                console.log('ℹ️ Release date already present');
               }
+            }
+
+            // Auto-fill Master file
+            if (release.master_file_url) {
+              console.log('📁 Attempting to auto-fill master file:', release.master_file_url);
+              const hasMaster = content.includes(release.master_file_url);
+              
+              if (!hasMaster) {
+                const masterPatterns = [
+                  /(📁\s*Master:?\s*)(<[^>]*>)*(\s|&nbsp;)*(\([^)]*\))?(\s|&nbsp;)*/i,
+                  /(Master:?\s*)(<[^>]*>)*(\s|&nbsp;)*(\([^)]*\))?(\s|&nbsp;)*/i
+                ];
+                
+                for (const pattern of masterPatterns) {
+                  if (pattern.test(content)) {
+                    content = content.replace(pattern, `$1 ${release.master_file_url}<br><br>`);
+                    contentUpdated = true;
+                    console.log('✅ Master file filled');
+                    break;
+                  }
+                }
+              }
+            }
+
+            // Auto-fill TikTok URL
+            if (release.artist_tiktok) {
+              console.log('📱 Attempting to auto-fill TikTok:', release.artist_tiktok);
+              const hasTikTok = content.includes(release.artist_tiktok);
+              
+              if (!hasTikTok) {
+                const tiktokIndex = content.search(/TikTok\s*:/i);
+                if (tiktokIndex !== -1) {
+                  console.log('🔍 Found TikTok at index:', tiktokIndex);
+                  const afterLabel = content.substring(tiktokIndex);
+                  const colonMatch = afterLabel.match(/TikTok\s*:\s*(<[^>]*>|\s|&nbsp;)*(\([^)]*\))?\s*/i);
+                  if (colonMatch) {
+                    const insertPos = tiktokIndex + colonMatch[0].length;
+                    content = content.substring(0, insertPos) + ` ${release.artist_tiktok}` + content.substring(insertPos);
+                    contentUpdated = true;
+                    console.log('✅ TikTok URL filled at position', insertPos);
+                  }
+                } else {
+                  console.log('⚠️ TikTok label not found in content');
+                }
+              }
+            }
+
+            // Auto-fill Instagram URL
+            if (release.artist_instagram) {
+              console.log('📸 Attempting to auto-fill Instagram:', release.artist_instagram);
+              const hasInstagram = content.includes(release.artist_instagram);
+              
+              if (!hasInstagram) {
+                const instagramIndex = content.search(/Instagram\s*:/i);
+                if (instagramIndex !== -1) {
+                  console.log('🔍 Found Instagram at index:', instagramIndex);
+                  const afterLabel = content.substring(instagramIndex);
+                  const colonMatch = afterLabel.match(/Instagram\s*:\s*(<[^>]*>|\s|&nbsp;)*(\([^)]*\))?\s*/i);
+                  if (colonMatch) {
+                    const insertPos = instagramIndex + colonMatch[0].length;
+                    content = content.substring(0, insertPos) + ` ${release.artist_instagram}` + content.substring(insertPos);
+                    contentUpdated = true;
+                    console.log('✅ Instagram URL filled at position', insertPos);
+                  }
+                } else {
+                  console.log('⚠️ Instagram label not found in content');
+                }
+              }
+            }
+
+            // Auto-fill Spotify URL (use artist spotify only, not release spotify to avoid duplication)
+            const spotifyUrl = release.artist_spotify;
+            if (spotifyUrl) {
+              console.log('🎶 Attempting to auto-fill Spotify:', spotifyUrl);
+              const hasSpotify = content.includes(spotifyUrl);
+              
+              if (!hasSpotify) {
+                const spotifyIndex = content.search(/Spotify\s*:/i);
+                if (spotifyIndex !== -1) {
+                  console.log('🔍 Found Spotify at index:', spotifyIndex);
+                  const afterLabel = content.substring(spotifyIndex);
+                  const colonMatch = afterLabel.match(/Spotify\s*:\s*(<[^>]*>|\s|&nbsp;)*(\([^)]*\))?\s*/i);
+                  if (colonMatch) {
+                    const insertPos = spotifyIndex + colonMatch[0].length;
+                    content = content.substring(0, insertPos) + ` ${spotifyUrl}` + content.substring(insertPos);
+                    contentUpdated = true;
+                    console.log('✅ Spotify URL filled at position', insertPos);
+                  }
+                } else {
+                  console.log('⚠️ Spotify label not found in content');
+                }
+              }
+            }
+
+            // Apply all content updates at once
+            if (contentUpdated) {
+              console.log('✅ Applying all auto-filled data to editor');
+              editorRef.current.innerHTML = content;
+              
+              // Update sheet state with replaced content so Novel editor shows it
+              setSheet(prev => prev ? {
+                ...prev,
+                content: {
+                  blocks: [{
+                    id: 'main-content',
+                    type: 'paragraph',
+                    content: content
+                  }]
+                }
+              } : null);
+              
+              // Re-render dynamic fields with updated styling
+              setTimeout(() => {
+                renderReleaseDataFields();
+                updateDynamicFieldStyling();
+              }, 100);
+              
+              scheduleAutoSave();
+            } else {
+              console.log('ℹ️ No fields needed auto-filling');
             }
           }
           
@@ -475,10 +888,10 @@ export const ReleaseSheetEditor: React.FC = () => {
     scheduleAutoSave();
   };
 
-  const handleContentChange = () => {
-    if (!sheet || !editorRef.current) return;
+  const handleContentChange = (htmlContent?: string) => {
+    if (!sheet) return;
     
-    const htmlContent = editorRef.current.innerHTML;
+    const htmlString = htmlContent || editorRef.current?.innerHTML || '';
     
     // Don't clean up content during typing - only save as-is
     // Cleanup will happen on load/paste if needed
@@ -486,7 +899,7 @@ export const ReleaseSheetEditor: React.FC = () => {
       blocks: [{
         id: 'main-content',
         type: 'paragraph',
-        content: htmlContent
+        content: htmlString
       }]
     };
     
@@ -519,6 +932,7 @@ export const ReleaseSheetEditor: React.FC = () => {
           .update({
             name: sheet.title,
             content: sheet.content,
+            locked_nodes: lockedNodes,
             updated_at: new Date().toISOString()
           })
           .eq('id', sheet.id);
@@ -545,14 +959,6 @@ export const ReleaseSheetEditor: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleEditorBlur = () => {
-    // Save immediately when focus leaves the editor
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    saveSheet();
   };
 
   // Formatting functions
@@ -900,134 +1306,88 @@ export const ReleaseSheetEditor: React.FC = () => {
     });
   };
 
-  // Convert HTML to Novel JSON format
-  const htmlToNovelJson = (html: string): JSONContent => {
-    if (!html || html.trim() === '') {
-      return {
-        type: 'doc',
-        content: [{ type: 'paragraph', content: [] }],
-      };
-    }
+  const renderReleaseDataFields = () => {
+    if (!editorRef.current) return;
+    
+    console.log('📋 renderReleaseDataFields called');
+    
+    // Define field configurations
+    const fieldConfigs = [
+      { emoji: '🎵', pattern: /🎵\s*Songname:?/i, type: 'songname', label: 'Songname' },
+      { emoji: '📆', pattern: /📆\s*Release Date:?/i, type: 'release_date', label: 'Release Date' },
+      { emoji: '💿', pattern: /💿\s*Artist-Genre:?/i, type: 'artist_genre', label: 'Artist-Genre' },
+      { emoji: '💿', pattern: /💿\s*Song-Genre:?/i, type: 'song_genre', label: 'Song-Genre' },
+      { emoji: '📁', pattern: /📁\s*Master:?/i, type: 'master', label: 'Master' },
+      { emoji: '📀', pattern: /📀\s*Snippet:?/i, type: 'snippet', label: 'Snippet' },
+      { emoji: '📱', pattern: /📱\s*TikTok:?/i, type: 'tiktok', label: 'TikTok' },
+      { emoji: '📸', pattern: /📸\s*Instagram:?/i, type: 'instagram', label: 'Instagram' },
+      { emoji: '🎶', pattern: /🎶\s*Spotify:?/i, type: 'spotify', label: 'Spotify' }
+    ];
 
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    const content: any[] = [];
-
-    const parseNode = (node: Node): any => {
-      if (node.nodeType === Node.TEXT_NODE) {
+    // Find and enhance each field
+    fieldConfigs.forEach(config => {
+      const walker = document.createTreeWalker(
+        editorRef.current!,
+        NodeFilter.SHOW_TEXT,
+        null
+      );
+      
+      let node;
+      while (node = walker.nextNode()) {
         const text = node.textContent || '';
-        if (text.trim()) {
-          return { type: 'text', text };
-        }
-        return null;
-      }
-
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const element = node as HTMLElement;
-        const tagName = element.tagName.toLowerCase();
-
-        if (tagName === 'p') {
-          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
-          return { type: 'paragraph', content: childContent.length > 0 ? childContent : [] };
-        }
-        if (tagName === 'h1') {
-          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
-          // Filter out any paragraph nodes - headings can only contain inline content
-          const inlineContent = childContent.filter((node: any) => node.type !== 'paragraph');
-          return { type: 'heading', attrs: { level: 1 }, content: inlineContent.length > 0 ? inlineContent : [] };
-        }
-        if (tagName === 'h2') {
-          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
-          // Filter out any paragraph nodes - headings can only contain inline content
-          const inlineContent = childContent.filter((node: any) => node.type !== 'paragraph');
-          return { type: 'heading', attrs: { level: 2 }, content: inlineContent.length > 0 ? inlineContent : [] };
-        }
-        if (tagName === 'h3') {
-          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
-          // Filter out any paragraph nodes - headings can only contain inline content
-          const inlineContent = childContent.filter((node: any) => node.type !== 'paragraph');
-          return { type: 'heading', attrs: { level: 3 }, content: inlineContent.length > 0 ? inlineContent : [] };
-        }
-        if (tagName === 'strong' || tagName === 'b') {
-          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean);
-          return childContent.map(c => ({ ...c, marks: [...(c.marks || []), { type: 'bold' }] }));
-        }
-        if (tagName === 'em' || tagName === 'i') {
-          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean);
-          return childContent.map(c => ({ ...c, marks: [...(c.marks || []), { type: 'italic' }] }));
-        }
-        if (tagName === 'u') {
-          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean);
-          return childContent.map(c => ({ ...c, marks: [...(c.marks || []), { type: 'underline' }] }));
-        }
-        if (tagName === 'div') {
-          const childContent = Array.from(element.childNodes).map(parseNode).filter(Boolean).flat();
-          return { type: 'paragraph', content: childContent.length > 0 ? childContent : [] };
-        }
-        if (tagName === 'img') {
-          return { type: 'image', attrs: { src: element.getAttribute('src'), alt: element.getAttribute('alt') } };
-        }
-      }
-
-      return null;
-    };
-
-    Array.from(tempDiv.childNodes).forEach((node) => {
-      const parsed = parseNode(node);
-      if (parsed) {
-        if (Array.isArray(parsed)) {
-          content.push(...parsed);
-        } else {
-          content.push(parsed);
+        if (config.pattern.test(text)) {
+          const parent = node.parentElement;
+          if (parent && !parent.querySelector('.release-data-field-marker')) {
+            // Add a marker to prevent duplicate processing
+            const marker = document.createElement('span');
+            marker.className = 'release-data-field-marker';
+            marker.style.display = 'none';
+            marker.setAttribute('data-field-type', config.type);
+            parent.appendChild(marker);
+            
+            // Add styling to make it look like a dynamic field
+            parent.style.padding = '8px 12px';
+            parent.style.margin = '8px 0';
+            parent.style.borderRadius = '8px';
+            parent.style.border = '2px dashed #d1d5db';
+            parent.style.backgroundColor = '#f9fafb';
+            parent.style.transition = 'all 0.2s';
+          }
+          break;
         }
       }
     });
-
-    if (content.length === 0) {
-      content.push({ type: 'paragraph', content: [] });
-    }
-
-    return { type: 'doc', content };
   };
 
-  // Convert Novel JSON to HTML
-  const novelJsonToHtml = (json: JSONContent): string => {
-    if (!json || !json.content) return '';
-
-    const renderNode = (node: any): string => {
-      if (node.type === 'text') {
-        let text = node.text || '';
-        if (node.marks) {
-          node.marks.forEach((mark: any) => {
-            if (mark.type === 'bold') text = `<strong>${text}</strong>`;
-            if (mark.type === 'italic') text = `<em>${text}</em>`;
-            if (mark.type === 'underline') text = `<u>${text}</u>`;
-          });
-        }
-        return text;
+  const updateDynamicFieldStyling = () => {
+    if (!editorRef.current) return;
+    
+    console.log('🎨 Updating dynamic field styling');
+    
+    // Find all marked fields and update their styling based on content
+    const markers = editorRef.current.querySelectorAll('.release-data-field-marker');
+    markers.forEach(marker => {
+      const parent = marker.parentElement;
+      if (!parent) return;
+      
+      const text = parent.textContent || '';
+      const fieldType = marker.getAttribute('data-field-type');
+      
+      // Check if field has data (more than just the label)
+      const hasData = text.split(':').length > 1 && text.split(':')[1].trim().length > 0;
+      
+      if (hasData) {
+        // Field is filled - show green border and background
+        parent.style.border = '2px solid #10b981';
+        parent.style.backgroundColor = '#ecfdf5';
+        console.log(`✅ Field ${fieldType} is filled`);
+      } else {
+        // Field is empty - show gray dashed border
+        parent.style.border = '2px dashed #d1d5db';
+        parent.style.backgroundColor = '#f9fafb';
+        console.log(`⚪ Field ${fieldType} is empty`);
       }
-
-      if (node.type === 'paragraph') {
-        const content = node.content?.map(renderNode).join('') || '';
-        return `<p>${content}</p>`;
-      }
-
-      if (node.type === 'heading') {
-        const level = node.attrs?.level || 1;
-        const content = node.content?.map(renderNode).join('') || '';
-        return `<h${level}>${content}</h${level}>`;
-      }
-
-      if (node.type === 'image') {
-        const src = node.attrs?.src || '';
-        const alt = node.attrs?.alt || '';
-        return `<img src="${src}" alt="${alt}" />`;
-      }
-
-      return '';
-    };
-
-    return json.content.map(renderNode).join('');
+    });
   };
 
   const renderReleaseLinkIcon = () => {
@@ -1094,7 +1454,6 @@ export const ReleaseSheetEditor: React.FC = () => {
       }
     }
   };
-
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -1215,7 +1574,7 @@ export const ReleaseSheetEditor: React.FC = () => {
       `}</style>
       
       {/* Combined Sticky Header */}
-      <div className="sticky top-0 z-50 bg-white/95 dark:bg-[#000000]/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="sticky top-0 z-50 bg-white/95 dark:bg-[#000000]/95 backdrop-blur-sm">
         {/* Sheet Title */}
         <div className="mx-auto py-4" style={{ paddingLeft: '10%', paddingRight: '10%' }}>
           <div className="flex items-center space-x-4">
@@ -1601,43 +1960,25 @@ export const ReleaseSheetEditor: React.FC = () => {
 
       {/* Editor Content */}
       <div className="mx-auto max-w-5xl px-8" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
-        {sheet && sheet.content && (
-          <SimpleNovelEditor
-            key={`${sheet.id}-${sheet.updated_at}`} // Force re-render when sheet or content changes
-            initialContent={(() => {
-              // Get all blocks and join them
-              const blocks = sheet.content?.blocks || [];
-              const htmlContent = blocks
-                .map((block: any) => block.content || '')
-                .join('');
+        {sheet && sheet.content && editorData && (
+          <EditorJSWrapper
+            key={`${sheet.id}-${sheet.updated_at}`}
+            data={editorData}
+            onChange={(data) => {
+              console.log('💾 Editor.js data changed:', data);
+              setEditorData(data);
               
-              console.log('📄 Loading content for sheet:', sheet.id);
-              console.log('📄 Number of blocks:', blocks.length);
-              console.log('📄 HTML content length:', htmlContent?.length);
-              console.log('📄 HTML content preview:', htmlContent?.substring(0, 300));
-              
-              if (htmlContent && htmlContent.trim()) {
-                const json = htmlToNovelJson(htmlContent);
-                console.log('📄 Converted to JSON:', JSON.stringify(json, null, 2));
-                return json;
+              // Convert to HTML and save
+              const html = editorJSToHTML(data);
+              if (editorRef.current) {
+                editorRef.current.innerHTML = html;
               }
-              
-              console.log('⚠️ No content found, using empty document');
-              return {
-                type: 'doc',
-                content: [{ type: 'paragraph', content: [] }],
-              };
-            })()}
-            onChange={(json) => {
-              if (!sheet || !editorRef.current) return;
-              // Convert JSON back to HTML and update the hidden div
-              const html = novelJsonToHtml(json);
-              console.log('💾 Saving HTML:', html?.substring(0, 200));
-              editorRef.current.innerHTML = html;
-              handleContentChange();
+              handleContentChange(html);
             }}
-            onBlur={handleEditorBlur}
-            editable={true}
+            artistId={artistId}
+            releaseDate={linkedRelease?.release_date}
+            placeholder={isTemplate ? 'Type / for commands... Use $table/field$ for placeholders' : 'Type / for commands...'}
+            readOnly={false}
           />
         )}
         {/* Hidden div to maintain compatibility with existing save logic */}
@@ -1791,6 +2132,9 @@ export const ReleaseSheetEditor: React.FC = () => {
           }}
         />
       )}
+
+      {/* Placeholder helper for templates */}
+      {isTemplate && <PlaceholderHelper />}
     </div>
   );
 };

@@ -5,14 +5,15 @@ import {
   Video,
   ChevronLeft,
   ChevronRight,
-  MessageSquare,
   Instagram,
-  LogOut,
-  Archive,
   Calendar,
+  MessageSquare,
+  Archive,
+  LogOut,
   FileText,
   Library,
-  Bell
+  Bell,
+  Music
 } from 'lucide-react';
 import { useStore } from '../store';
 import { Logo } from './Logo';
@@ -29,6 +30,7 @@ export function Sidebar() {
     { path: '/ad-creatives', icon: Instagram, label: 'Ad Creatives', exact: false },
     { path: '/content-plan', icon: Calendar, label: 'Content Plan', exact: false },
     { path: '/release-sheets', icon: FileText, label: 'Release Sheets', exact: false },
+    { path: '/releases', icon: Music, label: 'Releases', exact: false },
     { path: '/library', icon: Library, label: 'Video Library', exact: false },
     { path: '/artists', icon: Users, label: 'Artist Management', exact: false },
     { path: '/whatsapp', icon: MessageSquare, label: 'WhatsApp Logs', exact: false },

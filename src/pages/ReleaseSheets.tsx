@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { ReleaseService, type ReleaseSheet, type Release } from '../services/releaseService';
-import { AlertCircle, ExternalLink, Loader, Search, Plus, Pencil, Copy } from 'lucide-react';
+import { AlertCircle, ExternalLink, Loader, Search, Plus, Pencil, Copy, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ReleaseSheetEditModal } from '../components/ReleaseSheetEditModal';
 import { CreateReleaseSheetModal } from '../components/CreateReleaseSheetModal';
@@ -274,6 +274,7 @@ export const ReleaseSheets: React.FC = () => {
                             <Pencil className="h-5 w-5" />
                           </Link>
                           {isTemplate ? (
+                            <>
                             <button
                               onClick={async () => {
                                 if (!confirm('Duplicate this template as a new template?')) return;
@@ -347,6 +348,7 @@ export const ReleaseSheets: React.FC = () => {
                             >
                               <Copy className="h-5 w-5" />
                             </button>
+                            </>
                           ) : (
                             <a
                               href={`https://tool.swipeup-marketing.com/artist/${artistId}/release-sheets`}
@@ -358,6 +360,33 @@ export const ReleaseSheets: React.FC = () => {
                               <ExternalLink className="h-5 w-5" />
                             </a>
                           )}
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm('Are you sure you want to delete this release sheet?')) {
+                                return;
+                              }
+                              
+                              try {
+                                // Delete from correct table based on type
+                                const tableName = isTemplate ? 'release_sheet_templates' : 'release_sheets';
+                                const { error } = await supabase
+                                  .from(tableName)
+                                  .delete()
+                                  .match({ id: sheet.id });
+                                
+                                if (error) throw error;
+                                
+                                // Remove from local state
+                                setSheets(sheets.filter(s => s.id !== sheet.id));
+                              } catch (error: any) {
+                                alert(error?.message || 'Failed to delete release sheet');
+                              }
+                            }}
+                            className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                            title="Delete Release Sheet"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -391,8 +420,45 @@ export const ReleaseSheets: React.FC = () => {
             // Reload sheets after creation
             try {
               setLoading(true);
-              const data = await ReleaseService.getReleaseSheets();
-              setSheets(data);
+              
+              // Load both regular sheets and templates
+              const [regularSheets, templatesData] = await Promise.all([
+                ReleaseService.getReleaseSheets(),
+                supabase.from('release_sheet_templates').select('*').order('created_at', { ascending: false })
+              ]);
+              
+              if (templatesData.error) throw templatesData.error;
+              
+              // Map templates to sheet format and mark them as templates
+              const templatesAsSheets = (templatesData.data || []).map((template: any) => ({
+                id: template.id,
+                title: template.name,
+                artist_id: 'template',
+                release_id: null,
+                release_title: null,
+                content: template.content,
+                status: 'draft' as const,
+                tags: template.tags || [],
+                cover_image_url: null,
+                due_date: null,
+                completed_at: null,
+                created_at: template.created_at,
+                updated_at: template.updated_at,
+                is_template: true
+              }));
+              
+              // Combine and sort
+              const allSheets = [...regularSheets, ...templatesAsSheets].sort((a, b) => {
+                const aIsTemplate = (a as any).is_template === true;
+                const bIsTemplate = (b as any).is_template === true;
+                
+                if (aIsTemplate && !bIsTemplate) return -1;
+                if (!aIsTemplate && bIsTemplate) return 1;
+                
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+              });
+              
+              setSheets(allSheets);
             } catch (e: any) {
               setError(e?.message || 'Failed to load release sheets');
             } finally {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Heart, MessageCircle, Share2, Play, X, ArrowLeft, Download, ChevronRight, Bell, Maximize, Minimize, Disc3, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { LibraryVideo } from '../../types';
@@ -28,6 +28,8 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const [searchParams] = useSearchParams();
+  const artistId = searchParams.get('artist');
   const hasShuffledRef = useRef(false);
   const [shuffledVideos, setShuffledVideos] = useState<LibraryVideo[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -697,6 +699,15 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
         .eq('video_id', currentVideo.id)
         .eq('user_id', currentUser.id);
       
+      // Also remove from artist_liked_library_videos if artist parameter exists
+      if (artistId) {
+        await (supabase as any)
+          .from('artist_liked_library_videos')
+          .delete()
+          .eq('video_id', currentVideo.id)
+          .eq('artist_id', artistId);
+      }
+      
       setIsLiked(false);
     } else {
       // Like
@@ -706,6 +717,17 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
           video_id: currentVideo.id,
           user_id: currentUser.id
         });
+      
+      // Also add to artist_liked_library_videos if artist parameter exists
+      if (artistId) {
+        console.log('⭐ Adding to artist favorites:', { artistId, videoId: currentVideo.id });
+        await (supabase as any)
+          .from('artist_liked_library_videos')
+          .insert({
+            video_id: currentVideo.id,
+            artist_id: artistId
+          });
+      }
       
       setIsLiked(true);
       setShowHeartAnimation(true);

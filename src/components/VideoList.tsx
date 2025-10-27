@@ -298,36 +298,38 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
   };
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-        <thead className="bg-gray-50 dark:bg-gray-700">
-          <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-              <div className="w-3/5">Video Name</div>
-            </th>
-            {!artistId && (
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                Artist
+    <>
+    <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-800 border-b border-gray-700">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Video Name
               </th>
-            )}
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-              Content Type
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-              Status
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-              Uploaded At
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-              Updated At
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {!artistId && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Artist
+                </th>
+              )}
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Content Type
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Uploaded At
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Updated At
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-800">
           {filteredSubmissions.length === 0 ? (
             <tr>
               <td colSpan={artistId ? 6 : 7} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
@@ -336,21 +338,21 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
             </tr>
           ) : (
             sortedSubmissions.map((submission) => (
-              <tr key={submission.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+              <tr key={submission.id} className="hover:bg-gray-800/50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 w-3/5 truncate">
+                  <div className="text-sm font-medium text-white w-3/5 truncate">
                     {submission.projectName}
                   </div>
                 </td>
                 {!artistId && (
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-gray-100">
+                    <div className="text-sm text-gray-300">
                       {getArtistName(submission.artistId)}
                     </div>
                   </td>
                 )}
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-gray-100 capitalize">
+                  <div className="text-sm text-gray-300 capitalize">
                     {submission.type.replace('-', ' ')}
                   </div>
                 </td>
@@ -387,12 +389,12 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-gray-100">
+                  <div className="text-sm text-gray-300">
                     {formatDateToDDMMYY(submission.createdAt)}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-gray-100">
+                  <div className="text-sm text-gray-400">
                     {formatDateToDDMMYY(submission.updatedAt)}
                   </div>
                 </td>
@@ -453,6 +455,8 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
           )}
         </tbody>
       </table>
+      </div>
+    </div>
 
       {selectedVideo && (
         <FeedbackModal
@@ -484,6 +488,6 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirmation({ isOpen: false, videoId: null, videoName: '' })}
       />
-    </div>
+    </>
   );
 };

@@ -9,6 +9,8 @@ import {
   TextQuote,
   Code,
   CheckSquare,
+  DollarSign,
+  Video,
 } from 'lucide-react';
 
 export const suggestionItems = createSuggestionItems([
@@ -115,6 +117,33 @@ export const suggestionItems = createSuggestionItems([
     icon: <CheckSquare size={18} />,
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleTaskList().run();
+    },
+  },
+  {
+    title: 'Placeholder',
+    description: 'Insert a database placeholder (searchable)',
+    searchTerms: ['placeholder', 'variable', 'field', 'database', '$', 'release', 'artist'],
+    icon: <DollarSign size={18} />,
+    command: ({ editor, range }) => {
+      // Open placeholder search menu
+      // This will trigger a custom modal/dropdown
+      editor.chain().focus().deleteRange(range).run();
+      // Dispatch custom event to open placeholder menu
+      window.dispatchEvent(new CustomEvent('openPlaceholderMenu', { 
+        detail: { editor, range } 
+      }));
+    },
+  },
+  {
+    title: 'Library',
+    description: 'Insert artist favorites library section',
+    searchTerms: ['library', 'favorites', 'videos', 'liked'],
+    icon: <Video size={18} />,
+    command: ({ editor, range }) => {
+      // Insert a special marker that will be replaced with the React component
+      editor.chain().focus().deleteRange(range).insertContent(
+        '<div class="artist-library-component" data-component="library"></div>'
+      ).run();
     },
   },
 ]);
