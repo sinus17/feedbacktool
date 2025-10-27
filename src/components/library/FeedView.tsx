@@ -1332,7 +1332,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="absolute left-[7.5%] right-[7.5%] top-20 bottom-20 bg-dark-800/95 backdrop-blur-md rounded-2xl z-20 flex flex-col"
+            className="absolute left-[7.5%] right-[7.5%] top-20 bottom-20 bg-black/95 backdrop-blur-md rounded-2xl z-20 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
@@ -1385,22 +1385,22 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                 <>
                   {analysis.original_concept && (
                     <div>
-                      <h3 className="text-sm font-medium text-[#3b81f6] mb-1">💡 Original Concept</h3>
+                      <h3 className="text-sm font-medium text-[#0000fe] mb-1">💡 Original Concept</h3>
                       <p className="text-sm text-gray-300">{analysis.original_concept}</p>
                     </div>
                   )}
                   
                   {analysis.why_it_went_viral && (
                     <div>
-                      <h3 className="text-sm font-medium text-[#3b81f6] mb-1">🚀 Why It Went Viral</h3>
+                      <h3 className="text-sm font-medium text-[#0000fe] mb-1">🚀 Why It Went Viral</h3>
                       <p className="text-sm text-gray-300">{analysis.why_it_went_viral}</p>
                     </div>
                   )}
                   
                   {analysis.music_adaptation && (
-                    <div className="bg-[#0000fe]/20 p-4 rounded-lg border border-[#3b81f6]/30 relative">
+                    <div className="bg-[#0000fe]/20 p-4 rounded-lg border border-[#0000fe]/30 relative">
                       <div className="flex items-start justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-[#3b81f6]">🎵 Music Adaptation Strategy</h3>
+                        <h3 className="text-sm font-semibold text-[#0000fe]">🎵 Music Adaptation Strategy</h3>
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded-md border border-yellow-500/40 flex-shrink-0">
                           ⚡ Adaptable
                         </span>
@@ -1435,10 +1435,10 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                   
                   {analysis.best_song_topics && Array.isArray(analysis.best_song_topics) && (
                     <div>
-                      <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🎼 Best Song Topics</h3>
+                      <h3 className="text-sm font-medium text-[#0000fe] mb-2">🎼 Best Song Topics</h3>
                       <div className="flex flex-wrap gap-2">
                         {analysis.best_song_topics.map((topic: string, i: number) => (
-                          <span key={i} className="px-3 py-1 bg-[#3b81f6]/20 text-[#3b81f6] rounded-full text-xs">{topic}</span>
+                          <span key={i} className="px-3 py-1 bg-[#0000fe]/20 text-[#0000fe] rounded-full text-xs">{topic}</span>
                         ))}
                       </div>
                     </div>
@@ -1446,7 +1446,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                   
                   {analysis.production_requirements && Array.isArray(analysis.production_requirements) && (
                     <div>
-                      <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🎬 Production Requirements</h3>
+                      <h3 className="text-sm font-medium text-[#0000fe] mb-2">🎬 Production Requirements</h3>
                       <ul className="list-disc list-inside space-y-1">
                         {analysis.production_requirements.map((req: string, i: number) => (
                           <li key={i} className="text-sm text-gray-300">{req}</li>
@@ -1457,7 +1457,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                   
                   {analysis.shotlist_template && Array.isArray(analysis.shotlist_template) && (
                     <div>
-                      <h3 className="text-sm font-medium text-[#3b81f6] mb-2">📋 Shotlist Template</h3>
+                      <h3 className="text-sm font-medium text-[#0000fe] mb-2">📋 Shotlist Template</h3>
                       <ul className="list-decimal list-inside space-y-2">
                         {analysis.shotlist_template.map((shot: string, i: number) => (
                           <li key={i} className="text-sm text-gray-300 pl-2">{shot}</li>
@@ -1468,7 +1468,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
                   
                   {analysis.engagement_factors && Array.isArray(analysis.engagement_factors) && (
                     <div>
-                      <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🔥 Engagement Factors</h3>
+                      <h3 className="text-sm font-medium text-[#0000fe] mb-2">🔥 Engagement Factors</h3>
                       <ul className="list-disc list-inside space-y-1">
                         {analysis.engagement_factors.map((factor: string, i: number) => (
                           <li key={i} className="text-sm text-gray-300">{factor}</li>
@@ -1482,28 +1482,28 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
               {/* Regular Video Analysis */}
               {!analysis.original_concept && analysis.hook && (
                 <div>
-                  <h3 className="text-sm font-medium text-[#3b81f6] mb-1">🎣 Hook</h3>
+                  <h3 className="text-sm font-medium text-[#0000fe] mb-1">🎣 Hook</h3>
                   <p className="text-sm text-gray-300">{analysis.hook}</p>
                 </div>
               )}
               
               {analysis.content_type && (
                 <div>
-                  <h3 className="text-sm font-medium text-[#3b81f6] mb-1">📹 Content Type</h3>
+                  <h3 className="text-sm font-medium text-[#0000fe] mb-1">📹 Content Type</h3>
                   <p className="text-sm text-gray-300">{analysis.content_type}</p>
                 </div>
               )}
               
               {analysis.visual_style && (
                 <div>
-                  <h3 className="text-sm font-medium text-[#3b81f6] mb-1">🎨 Visual Style</h3>
+                  <h3 className="text-sm font-medium text-[#0000fe] mb-1">🎨 Visual Style</h3>
                   <p className="text-sm text-gray-300">{analysis.visual_style}</p>
                 </div>
               )}
               
               {analysis.shotlist && Array.isArray(analysis.shotlist) && (
                 <div>
-                  <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🎬 Shotlist</h3>
+                  <h3 className="text-sm font-medium text-[#0000fe] mb-2">🎬 Shotlist</h3>
                   <ul className="list-decimal list-inside space-y-2">
                     {analysis.shotlist.map((shot: any, i: number) => (
                       <li key={i} className="text-sm text-gray-300 pl-2">
@@ -1518,7 +1518,7 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
               
               {!analysis.original_concept && analysis.engagement_factors && Array.isArray(analysis.engagement_factors) && (
                 <div>
-                  <h3 className="text-sm font-medium text-[#3b81f6] mb-2">🔥 Why This Works</h3>
+                  <h3 className="text-sm font-medium text-[#0000fe] mb-2">🔥 Why This Works</h3>
                   <ul className="list-disc list-inside space-y-1">
                     {analysis.engagement_factors.map((factor: string, i: number) => (
                       <li key={i} className="text-sm text-gray-300">{factor}</li>
