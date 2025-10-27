@@ -532,15 +532,6 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
     }, 500);
   };
 
-
-  const handleStatsClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowAnalysis(true);
-    setShowAnalysisTooltip(false); // Hide tooltip when clicked
-    hasInteractedWithCurrentVideoRef.current = true; // Mark as interacted
-    console.log('👁️ User opened analysis - marked as interacted');
-  };
-
   // Handle fullscreen toggle
   const handleFullscreen = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1280,12 +1271,8 @@ export const FeedView: React.FC<FeedViewProps> = ({ videos, isPublicMode = false
           className="flex items-center gap-2 justify-end cursor-pointer hover:opacity-80 transition-opacity"
           onClick={(e) => {
             e.stopPropagation();
-            // Open the original sound/video URL on the platform
-            if (currentVideo.musicUrl) {
-              window.open(currentVideo.musicUrl, '_blank');
-            } else if (currentVideo.sourceUrl) {
-              window.open(currentVideo.sourceUrl, '_blank');
-            }
+            // Open the original video URL on the platform
+            window.open(currentVideo.sourceUrl, '_blank');
           }}
         >
           {/* Sound Name - Scrolling if too long */}
