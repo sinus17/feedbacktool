@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Calendar, FileText, Trash2, Plus, HardDrive, Loader, MessageSquare } from 'lucide-react';
+import { Calendar, FileText, Trash2, Plus, HardDrive, Loader, MessageSquare, Instagram } from 'lucide-react';
 import { useStore } from '../store';
 import { AdCreativeSubmissionModal } from '../components/AdCreativeSubmissionModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
@@ -325,11 +325,7 @@ export const ArtistAdCreatives: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             {creative.platform === 'instagram' ? (
-                              <img 
-                                src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
-                                alt="Instagram"
-                                className="h-5 w-5"
-                              />
+                              <Instagram className="h-5 w-5 text-white" />
                             ) : creative.platform === 'dropbox' ? (
                               // Check if it's a Supabase storage URL or regular Dropbox
                               (creative.content.includes('://') && isSupabaseStorageUrl(creative.content)) ? (
@@ -378,11 +374,13 @@ export const ArtistAdCreatives: React.FC = () => {
                                     )}
                                   </div>
                                 ) : (
-                                  <img 
-                                    src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
-                                    alt="TikTok"
-                                    className="h-5 w-5"
-                                  />
+                                  <svg 
+                                    viewBox="0 0 24 24" 
+                                    fill="currentColor"
+                                    className="h-5 w-5 text-white"
+                                  >
+                                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                                  </svg>
                                 )}
                               </div>
                             )}
@@ -414,11 +412,7 @@ export const ArtistAdCreatives: React.FC = () => {
                                 {creative.mergedInstagramReelUrl && (
                                   <div className="flex items-center gap-1 mt-1 ml-4">
                                     <span className="text-gray-400">↳</span>
-                                    <img 
-                                      src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
-                                      alt="Instagram"
-                                      className="h-4 w-4"
-                                    />
+                                    <Instagram className="h-4 w-4 text-white" />
                                     <a
                                       href={creative.mergedInstagramReelUrl}
                                       target="_blank"
@@ -435,11 +429,13 @@ export const ArtistAdCreatives: React.FC = () => {
                                 {creative.mergedTiktokAuthCode && (
                                   <div className="flex items-center gap-1 mt-1 ml-4">
                                     <span className="text-gray-400">↳</span>
-                                    <img 
-                                      src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
-                                      alt="TikTok"
-                                      className="h-4 w-4"
-                                    />
+                                    <svg 
+                                      viewBox="0 0 24 24" 
+                                      fill="currentColor"
+                                      className="h-4 w-4 text-white"
+                                    >
+                                      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                                    </svg>
                                     <span className="truncate block max-w-[200px] sm:max-w-[300px] md:max-w-full text-xs text-gray-500 dark:text-gray-400" title={creative.mergedTiktokAuthCode}>
                                       {creative.mergedTiktokAuthCode}
                                     </span>
@@ -466,11 +462,7 @@ export const ArtistAdCreatives: React.FC = () => {
                                       <path fill="currentColor" d="M264.4 116.3l-132 84.3 132 84.3-132 84.3L0 284.1l132.3-84.3L0 116.3 132.3 32l132.1 84.3zM131.6 395.7l132-84.3 132 84.3-132 84.3-132-84.3zm132.8-111.6l132-84.3-132-83.6L395.7 32 528 116.3l-132.3 84.3L528 284.8l-132.3 84.3-131.3-85z"/>
                                     </svg>
                                   ) : creative.platform === 'instagram' ? (
-                                    <img 
-                                      src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
-                                      alt="Instagram"
-                                      className="h-4 w-4"
-                                    />
+                                    <Instagram className="h-4 w-4 text-white" />
                                   ) : (
                                     <HardDrive className="h-4 w-4 text-white" />
                                   )}
@@ -480,11 +472,13 @@ export const ArtistAdCreatives: React.FC = () => {
                                 </a>
                               ) : (
                                 <span className="flex items-center gap-2" title={creative.content}>
-                                  <img 
-                                    src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
-                                    alt="TikTok"
-                                    className="h-4 w-4"
-                                  />
+                                  <svg 
+                                    viewBox="0 0 24 24" 
+                                    fill="currentColor"
+                                    className="h-4 w-4 text-white"
+                                  >
+                                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                                  </svg>
                                   <span className="truncate block max-w-[120px] sm:max-w-[150px] md:max-w-[200px]">
                                     {creative.content.substring(0, 30)}...
                                   </span>
@@ -496,11 +490,7 @@ export const ArtistAdCreatives: React.FC = () => {
                             {creative.mergedInstagramReelUrl && !creative.videoName && (
                               <div className="flex items-center gap-1 mt-1 ml-4">
                                 <span className="text-gray-400">↳</span>
-                                <img 
-                                  src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
-                                  alt="Instagram" 
-                                  className="h-4 w-4"
-                                />
+                                <Instagram className="h-4 w-4 text-white" />
                                 <a
                                   href={creative.mergedInstagramReelUrl}
                                   target="_blank"
@@ -517,11 +507,13 @@ export const ArtistAdCreatives: React.FC = () => {
                             {creative.mergedTiktokAuthCode && !creative.videoName && (
                               <div className="flex items-center gap-1 mt-1 ml-4">
                                 <span className="text-gray-400">↳</span>
-                                <img 
-                                  src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
-                                  alt="TikTok"
-                                  className="h-4 w-4"
-                                />
+                                <svg 
+                                  viewBox="0 0 24 24" 
+                                  fill="currentColor"
+                                  className="h-4 w-4 text-white"
+                                >
+                                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                                </svg>
                                 <span className="truncate block max-w-[120px] sm:max-w-[150px] md:max-w-[200px] text-xs text-gray-500 dark:text-gray-400" title={creative.mergedTiktokAuthCode}>
                                   {creative.mergedTiktokAuthCode}
                                 </span>

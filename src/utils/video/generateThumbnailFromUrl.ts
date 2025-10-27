@@ -13,11 +13,12 @@ import { supabase } from '../../lib/supabase';
  * @returns The data URL of the generated thumbnail
  */
 export async function generateThumbnailFromUrl(videoUrl: string): Promise<string | null> {
-  return new Promise((resolve, reject) => {
+  return new Promise<string | null>((resolve, reject) => {
     try {
-      // Only generate thumbnails for Supabase storage URLs
-      if (!videoUrl || !isSupabaseStorageUrl(videoUrl)) {
-        console.log('Skipping thumbnail generation - not a Supabase storage URL:', videoUrl);
+      // Only generate thumbnails for Supabase storage URLs or Dropbox direct download URLs
+      const isDropboxDirect = videoUrl.includes('dropbox.com') && videoUrl.includes('dl=1');
+      if (!videoUrl || (!isSupabaseStorageUrl(videoUrl) && !isDropboxDirect)) {
+        console.log('Skipping thumbnail generation - not a Supabase storage URL or Dropbox direct link:', videoUrl);
         resolve(null);
         return;
       }
@@ -25,7 +26,10 @@ export async function generateThumbnailFromUrl(videoUrl: string): Promise<string
       console.log('Starting thumbnail generation for URL:', videoUrl);
       // Create a video element to load the URL
       const video = document.createElement('video');
-      video.crossOrigin = 'anonymous'; // Important for CORS
+      // Only set crossOrigin for Supabase URLs to avoid CORS issues with Dropbox
+      if (isSupabaseStorageUrl(videoUrl)) {
+        video.crossOrigin = 'anonymous';
+      }
       video.preload = 'metadata';
       
       // Set a timeout to prevent hanging
@@ -169,8 +173,8 @@ export async function updateAdCreativeThumbnail(creativeId: string, thumbnailUrl
       .update({ 
         thumbnail_url: thumbnailUrl,
         updated_at: new Date().toISOString()
-      })
-      .eq('id', creativeId);
+      } as any)
+      .eq('id' as any, creativeId as any);
     
     if (error) {
       console.error('Error updating ad creative thumbnail:', error);

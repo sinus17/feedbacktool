@@ -22,6 +22,7 @@ import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { PushNotifications } from './pages/PushNotifications';
 import { NovelTest } from './pages/NovelTest';
+import NewCampaignSubmission from './pages/NewCampaignSubmission';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -196,6 +197,7 @@ function App() {
               <Route path="/release-sheets/templates/:templateId/edit" element={<ReleaseSheetEditor />} />
               <Route path="/novel-test" element={<NovelTest />} />
               <Route path="/preview/:id" element={<PreviewArtistView />} />
+              <Route path="/new-campaign" element={<NewCampaignSubmission />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               

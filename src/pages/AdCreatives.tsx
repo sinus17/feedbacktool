@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Copy, Trash2, Plus, Edit, Archive, HardDrive } from 'lucide-react';
+import { Copy, Trash2, Plus, Edit, Archive, HardDrive, Instagram } from 'lucide-react';
 import { isSupabaseStorageUrl } from '../utils/video/player';
 import { removeSpecificAdCreative } from '../utils/removeAdCreative';
 import { normalizeString, stringContains } from '../utils/contentPlanMatcher';
@@ -12,6 +12,8 @@ import { ConfirmationModal } from '../components/ConfirmationModal';
 import { VideoPreviewModal } from '../components/VideoPreviewModal';
 import { Pagination } from '../components/Pagination';
 import { format } from 'date-fns';
+import { generateThumbnailFromUrl } from '../utils/video/generateThumbnailFromUrl';
+import { supabase } from '../lib/supabase';
 
 interface AdCreativesProps {
   artistId?: string;
@@ -107,6 +109,69 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
       });
     }
   }, [adCreativesPagination.currentPage, adCreativesPagination.pageSize, artistId, selectedArtist, selectedPlatform, selectedStatus]);
+
+  // Auto-generate thumbnails for videos without them
+  useEffect(() => {
+    const generateMissingThumbnails = async () => {
+      // Find videos that need thumbnails
+      const supabaseVideos = adCreatives.filter(creative => 
+        creative.content && 
+        isSupabaseStorageUrl(creative.content) && 
+        !creative.thumbnail_url
+      );
+
+      const dropboxVideos = adCreatives.filter(creative =>
+        creative.content &&
+        creative.content.includes('dropbox.com') &&
+        !creative.thumbnail_url
+      );
+
+      if (supabaseVideos.length === 0 && dropboxVideos.length === 0) return;
+
+      console.log(`Found ${supabaseVideos.length} Supabase videos and ${dropboxVideos.length} Dropbox videos without thumbnails`);
+
+      // Generate thumbnails for Supabase storage videos (client-side)
+      for (const creative of supabaseVideos.slice(0, 3)) { // Limit to 3 at a time
+        try {
+          console.log(`Generating thumbnail for Supabase video ${creative.id}`);
+          const thumbnailUrl = await generateThumbnailFromUrl(creative.content);
+          
+          if (thumbnailUrl) {
+            await supabase
+              .from('ad_creatives')
+              .update({ 
+                thumbnail_url: thumbnailUrl,
+                updated_at: new Date().toISOString()
+              } as any)
+              .eq('id' as any, creative.id as any);
+            
+            console.log(`Thumbnail generated and saved for creative ${creative.id}`);
+          }
+        } catch (error) {
+          console.error(`Error generating thumbnail for creative ${creative.id}:`, error);
+        }
+      }
+
+      // Note: Dropbox thumbnails cannot be generated automatically due to CORS restrictions
+      // They will be generated when the user previews the video
+      if (dropboxVideos.length > 0) {
+        console.log(`Found ${dropboxVideos.length} Dropbox videos without thumbnails. Thumbnails will be generated on first preview.`);
+      }
+
+      // Refresh the list to show new thumbnails
+      const filters = {
+        artistId: artistId || selectedArtist || undefined,
+        platform: selectedPlatform || undefined,
+        status: selectedStatus || undefined
+      };
+      fetchAdCreatives(adCreativesPagination.currentPage, adCreativesPagination.pageSize, filters);
+    };
+
+    // Only run if we have creatives loaded
+    if (adCreatives.length > 0 && !loading) {
+      generateMissingThumbnails();
+    }
+  }, [adCreatives.length]); // Run when creatives are loaded
 
   const getArtistName = (artistId: string) => {
     const artist = artists.find(a => a.id === artistId);
@@ -514,68 +579,62 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         {creative.platform === 'instagram' ? (
-                          <img 
-                            src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
-                            alt="Instagram" 
-                            className="h-5 w-5" 
-                          /> 
+                          <Instagram className="h-5 w-5 text-white" /> 
                         ) : creative.platform === 'dropbox' ? (
                           // Check if it's a Supabase storage URL or regular Dropbox
                           (creative.content.includes('://') && isSupabaseStorageUrl(creative.content)) ? (
-                            <div className="relative w-10 h-10 bg-gray-800 rounded overflow-hidden">
-                              {creative.thumbnail_url ? (
+                            creative.thumbnail_url ? (
+                              <div className="relative w-10 h-10 bg-gray-800 rounded overflow-hidden">
                                 <img 
                                   src={creative.thumbnail_url} 
                                   alt="Video thumbnail" 
                                   className="w-full h-full object-cover"
                                 />
-                              ) : (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <HardDrive className="h-5 w-5 text-white" />
-                                </div>
-                              )}
-                            </div>
+                              </div>
+                            ) : (
+                              <HardDrive className="h-5 w-5 text-white" />
+                            )
                           ) : (
-                            <div className="relative w-10 h-10 bg-gray-800 rounded overflow-hidden">
-                              {creative.thumbnail_url ? (
+                            creative.thumbnail_url ? (
+                              <div className="relative w-10 h-10 bg-gray-800 rounded overflow-hidden">
                                 <img 
                                   src={creative.thumbnail_url} 
                                   alt="Video thumbnail" 
                                   className="w-full h-full object-cover"
                                 />
-                              ) : (
-                                <svg 
-                                  xmlns="http://www.w3.org/2000/svg" 
-                                  viewBox="0 0 528 512"
-                                  className="h-5 w-5 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-                                >
-                                  <path fill="currentColor" d="M264.4 116.3l-132 84.3 132 84.3-132 84.3L0 284.1l132.3-84.3L0 116.3 132.3 32l132.1 84.3zM131.6 395.7l132-84.3 132 84.3-132 84.3-132-84.3zm132.8-111.6l132-84.3-132-83.6L395.7 32 528 116.3l-132.3 84.3L528 284.8l-132.3 84.3-131.3-85z"/>
-                                </svg>
-                              )}
-                            </div>
+                              </div>
+                            ) : (
+                              <svg 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                viewBox="0 0 528 512"
+                                className="h-5 w-5 text-white"
+                              >
+                                <path fill="currentColor" d="M264.4 116.3l-132 84.3 132 84.3-132 84.3L0 284.1l132.3-84.3L0 116.3 132.3 32l132.1 84.3zM131.6 395.7l132-84.3 132 84.3-132 84.3-132-84.3zm132.8-111.6l132-84.3-132-83.6L395.7 32 528 116.3l-132.3 84.3L528 284.8l-132.3 84.3-131.3-85z"/>
+                              </svg>
+                            )
                           )
                         ) : (
                           <div className="flex items-center">
                             {(creative.content.includes('://') && isSupabaseStorageUrl(creative.content)) ? (
-                              <div className="relative w-10 h-10 bg-gray-800 rounded overflow-hidden">
-                                {creative.thumbnail_url ? (
+                              creative.thumbnail_url ? (
+                                <div className="relative w-10 h-10 bg-gray-800 rounded overflow-hidden">
                                   <img 
                                     src={creative.thumbnail_url} 
                                     alt="Video thumbnail" 
                                     className="w-full h-full object-cover"
                                   />
-                                ) : (
-                                  <div className="absolute inset-0 flex items-center justify-center">
-                                    <HardDrive className="h-5 w-5 text-white" />
-                                  </div>
-                                )}
-                              </div>
+                                </div>
+                              ) : (
+                                <HardDrive className="h-5 w-5 text-white" />
+                              )
                             ) : (
-                              <img 
-                                src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
-                                alt="TikTok"
-                                className="h-5 w-5"
-                              />
+                              <svg 
+                                viewBox="0 0 24 24" 
+                                fill="currentColor"
+                                className="h-5 w-5 text-white"
+                              >
+                                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                              </svg>
                             )}
                           </div>
                         )}
@@ -636,11 +695,7 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                             {creative.mergedInstagramReelUrl && (
                               <div className="flex items-center gap-1 mt-1 ml-4">
                                 <span className="text-gray-400">↳</span>
-                                <img 
-                                  src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
-                                  alt="Instagram"
-                                  className="h-4 w-4" 
-                                />
+                                <Instagram className="h-4 w-4 text-white" />
                                 <div className="relative group">
                                   <a
                                     href={creative.mergedInstagramReelUrl}
@@ -676,11 +731,13 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                             {creative.mergedTiktokAuthCode && (
                               <div className="flex items-center gap-1 mt-1 ml-4">
                                 <span className="text-gray-400">↳</span>
-                                <img 
-                                  src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
-                                  alt="TikTok"
-                                  className="h-4 w-4"
-                                />
+                                <svg 
+                                  viewBox="0 0 24 24" 
+                                  fill="currentColor"
+                                  className="h-4 w-4 text-white"
+                                >
+                                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                                </svg>
                                 <span className="truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] text-xs text-gray-500 dark:text-gray-400" title={creative.mergedTiktokAuthCode}>
                                   {creative.mergedTiktokAuthCode}
                                 </span>
@@ -734,11 +791,7 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                         {creative.mergedInstagramReelUrl && !creative.videoName && (
                           <div className="flex items-center gap-1 mt-1 ml-4">
                             <span className="text-gray-400">↳</span>
-                            <img 
-                              src="https://swipeup-marketing.com/wp-content/uploads/2025/01/instagram-white-icon.png"
-                              alt="Instagram" 
-                              className="h-4 w-4"
-                            />
+                            <Instagram className="h-4 w-4 text-white" />
                             <a
                               href={creative.mergedInstagramReelUrl}
                               target="_blank"
@@ -772,11 +825,13 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                         {creative.mergedTiktokAuthCode && !creative.videoName && (
                           <div className="flex items-center gap-1 mt-1 ml-4">
                             <span className="text-gray-400">↳</span>
-                            <img 
-                              src="https://swipeup-marketing.com/wp-content/uploads/2025/01/e19bb6a0396fdfff0220c982289ff11c.png"
-                              alt="TikTok"
-                              className="h-4 w-4"
-                            />
+                            <svg 
+                              viewBox="0 0 24 24" 
+                              fill="currentColor"
+                              className="h-4 w-4 text-white"
+                            >
+                              <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                            </svg>
                             <span className="truncate block max-w-[150px] sm:max-w-[200px] md:max-w-[250px] text-xs text-gray-500 dark:text-gray-400" title={creative.mergedTiktokAuthCode}>
                               {creative.mergedTiktokAuthCode}
                             </span>
