@@ -6,9 +6,8 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 import moment from 'moment';
 import { useContentPlanStore } from '../store/contentPlanStore';
 import { useStore } from '../store';
-import { Loader, AlertCircle, Filter, Plus, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Loader, AlertCircle, Plus, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { ContentPlanPostModal } from './ContentPlanPostModal';
-import { ContentPlanFilterMenu } from './ContentPlanFilterMenu';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Create DnD Calendar
@@ -34,7 +33,6 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
   const { artists } = useStore();
   const [showPostModal, setShowPostModal] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any>(null);
-  const [showFilters, setShowFilters] = useState(false);
   const [draggedPost, setDraggedPost] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'month' | 'agenda'>('month');
   const [downloadingVideos, setDownloadingVideos] = useState<Set<string>>(new Set());
@@ -302,16 +300,6 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
         
         <div className="flex gap-2">
           <motion.button
-            onClick={() => setShowFilters(!showFilters)}
-            className="btn-outline flex items-center gap-1"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <Filter className="h-4 w-4" />
-            <span>Filters</span>
-          </motion.button>
-          
-          <motion.button
             onClick={() => {
               setSelectedPost(null);
               setShowPostModal(true);
@@ -326,18 +314,6 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
         </div>
       </div>
       
-      <AnimatePresence>
-        {showFilters && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <ContentPlanFilterMenu artistId={artistId} />
-          </motion.div>
-        )}
-      </AnimatePresence>
       
       {/* Navigation Header - Always Visible */}
       <div className="flex justify-between items-center mb-4">
