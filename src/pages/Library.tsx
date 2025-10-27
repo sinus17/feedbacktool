@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Loader, Grid3x3, Play } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -75,9 +75,62 @@ export const Library: React.FC = () => {
     return () => clearInterval(interval);
   }, [processingVideos.size]);
 
+  const filterVideos = useCallback(() => {
+    console.log('🔎 Filtering videos, total:', videos.length);
+    let filtered = [...videos];
+
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (v) =>
+          v.title?.toLowerCase().includes(query) ||
+          v.description?.toLowerCase().includes(query) ||
+          v.accountUsername?.toLowerCase().includes(query) ||
+          (typeof v.genre === 'string' && v.genre.toLowerCase().includes(query)) ||
+          (typeof v.category === 'string' && v.category.toLowerCase().includes(query)) ||
+          v.tags?.some((tag) => tag.toLowerCase().includes(query))
+      );
+    }
+
+    // Genre filter
+    if (selectedGenre !== 'all') {
+      filtered = filtered.filter((v) => {
+        if (Array.isArray(v.genre)) {
+          return v.genre.includes(selectedGenre);
+        }
+        return v.genre === selectedGenre;
+      });
+    }
+
+    // Type filter (song-specific / off-topic)
+    if (selectedType !== 'all') {
+      filtered = filtered.filter((v) => v.type === selectedType);
+    }
+
+    // Category filter (Performance, Relatable, Entertainment, Personal, Adaptable)
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter((v) => {
+        // Special handling for Adaptable - check is_adaptable field
+        if (selectedCategory === 'Adaptable') {
+          return v.isAdaptable === true;
+        }
+        // For other categories, check the category array
+        if (Array.isArray(v.category)) {
+          return v.category.includes(selectedCategory);
+        }
+        return v.category === selectedCategory;
+      });
+    }
+
+    console.log('✅ Filtered videos:', filtered.length);
+    console.log('💾 Setting filteredVideos state...');
+    setFilteredVideos(filtered);
+  }, [videos, searchQuery, selectedGenre, selectedType, selectedCategory]);
+
   useEffect(() => {
     filterVideos();
-  }, [videos, searchQuery, selectedGenre, selectedType, selectedCategory]);
+  }, [filterVideos]);
 
   const loadUserProfile = async () => {
     console.log('👤 Loading user profile...');
@@ -192,6 +245,7 @@ export const Library: React.FC = () => {
         tags: v.tags,
         type: v.type,
         actor: v.actor,
+        isAdaptable: v.is_adaptable,
         contentDescription: v.content_description,
         whyItWorks: v.why_it_works,
         artistRecommendation: v.artist_recommendation,
@@ -247,48 +301,6 @@ export const Library: React.FC = () => {
     }, 7000);
   };
 
-  const filterVideos = () => {
-    console.log('🔎 Filtering videos, total:', videos.length);
-    let filtered = [...videos];
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (v) =>
-          v.title?.toLowerCase().includes(query) ||
-          v.description?.toLowerCase().includes(query) ||
-          v.accountUsername?.toLowerCase().includes(query) ||
-          (typeof v.genre === 'string' && v.genre.toLowerCase().includes(query)) ||
-          (typeof v.category === 'string' && v.category.toLowerCase().includes(query)) ||
-          v.tags?.some((tag) => tag.toLowerCase().includes(query))
-      );
-    }
-
-    // Genre filter
-    if (selectedGenre !== 'all') {
-      filtered = filtered.filter((v) => v.genre === selectedGenre);
-    }
-
-    // Type filter (song-specific / off-topic)
-    if (selectedType !== 'all') {
-      filtered = filtered.filter((v) => v.type === selectedType);
-    }
-
-    // Category filter (Performance, Relatable, Entertainment, Personal)
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter((v) => {
-        if (Array.isArray(v.category)) {
-          return v.category.includes(selectedCategory);
-        }
-        return v.category === selectedCategory;
-      });
-    }
-
-    console.log('✅ Filtered videos:', filtered.length);
-    console.log('💾 Setting filteredVideos state...');
-    setFilteredVideos(filtered);
-  };
 
   const genres = Array.from(new Set(videos.flatMap((v) => v.genre || []).filter(Boolean)));
   const canEdit = userTeam === 'admin' || userTeam === 'management';
@@ -374,6 +386,7 @@ export const Library: React.FC = () => {
                 <option value="Relatable">Relatable</option>
                 <option value="Entertainment">Entertainment</option>
                 <option value="Personal">Personal</option>
+                <option value="Adaptable">Adaptable</option>
               </select>
 
               {/* View Mode Toggle - Fits perfectly next to Category on mobile */}

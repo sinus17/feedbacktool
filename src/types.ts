@@ -120,6 +120,7 @@ export interface LibraryVideo {
   type?: 'song-specific' | 'off-topic';
   actor?: 'solo' | 'multiple';
   tags?: string[];
+  isAdaptable?: boolean;
   contentDescription?: string;
   whyItWorks?: string;
   artistRecommendation?: string;

@@ -66,7 +66,7 @@ interface TikTokTrendingPost {
 
 
 export const RecommendationsSection: React.FC = () => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [recommendations, setRecommendations] = useState<TikTokTrendingPost[]>([]);
