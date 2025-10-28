@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Calendar, FileText, Trash2, Plus, HardDrive, Loader, MessageSquare, Instagram } from 'lucide-react';
+import { Calendar, FileText, Trash2, Plus, HardDrive, Loader, MessageSquare, Instagram, AlertCircle } from 'lucide-react';
 import { useStore } from '../store';
 import { AdCreativeSubmissionModal } from '../components/AdCreativeSubmissionModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
@@ -13,6 +13,8 @@ export const ArtistAdCreatives: React.FC = () => {
   const { artists, adCreatives, fetchAdCreatives, fetchArtists, deleteAdCreative, loading } = useStore();
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [previewModal, setPreviewModal] = useState<{
     isOpen: boolean;
     videoUrl: string;
@@ -49,8 +51,22 @@ export const ArtistAdCreatives: React.FC = () => {
   }, [id, fetchAdCreatives]);
 
   useEffect(() => {
-    fetchArtistAdCreatives().catch(console.error);
-    fetchArtists().catch(console.error);
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        await Promise.all([
+          fetchArtistAdCreatives(),
+          fetchArtists()
+        ]);
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Error loading ad creatives:', err);
+        setError('Failed to load ad creatives. Please try refreshing the page.');
+        setIsLoading(false);
+      }
+    };
+    loadData();
   }, [fetchArtistAdCreatives, fetchArtists]);
 
   // Watch for changes in adCreatives length and re-fetch if needed to maintain filtering
@@ -183,16 +199,58 @@ export const ArtistAdCreatives: React.FC = () => {
     }
   };
   
-  if (!artist) {
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="text-center max-w-md">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Error Loading Ad Creatives
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            {error}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (isLoading || (!artist && artists.length === 0)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading ad creatives...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!artist) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="text-center">
+          <AlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Artist not found
           </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Please check the URL and try again
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            The artist you're looking for doesn't exist or has been removed.
           </p>
+          <button
+            onClick={() => window.history.back()}
+            className="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     );

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { Calendar, FileText } from 'lucide-react';
+import { Calendar, FileText, AlertCircle } from 'lucide-react';
 import { useStore } from '../store';
 import { ContentPlanCalendar } from '../components/ContentPlanCalendar';
 import { useEffect } from 'react';
@@ -11,25 +11,85 @@ export const ArtistContentPlan: React.FC = () => {
   const isEmbedded = searchParams.get('embedded') === 'true';
   const releaseDate = searchParams.get('releaseDate') || undefined;
   const { artists, fetchArtists } = useStore();
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const artist = artists.find(a => a.id === id);
 
   useEffect(() => {
-    if (id) {
-      fetchArtists().catch(console.error);
-    }
-  }, [id]);
+    const loadData = async () => {
+      if (!id) {
+        setError('No artist ID provided');
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        setIsLoading(true);
+        setError(null);
+        await fetchArtists();
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Error loading content plan:', err);
+        setError('Failed to load content plan. Please try refreshing the page.');
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, [id, fetchArtists]);
   
-  if (!artist) {
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="text-center max-w-md">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Error Loading Content Plan
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            {error}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (isLoading || (!artist && artists.length === 0)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading content plan...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!artist) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="text-center">
+          <AlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Artist not found
           </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Please check the URL and try again
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            The artist you're looking for doesn't exist or has been removed.
           </p>
+          <button
+            onClick={() => window.history.back()}
+            className="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     );

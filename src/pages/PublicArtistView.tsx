@@ -1,23 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { Plus, Calendar, FileText } from 'lucide-react';
+import { Plus, Calendar, FileText, AlertCircle } from 'lucide-react';
 import { useStore } from '../store';
 import { SubmissionForm } from '../components/SubmissionForm';
 import { VideoList } from '../components/VideoList';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 export const PublicArtistView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [showForm, setShowForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { artists, submissions, fetchArtists, fetchSubmissions, fetchAdCreatives } = useStore();
   const location = useLocation();
 
   useEffect(() => {
-    if (id) {
-      fetchArtists();
-      fetchSubmissions(1, 1000, { artistId: id }).catch(console.error);
-      fetchAdCreatives();
-    }
-  }, [id]);
+    const loadData = async () => {
+      if (!id) {
+        setError('No artist ID provided');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Fetch data in parallel with error handling
+        const results = await Promise.allSettled([
+          fetchArtists(),
+          fetchSubmissions(1, 1000, { artistId: id }),
+          fetchAdCreatives()
+        ]);
+
+        // Check if any critical fetch failed
+        const artistsFetch = results[0];
+        if (artistsFetch.status === 'rejected') {
+          console.error('Failed to fetch artists:', artistsFetch.reason);
+          setError('Failed to load artist data. Please try refreshing the page.');
+        }
+
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Error loading artist view:', err);
+        setError('An unexpected error occurred. Please try refreshing the page.');
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [id, fetchArtists, fetchSubmissions, fetchAdCreatives]);
 
   const artist = artists.find(a => a.id === id);
   
@@ -27,25 +59,58 @@ export const PublicArtistView: React.FC = () => {
   );
   const videoCount = artistSubmissions.length;
 
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="text-center max-w-md">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Error Loading Artist View
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            {error}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Show loading state while fetching artist data
-  if (!artist && artists.length === 0) {
+  if (isLoading || (!artist && artists.length === 0)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading artist data...</p>
+        </div>
       </div>
     );
   }
 
   if (!artist && artists.length > 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
         <div className="text-center">
+          <AlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Artist not found
           </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Please check the URL and try again
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            The artist you're looking for doesn't exist or has been removed.
           </p>
+          <button
+            onClick={() => window.history.back()}
+            className="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     );
@@ -145,9 +210,11 @@ export const PublicArtistView: React.FC = () => {
             </button>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-            <VideoList artistId={id} isArtistView={true} />
-          </div>
+          <ErrorBoundary>
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+              <VideoList artistId={id} isArtistView={true} />
+            </div>
+          </ErrorBoundary>
         </div>
 
         {showForm && (

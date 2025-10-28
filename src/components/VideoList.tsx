@@ -297,6 +297,16 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
     }
   };
 
+  // Safety check for submissions array
+  if (!Array.isArray(submissions)) {
+    console.error('VideoList: submissions is not an array', submissions);
+    return (
+      <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 text-center">
+        <p className="text-gray-400">Unable to load video submissions. Please refresh the page.</p>
+      </div>
+    );
+  }
+
   return (
     <>
     <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
