@@ -1,5 +1,5 @@
 // Service Worker for SwipeUp PWA
-const CACHE_NAME = 'swipeup-v9-20251028-cache-bust';
+const CACHE_NAME = 'swipeup-v10-20251028-force-update';
 const urlsToCache = [
   '/plane_new.png',
   '/NEU_PSD_swipeup-marketing_2.png'
@@ -10,7 +10,7 @@ const VAPID_PUBLIC_KEY = 'BLeXYHMpjqspKNY_pxGtuCHgDbH6IxE6Ksk0vAtZPySciN9JvgrDX2
 
 // Install event - cache resources
 self.addEventListener('install', (event) => {
-  console.log('Service Worker installing...');
+  console.log('Service Worker v10 installing - force update...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -18,6 +18,7 @@ self.addEventListener('install', (event) => {
         return cache.addAll(urlsToCache);
       })
   );
+  // Force immediate activation
   self.skipWaiting();
 });
 
