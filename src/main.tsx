@@ -12,6 +12,11 @@ if ('serviceWorker' in navigator && !isInstagramBrowser) {
       .then((registration) => {
         console.log('✅ Service Worker registered:', registration);
         
+        // Check for updates immediately on page load
+        registration.update().then(() => {
+          console.log('🔍 Checked for service worker updates on page load');
+        });
+        
         // Check for updates every 60 seconds
         setInterval(() => {
           registration.update();
