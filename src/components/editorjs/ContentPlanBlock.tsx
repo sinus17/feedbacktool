@@ -5,7 +5,6 @@ export class ContentPlanBlock {
   // @ts-expect-error - Required by Editor.js interface
   private _readOnly: boolean;
   private data: { artistId: string; releaseDate?: string };
-  private config: any;
   private wrapper: HTMLElement | null = null;
 
   static get toolbox() {
@@ -22,7 +21,6 @@ export class ContentPlanBlock {
   constructor({ data, api, readOnly, config }: any) {
     this._api = api;
     this._readOnly = readOnly;
-    this.config = config;
     // Use data artistId if available, otherwise fall back to config artistId
     this.data = {
       artistId: data?.artistId || config?.artistId || '',
