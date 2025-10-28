@@ -356,7 +356,8 @@ export const ReleaseSheetEditor: React.FC = () => {
     if (itemId) {
       loadSheet();
     }
-  }, [itemId, loadSheet]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemId]);
 
   // Real-time subscription for collaborative editing
   useEffect(() => {
@@ -1962,7 +1963,7 @@ export const ReleaseSheetEditor: React.FC = () => {
       <div className="mx-auto max-w-5xl px-8" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
         {sheet && sheet.content && editorData && (
           <EditorJSWrapper
-            key={`${sheet.id}-${sheet.updated_at}`}
+            key={sheet.id}
             data={editorData}
             onChange={(data) => {
               console.log('💾 Editor.js data changed:', data);

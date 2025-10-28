@@ -233,8 +233,12 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
       return false;
     }
     
-    // If we're in artist view, show ALL videos for the artist regardless of status
+    // If we're in artist view, hide archived videos unless specifically filtered
     if (isArtistView) {
+      // Hide archived videos unless explicitly filtered for them
+      if (!filters.status && sub.status === 'archived') {
+        return false;
+      }
       return true;
     }
     
