@@ -33,6 +33,43 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <title>SwipeUp</title>
+    
+    <!-- Emergency cache clear script - runs before anything else -->
+    <script>
+      (function() {
+        // Check if we need to force clear (version mismatch)
+        const CURRENT_VERSION = 'v11-20251028';
+        const storedVersion = localStorage.getItem('app_version');
+        
+        if (storedVersion !== CURRENT_VERSION) {
+          console.log('🔥 Version mismatch detected, clearing all caches...');
+          
+          // Clear all service workers
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              for (let registration of registrations) {
+                registration.unregister();
+                console.log('🗑️ Unregistered service worker');
+              }
+            });
+          }
+          
+          // Clear all caches
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              for (let name of names) {
+                caches.delete(name);
+                console.log('🗑️ Deleted cache:', name);
+              }
+            });
+          }
+          
+          // Update version
+          localStorage.setItem('app_version', CURRENT_VERSION);
+          console.log('✅ Cache cleared, version updated to', CURRENT_VERSION);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
