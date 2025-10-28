@@ -402,7 +402,7 @@ export const ContentPlanCalendar: React.FC<ContentPlanCalendarProps> = ({ artist
       </div>
       
       <motion.div 
-        className={`${embedded ? 'bg-gray-800' : 'bg-white dark:bg-gray-800'} rounded-lg shadow-md ${embedded ? 'h-[420px] p-2' : 'h-[600px] p-4'}`}
+        className={`${embedded ? 'bg-gray-800' : 'bg-white dark:bg-gray-800'} rounded-lg shadow-md ${embedded ? 'h-[580px] p-2' : 'h-[600px] p-4'}`}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}

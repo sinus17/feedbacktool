@@ -37,12 +37,14 @@ export class ContentPlanBlock {
 
     if (this.data.artistId) {
       const iframe = document.createElement('iframe');
-      let url = `http://localhost:3000/artist/${this.data.artistId}/content-plan?embedded=true`;
+      // Always use production URL
+      let url = `https://tool.swipeup-marketing.com/artist/${this.data.artistId}/content-plan?embedded=true`;
       if (this.data.releaseDate) {
         url += `&releaseDate=${encodeURIComponent(this.data.releaseDate)}`;
       }
       iframe.src = url;
-      iframe.style.cssText = 'width: 100%; height: 288px; border: none; border-radius: 0.5rem; background: black; display: block; overflow: hidden;';
+      // Increase height to show full calendar without scroll
+      iframe.style.cssText = 'width: 100%; height: 680px; border: none; border-radius: 0.5rem; background: black; display: block; overflow: hidden;';
       iframe.title = 'Content Plan Calendar';
       
       this.wrapper.appendChild(iframe);
