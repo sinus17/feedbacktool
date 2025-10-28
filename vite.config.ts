@@ -16,6 +16,17 @@ export default defineConfig({
           console.error('Failed to copy files:', err);
         }
       }
+    },
+    {
+      name: 'cache-bust-html',
+      transformIndexHtml(html) {
+        // Add timestamp query parameter to force cache invalidation
+        const timestamp = Date.now();
+        return html.replace(
+          /<script type="module" src="([^"]+)"><\/script>/g,
+          `<script type="module" src="$1?v=${timestamp}"></script>`
+        );
+      }
     }
   ],
   server: {
@@ -35,6 +46,10 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
+        // Use timestamp in chunk names for automatic cache busting
+        entryFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
+        chunkFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
+        assetFileNames: `assets/[name]-[hash]-${Date.now()}.[ext]`,
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           ui: ['lucide-react']
