@@ -187,7 +187,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           {isChristmasTime && <SnowEffect />}
-          <div className="bg-gray-50 dark:bg-dark-900 text-gray-900 dark:text-dark-100">
+          <div className="min-h-screen bg-gray-50 dark:bg-dark-900 text-gray-900 dark:text-dark-100">
             <Routes>
               {/* Public routes */}
               <Route path="/artist/:id" element={<PublicArtistView />} />
