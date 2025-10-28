@@ -63,7 +63,7 @@ interface StoreState {
   }) => Promise<void>;
   
   addSubmission: (submission: Omit<VideoSubmission, 'id' | 'messages' | 'createdAt' | 'updatedAt'>) => Promise<{ data?: VideoSubmission; error?: Error }>;
-  updateSubmission: (id: string, updates: Partial<VideoSubmission>, skipNotification?: boolean, isArtistUpdate?: boolean) => Promise<{ success: boolean; error?: Error }>;
+  updateSubmission: (id: string, updates: Partial<VideoSubmission>, skipNotification?: boolean) => Promise<{ success: boolean; error?: Error }>;
   deleteSubmission: (id: string) => Promise<void>;
   
   // Artist Actions
@@ -422,7 +422,7 @@ const useStore = create<StoreState>((set, get) => ({
   },
 
   // Update submission
-  updateSubmission: async (id: string, updates: Partial<VideoSubmission>, skipNotification = false, isArtistUpdate = false) => {
+  updateSubmission: async (id: string, updates: Partial<VideoSubmission>, skipNotification = false) => {
     try {
       set({ loading: true, error: null });
 
