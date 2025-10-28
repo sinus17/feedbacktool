@@ -51,23 +51,65 @@
                 registration.unregister();
                 console.log('🗑️ Unregistered service worker');
               }
-            });
-          }
-          
-          // Clear all caches
-          if ('caches' in window) {
-            caches.keys().then(function(names) {
-              for (let name of names) {
-                caches.delete(name);
-                console.log('🗑️ Deleted cache:', name);
+              
+              // Clear all caches
+              if ('caches' in window) {
+                caches.keys().then(function(names) {
+                  for (let name of names) {
+                    caches.delete(name);
+                    console.log('🗑️ Deleted cache:', name);
+                  }
+                  
+                  // Update version and force reload
+                  localStorage.setItem('app_version', CURRENT_VERSION);
+                  console.log('✅ Cache cleared, reloading page...');
+                  
+                  // Force hard reload after clearing
+                  setTimeout(function() {
+                    window.location.reload(true);
+                  }, 500);
+                });
               }
             });
+          } else {
+            // No service worker support, just update version
+            localStorage.setItem('app_version', CURRENT_VERSION);
           }
-          
-          // Update version
-          localStorage.setItem('app_version', CURRENT_VERSION);
-          console.log('✅ Cache cleared, version updated to', CURRENT_VERSION);
         }
+        
+        // Global error handler to catch syntax errors from old cached files
+        window.addEventListener('error', function(event) {
+          if (event.message && event.message.includes('Unexpected token')) {
+            console.error('🚨 Syntax error detected - likely old cached file. Force clearing...');
+            
+            // Mark that we need to clear
+            localStorage.setItem('force_clear', 'true');
+            
+            // Unregister service workers and reload
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for (let registration of registrations) {
+                  registration.unregister();
+                }
+                
+                // Clear caches
+                if ('caches' in window) {
+                  caches.keys().then(function(names) {
+                    for (let name of names) {
+                      caches.delete(name);
+                    }
+                    // Hard reload
+                    window.location.reload(true);
+                  });
+                } else {
+                  window.location.reload(true);
+                }
+              });
+            } else {
+              window.location.reload(true);
+            }
+          }
+        }, true);
       })();
     </script>
   </head>
