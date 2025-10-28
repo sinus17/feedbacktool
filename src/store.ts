@@ -514,21 +514,14 @@ const useStore = create<StoreState>((set, get) => ({
           const artist = get().artists.find(a => a.id === transformedSubmission.artistId);
           if (artist) {
             const { WhatsAppService } = await import('./services/whatsapp');
-            if (isArtistUpdate) {
-              await WhatsAppService.notifyArtist({
-                artist,
-                submission: transformedSubmission,
-                feedback: `Status updated to: ${transformedSubmission.status}`,
-                status: transformedSubmission.status
-              });
-            } else {
-              await WhatsAppService.notifyTeam({
-                artist,
-                submission: transformedSubmission,
-                feedback: `Status updated to: ${transformedSubmission.status}`,
-                status: transformedSubmission.status
-              });
-            }
+            // Always notify the artist (their WhatsApp group) about status changes
+            // The notifyArtist function will handle team notifications internally if needed
+            await WhatsAppService.notifyArtist({
+              artist,
+              submission: transformedSubmission,
+              feedback: updates.status ? `Status updated to: ${transformedSubmission.status}` : undefined,
+              status: transformedSubmission.status
+            });
           }
         } catch (notifyError) {
           console.error('Error sending WhatsApp notification:', notifyError);
