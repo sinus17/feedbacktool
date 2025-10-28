@@ -785,8 +785,13 @@ const useStore = create<StoreState>((set, get) => ({
       // Send WhatsApp notification for feedback
       if (isAdmin) {
         try {
+          console.log('🔔 Attempting to send WhatsApp notification for feedback...');
           const submission = get().submissions.find(s => s.id.toString() === submissionId.toString());
           const artist = get().artists.find(a => a.id === submission?.artistId);
+          
+          console.log('🔔 Found submission:', submission?.projectName);
+          console.log('🔔 Found artist:', artist?.name);
+          console.log('🔔 Artist WhatsApp Group ID:', artist?.whatsappGroupId);
           
           if (artist && submission) {
             const { WhatsAppService } = await import('./services/whatsapp');
@@ -797,10 +802,14 @@ const useStore = create<StoreState>((set, get) => ({
               status: submission.status
             });
             console.log('✅ WhatsApp notification sent for feedback on:', submission.projectName);
+          } else {
+            console.error('❌ Cannot send WhatsApp notification - missing artist or submission');
           }
         } catch (notifyError) {
-          console.error('Error sending WhatsApp notification for feedback:', notifyError);
+          console.error('❌ Error sending WhatsApp notification for feedback:', notifyError);
         }
+      } else {
+        console.log('⚠️ Skipping WhatsApp notification - not admin message');
       }
 
       return { success: true };
