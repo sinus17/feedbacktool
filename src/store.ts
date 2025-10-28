@@ -984,6 +984,35 @@ const useStore = create<StoreState>((set, get) => ({
           creative.id === id ? transformedCreative : creative
         )
       }));
+
+      // Send WhatsApp notification for status changes
+      try {
+        const { artists } = get();
+        const artist = artists.find(a => a.id === updatedCreative.artists_id);
+        
+        if (artist && artist.whatsappGroupId) {
+          // Import WhatsAppService dynamically
+          const { WhatsAppService } = await import('./services/whatsapp');
+          
+          await WhatsAppService.notifyAdCreativeUpdate({
+            artistName: artist.name,
+            artistId: String(artist.id),
+            artistGroupId: artist.whatsappGroupId,
+            platform: updatedCreative.platform,
+            content: updatedCreative.content,
+            status: updatedCreative.status,
+            rejectionReason: rejectionReason || undefined,
+            videoName: updatedCreative.video_name
+          });
+          
+          console.log('✅ WhatsApp notification sent for ad creative status change');
+        } else {
+          console.log('⚠️ No WhatsApp group ID found for artist, skipping notification');
+        }
+      } catch (notifyError) {
+        console.error('❌ Error sending WhatsApp notification:', notifyError);
+        // Don't throw - notification failure shouldn't break the status update
+      }
     } catch (error) {
       console.error('Error updating ad creative status:', error);
       throw error;
