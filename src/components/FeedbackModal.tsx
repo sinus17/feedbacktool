@@ -288,9 +288,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
       setError(null);
       setConfirmReady(false);
       
-      // Get the current artist for WhatsApp notification
-      const artist = artists.find(a => a.id === currentSubmission.artistId);
-      
       // Update the submission status
       // updateSubmission will handle the WhatsApp notification automatically
       const { success, error: updateError } = await updateSubmission(
