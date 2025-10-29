@@ -169,8 +169,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
           const { success, error: updateError } = await updateSubmission(
             currentSubmission.id.toString(),
             { videoUrl: newMessage.trim() }, 
-            false,  // Don't skip WhatsApp notification
-            true    // Flag to indicate this is an update from artist
+            false  // Don't skip WhatsApp notification
           );
   
           if (!success || updateError) {
@@ -293,10 +292,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
       const artist = artists.find(a => a.id === currentSubmission.artistId);
       
       // Update the submission status
+      // updateSubmission will handle the WhatsApp notification automatically
       const { success, error: updateError } = await updateSubmission(
         currentSubmission.id.toString(),
         { status: 'ready' },
-        false  // Don't skip WhatsApp notification
+        false  // Don't skip WhatsApp notification - updateSubmission will send it
       );
 
       if (!success || updateError) {
@@ -306,24 +306,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ submission: initia
           return;
         }
         throw updateError || new Error('Failed to mark as ready');
-      }
-      
-      // Send a WhatsApp notification about the status change
-      try {
-        if (artist) {
-          const { WhatsAppService } = await import('../services/whatsapp');
-          await WhatsAppService.notifyArtist({
-            artist,
-            submission: {
-              ...currentSubmission,
-              status: 'ready'
-            },
-            feedback: 'Your video has been approved and is ready for use! ✅',
-            status: 'ready'
-          });
-        }
-      } catch (notifyError) {
-        console.error('Error sending ready notification:', notifyError);
       }
       
       // Refresh the submissions list to show updated status
