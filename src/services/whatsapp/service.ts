@@ -5,6 +5,11 @@ import { supabase } from '../../lib/supabase';
 class WhatsAppServiceImpl implements IWhatsAppService {
   private readonly TEAM_GROUP_ID = import.meta.env.VITE_TEAM_GROUP_ID || '120363291976373833';
   private readonly AD_CREATIVE_GROUP_ID = import.meta.env.VITE_AD_CREATIVE_GROUP_ID || '120363376937486419';
+  
+  // Track sent messages to prevent duplicates (with timestamp for cleanup)
+  private sentMessages = new Map<string, number>();
+  private MESSAGE_DEDUP_WINDOW = 5000; // 5 seconds deduplication window
+  
   // Notification configuration
   private readonly NOTIFICATION_RULES = {
     ADMIN_FEEDBACK_TO_ARTIST_ONLY: true,  // When admin sends feedback, only notify artist
@@ -57,6 +62,27 @@ class WhatsAppServiceImpl implements IWhatsAppService {
       if (!cleanGroupId || cleanGroupId.length < 15) {
         console.error('❌ WhatsApp: Group ID is too short or invalid:', params.groupId, 'cleaned:', cleanGroupId);
         return;
+      }
+      
+      // Create a unique message key for deduplication
+      const messageKey = `${cleanGroupId}:${params.text.substring(0, 100)}`;
+      const now = Date.now();
+      
+      // Check if we've sent this exact message recently
+      const lastSent = this.sentMessages.get(messageKey);
+      if (lastSent && (now - lastSent) < this.MESSAGE_DEDUP_WINDOW) {
+        console.log('⚠️ WhatsApp: Duplicate message detected, skipping send (sent', now - lastSent, 'ms ago)');
+        return;
+      }
+      
+      // Mark this message as sent
+      this.sentMessages.set(messageKey, now);
+      
+      // Clean up old entries (older than dedup window)
+      for (const [key, timestamp] of this.sentMessages.entries()) {
+        if (now - timestamp > this.MESSAGE_DEDUP_WINDOW) {
+          this.sentMessages.delete(key);
+        }
       }
       
       console.log('🔔 WhatsApp: Preparing to send message to:', `${cleanGroupId}@g.us`);
