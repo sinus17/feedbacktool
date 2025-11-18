@@ -78,7 +78,17 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
         true // Skip WhatsApp notification
       );
 
-      // Archive action completed successfully
+      // Refresh submissions to update the list (especially for artist view)
+      if (isArtistView && artistId) {
+        await fetchSubmissions(1, 1000, { artistId }, true);
+      } else if (filters) {
+        await fetchSubmissions(
+          submissionsPagination.currentPage,
+          submissionsPagination.pageSize,
+          filters,
+          true
+        );
+      }
     } catch (error) {
       console.error('Failed to archive video:', error);
     }
@@ -233,32 +243,20 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
       return false;
     }
     
-    // If we're in artist view, hide archived videos unless specifically filtered
-    if (isArtistView) {
-      // Hide archived videos unless explicitly filtered for them
-      if (!filters.status && sub.status === 'archived') {
-        return false;
-      }
-      return true;
-    }
+    // For both artist and admin view:
+    // Note: archived videos are already filtered out in the database query (store.ts)
+    // unless explicitly filtered for them, so we don't need to filter them again here
     
-    // For admin view, apply filters
-    let matchesFilters = true;
-    
+    // Apply type and status filters if provided
     if (filters.type && sub.type !== filters.type) {
-      matchesFilters = false;
+      return false;
     }
     
     if (filters.status && sub.status !== filters.status) {
-      matchesFilters = false;
+      return false;
     }
     
-    // If no status filter is applied, hide archived by default in admin view
-    if (!filters.status && sub.status === 'archived') {
-      matchesFilters = false;
-    }
-    
-    return matchesFilters;
+    return true;
   });
   
   // Sort submissions by status (if no filters) or date

@@ -115,8 +115,8 @@ const useStore = create<StoreState>((set, get) => ({
     try {
       set({ loading: true, error: null });
 
-      // Create cache key based on filters
-      const cacheKey = `submissions_${page}_${limit}_${JSON.stringify(filters)}`;
+      // Create cache key based on filters (v2 to invalidate old cache with archived videos)
+      const cacheKey = `submissions_v2_${page}_${limit}_${JSON.stringify(filters)}`;
       
       // Skip cache if explicitly requested (e.g., after status updates)
       if (!skipCache) {
@@ -169,6 +169,9 @@ const useStore = create<StoreState>((set, get) => ({
       }
       if (filters.status) {
         query = query.eq('status' as any, filters.status as any);
+      } else {
+        // If no status filter is applied, exclude archived videos by default
+        query = query.neq('status' as any, 'archived' as any);
       }
 
       // Apply pagination and ordering
@@ -496,6 +499,11 @@ const useStore = create<StoreState>((set, get) => ({
         loading: false
       }));
 
+      // Invalidate cache if status changed (especially for archived videos)
+      if (updates.status) {
+        cache.clearAll();
+      }
+
       // Refresh ad creatives if status changed to ready (database trigger handles creation)
       if (updates.status === 'ready' && transformedSubmission.type === 'song-specific') {
         console.log('🎯 Video set to ready, database trigger will handle ad creative creation:', transformedSubmission.projectName);
@@ -569,6 +577,9 @@ const useStore = create<StoreState>((set, get) => ({
         submissions: state.submissions.filter(sub => sub.id.toString() !== id),
         loading: false
       }));
+
+      // Clear cache to refresh pagination counts
+      cache.clearAll();
     } catch (error) {
       console.error('Error deleting submission:', error);
       set({ 

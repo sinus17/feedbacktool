@@ -41,7 +41,11 @@ export const PreviewArtistView: React.FC = () => {
     );
   }
 
-  const filteredSubmissions = submissions.filter(s => s.artistId === id);
+  // Filter submissions for this artist (archived videos already filtered by database)
+  const artistSubmissions = submissions.filter(submission => 
+    String(submission.artistId) === String(id)
+  );
+  const videoCount = artistSubmissions.length;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -64,7 +68,7 @@ export const PreviewArtistView: React.FC = () => {
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-2xl font-semibold dark:text-white">
-                {artist.name}'s Videos
+                {artist.name}'s Videos ({videoCount})
               </h2>
               <p className="text-gray-600 dark:text-gray-400">
                 Submit and manage your video feedback
@@ -77,14 +81,14 @@ export const PreviewArtistView: React.FC = () => {
           </div>
 
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-            <VideoList artistId={artist.id} isArtistView={true} />
+            <VideoList artistId={String(artist.id)} isArtistView={true} />
           </div>
         </div>
 
         {showForm && (
           <SubmissionForm 
             onClose={() => setShowForm(false)} 
-            artistId={artist.id}
+            artistId={String(artist.id)}
           />
         )}
       </main>
