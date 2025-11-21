@@ -441,25 +441,46 @@ export const SubmissionForm: React.FC<SubmissionFormProps> = ({ onClose, artistI
                       exit={{ opacity: 0 }}
                       className="flex flex-col items-center"
                     >
-                      <div className="flex items-center">
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        >
-                          <Upload className="h-5 w-5" />
-                        </motion.div>
-                        <span className="ml-2">{Math.round(uploadProgress)}%</span>
-                      </div>
-                      {uploadStats && (
-                        <div className="text-xs text-gray-500 mt-1 text-center">
-                          <div>{uploadStats.fileSize}</div>
-                          {uploadStats.remainingTime > 0 && (
-                            <div>{formatTime(uploadStats.remainingTime)} remaining</div>
-                          )}
-                          {uploadStats.uploadSpeed > 0 && (
-                            <div>{formatSpeed(uploadStats.uploadSpeed)}</div>
+                      {uploadProgress >= 95 ? (
+                        <div className="flex flex-col items-center">
+                          <div className="flex items-center">
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                            >
+                              <Loader className="h-5 w-5" />
+                            </motion.div>
+                            <span className="ml-2">Processing...</span>
+                          </div>
+                          {uploadStats && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              {uploadStats.fileSize}
+                            </div>
                           )}
                         </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center">
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                            >
+                              <Upload className="h-5 w-5" />
+                            </motion.div>
+                            <span className="ml-2">{Math.round(uploadProgress)}%</span>
+                          </div>
+                          {uploadStats && (
+                            <div className="text-xs text-gray-500 mt-1 text-center">
+                              <div>{uploadStats.fileSize}</div>
+                              {uploadStats.remainingTime > 0 && (
+                                <div>{formatTime(uploadStats.remainingTime)} remaining</div>
+                              )}
+                              {uploadStats.uploadSpeed > 0 && (
+                                <div>{formatSpeed(uploadStats.uploadSpeed)}</div>
+                              )}
+                            </div>
+                          )}
+                        </>
                       )}
                     </motion.div>
                   ) : (

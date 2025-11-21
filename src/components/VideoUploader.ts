@@ -56,10 +56,10 @@ export class VideoUploader {
         throw new Error('Please select a valid video file (MP4, WebM, or MOV).');
       }
 
-      // Validate file size (200MB max)
-      const maxSize = 200 * 1024 * 1024; // 200MB in bytes
+      // Validate file size (300MB max)
+      const maxSize = 300 * 1024 * 1024; // 300MB in bytes
       if (file.size > maxSize) {
-        throw new Error(`File size must be less than 200MB. Current file: ${this.formatFileSize(file.size)}`);
+        throw new Error(`File size must be less than 300MB. Current file: ${this.formatFileSize(file.size)}`);
       }
 
       console.log(`Starting upload: ${file.name} (${this.formatFileSize(file.size)})`);
