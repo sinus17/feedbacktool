@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Trash2, Edit, Download, Archive, MoveRight, Loader } from 'lucide-react';
+import { MessageSquare, Trash2, Edit, Download, Archive, MoveRight, Loader, ChevronRight, ChevronDown } from 'lucide-react';
 import { useStore } from '../store';
 import { FeedbackModal } from './FeedbackModal';
 import { EditVideoModal } from './EditVideoModal';
@@ -22,6 +22,7 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
   const [selectedVideo, setSelectedVideo] = useState<VideoSubmission | null>(null);
   const [editingVideo, setEditingVideo] = useState<VideoSubmission | null>(null);
   const [downloadingVideos, setDownloadingVideos] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
   
   const { 
     submissions, 
@@ -80,7 +81,7 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
 
       // Refresh submissions to update the list (especially for artist view)
       if (isArtistView && artistId) {
-        await fetchSubmissions(1, 1000, { artistId }, true);
+        await fetchSubmissions(1, 1000, { artistId, includeArchived: true }, true);
       } else if (filters) {
         await fetchSubmissions(
           submissionsPagination.currentPage,
@@ -299,6 +300,89 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
     }
   };
 
+  const getStatusLabel = (status: VideoSubmission['status']) => {
+    switch (status) {
+      case 'new':
+        return 'New';
+      case 'feedback-needed':
+        return 'Feedback Needed';
+      case 'correction-needed':
+        return 'Correction Needed';
+      case 'ready':
+        return 'Ready';
+      case 'planned':
+        return 'Planned';
+      case 'posted':
+        return 'Posted';
+      case 'archived':
+        return 'Archived';
+      default:
+        return status;
+    }
+  };
+
+  const getStatusHeaderClass = (status: VideoSubmission['status']) => {
+    const baseClasses = 'border-l-4';
+    switch (status) {
+      case 'new':
+        return `${baseClasses} bg-blue-500/20 border-blue-500`;
+      case 'feedback-needed':
+        return `${baseClasses} bg-yellow-500/20 border-yellow-500`;
+      case 'correction-needed':
+        return `${baseClasses} bg-red-500/20 border-red-500`;
+      case 'ready':
+        return `${baseClasses} bg-emerald-500/20 border-emerald-500`;
+      case 'planned':
+        return `${baseClasses} bg-green-500/20 border-green-500`;
+      case 'posted':
+        return `${baseClasses} bg-purple-500/20 border-purple-500`;
+      case 'archived':
+        return `${baseClasses} bg-gray-500/20 border-gray-500`;
+      default:
+        return `${baseClasses} bg-gray-500/20 border-gray-500`;
+    }
+  };
+
+  const getStatusTextColor = (status: VideoSubmission['status']) => {
+    switch (status) {
+      case 'new':
+        return 'text-blue-300';
+      case 'feedback-needed':
+        return 'text-yellow-300';
+      case 'correction-needed':
+        return 'text-red-300';
+      case 'ready':
+        return 'text-emerald-300';
+      case 'planned':
+        return 'text-green-300';
+      case 'posted':
+        return 'text-purple-300';
+      case 'archived':
+        return 'text-gray-300';
+      default:
+        return 'text-gray-300';
+    }
+  };
+
+  // Group submissions by status (including archived separately)
+  const groupedSubmissions = sortedSubmissions.reduce((groups, submission) => {
+    const status = submission.status;
+    if (!groups[status]) {
+      groups[status] = [];
+    }
+    groups[status].push(submission);
+    return groups;
+  }, {} as Record<string, VideoSubmission[]>);
+
+  // Get ordered status keys that have videos (excluding archived)
+  const orderedStatusKeys = (Object.keys(statusOrder) as VideoSubmission['status'][])
+    .filter(status => status !== 'archived' && groupedSubmissions[status]?.length > 0)
+    .sort((a, b) => statusOrder[a] - statusOrder[b]);
+
+  // Get archived videos separately
+  const archivedVideos = groupedSubmissions['archived'] || [];
+  const hasArchivedVideos = archivedVideos.length > 0;
+
   // Safety check for submissions array
   if (!Array.isArray(submissions)) {
     console.error('VideoList: submissions is not an array', submissions);
@@ -349,7 +433,18 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
               </td>
             </tr>
           ) : (
-            sortedSubmissions.map((submission) => (
+            orderedStatusKeys.map((status) => (
+              <React.Fragment key={status}>
+                {/* Status Group Header */}
+                <tr className={getStatusHeaderClass(status as VideoSubmission['status'])}>
+                  <td colSpan={artistId ? 6 : 7} className="px-6 py-2">
+                    <div className={`text-sm font-medium ${getStatusTextColor(status as VideoSubmission['status'])}`}>
+                      {getStatusLabel(status as VideoSubmission['status'])} ({groupedSubmissions[status].length})
+                    </div>
+                  </td>
+                </tr>
+                {/* Videos in this status group */}
+                {groupedSubmissions[status].map((submission) => (
               <tr key={submission.id} className="hover:bg-gray-800/50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-white w-3/5 truncate">
@@ -463,7 +558,147 @@ export const VideoList: React.FC<VideoListProps> = ({ artistId, filters = {}, is
                   </div>
                 </td>
               </tr>
+                ))}
+              </React.Fragment>
             ))
+          )}
+          
+          {/* Archived Section */}
+          {hasArchivedVideos && (
+            <>
+              <tr 
+                className="bg-gray-500/20 border-l-4 border-gray-500 cursor-pointer hover:bg-gray-500/30 transition-colors"
+                onClick={() => setShowArchived(!showArchived)}
+              >
+                <td colSpan={artistId ? 6 : 7} className="px-6 py-2">
+                  <div className="flex items-center space-x-2 text-sm font-medium text-gray-300">
+                    {showArchived ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    <span>Archived ({archivedVideos.length})</span>
+                  </div>
+                </td>
+              </tr>
+              
+              {/* Archived Videos */}
+              {showArchived && archivedVideos.map((submission) => (
+                <tr key={submission.id} className="hover:bg-gray-800/50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-white w-3/5 truncate">
+                      {submission.projectName}
+                    </div>
+                  </td>
+                  {!artistId && (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-300">
+                        {getArtistName(submission.artistId)}
+                      </div>
+                    </td>
+                  )}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-300 capitalize">
+                      {submission.type.replace('-', ' ')}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(submission.status)}`}>
+                        {submission.status.replace(/-/g, ' ')}
+                      </span>
+                      {submission.status === 'ready' && submission.type === 'song-specific' && (
+                        isVideoInAdCreatives(submission.videoUrl) ? (
+                          <div
+                            className="text-green-500 dark:text-green-400"
+                            title="Already in Ad Creatives"
+                          >
+                            <AdTagIcon />
+                          </div>
+                        ) : movingVideos.has(submission.id.toString()) ? (
+                          <div
+                            className="text-blue-500 dark:text-blue-400"
+                            title="Moving to Ad Creatives..."
+                          >
+                            <Loader className="h-4 w-4 animate-spin" />
+                          </div>
+                        ) : !isArtistView && (
+                          <button
+                            onClick={() => onMoveToAdCreatives(submission)}
+                            className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                            title="Move to Ad Creatives"
+                          >
+                            <MoveRight className="h-4 w-4" />
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-300">
+                      {formatDateToDDMMYY(submission.createdAt)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-400">
+                      {formatDateToDDMMYY(submission.updatedAt)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={() => setSelectedVideo(submission)}
+                        className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                        title="Give Feedback"
+                      >
+                        <MessageSquare className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDownload(submission.videoUrl)}
+                        disabled={downloadingVideos.has(submission.videoUrl)}
+                        className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                        title="Download Video"
+                      >
+                        {downloadingVideos.has(submission.videoUrl) ? (
+                          <Loader className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Download className="h-5 w-5" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setEditingVideo(submission)}
+                        className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                        title="Edit Video"
+                      >
+                        <Edit className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handleArchive(submission)}
+                        className={`transition-colors ${
+                          submission.status === 'archived'
+                            ? 'text-green-500 hover:text-green-600 dark:text-green-400 dark:hover:text-green-300'
+                            : 'text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300'
+                        }`}
+                        title={submission.status === 'archived' ? 'Unarchive Video' : 'Archive Video'}
+                      >
+                        <Archive className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmation({
+                          isOpen: true,
+                          videoId: submission.id.toString(),
+                          videoName: submission.projectName,
+                        })}
+                        className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                        title="Delete Video"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </>
           )}
         </tbody>
       </table>

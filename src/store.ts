@@ -54,6 +54,7 @@ interface StoreState {
     artistId?: string;
     type?: string;
     status?: string;
+    includeArchived?: boolean;
   }, skipCache?: boolean) => Promise<void>;
   fetchArtists: () => Promise<void>;
   fetchAdCreatives: (page?: number, limit?: number, filters?: {
@@ -169,10 +170,11 @@ const useStore = create<StoreState>((set, get) => ({
       }
       if (filters.status) {
         query = query.eq('status' as any, filters.status as any);
-      } else {
-        // If no status filter is applied, exclude archived videos by default
+      } else if (!filters.includeArchived) {
+        // If no status filter is applied and includeArchived is not set, exclude archived videos by default
         query = query.neq('status' as any, 'archived' as any);
       }
+      // If includeArchived is true, don't filter by status at all
 
       // Apply pagination and ordering
       const from = (page - 1) * limit;
