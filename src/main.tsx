@@ -4,45 +4,69 @@ import { Toaster } from 'react-hot-toast';
 import App from './App.tsx';
 import './index.css';
 
-// Register Service Worker for PWA (skip in Instagram in-app browser)
-const isInstagramBrowser = /Instagram/i.test(navigator.userAgent);
-if ('serviceWorker' in navigator && !isInstagramBrowser) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((registration) => {
-        console.log('✅ Service Worker registered:', registration);
-        
-        // Check for updates immediately on page load
-        registration.update().then(() => {
-          console.log('🔍 Checked for service worker updates on page load');
-        });
-        
-        // Check for updates every 60 seconds
-        setInterval(() => {
-          registration.update();
-        }, 60000);
-        
-        // Listen for new service worker waiting to activate
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New service worker available, reload the page
-                console.log('🔄 New service worker available, reloading...');
-                window.location.reload();
-              }
-            });
-          }
-        });
-      })
-      .catch((error) => {
-        console.error('❌ Service Worker registration failed:', error);
-      });
+// TEMPORARILY DISABLED - Unregister existing service workers
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (let registration of registrations) {
+        await registration.unregister();
+        console.log('🗑️ Unregistered service worker:', registration.scope);
+      }
+      
+      // Clear all caches
+      const cacheNames = await caches.keys();
+      for (let cacheName of cacheNames) {
+        await caches.delete(cacheName);
+        console.log('🗑️ Deleted cache:', cacheName);
+      }
+      
+      console.log('✅ All service workers and caches cleared');
+    } catch (error) {
+      console.error('❌ Failed to clear service workers:', error);
+    }
   });
-} else if (isInstagramBrowser) {
-  console.log('📱 Instagram browser detected - Service Worker disabled');
 }
+
+// Register Service Worker for PWA (skip in Instagram in-app browser)
+// const isInstagramBrowser = /Instagram/i.test(navigator.userAgent);
+// if ('serviceWorker' in navigator && !isInstagramBrowser) {
+//   window.addEventListener('load', () => {
+//     navigator.serviceWorker.register('/sw.js')
+//       .then((registration) => {
+//         console.log('✅ Service Worker registered:', registration);
+//         
+//         // Check for updates immediately on page load
+//         registration.update().then(() => {
+//           console.log('🔍 Checked for service worker updates on page load');
+//         });
+//         
+//         // Check for updates every 60 seconds
+//         setInterval(() => {
+//           registration.update();
+//         }, 60000);
+//         
+//         // Listen for new service worker waiting to activate
+//         registration.addEventListener('updatefound', () => {
+//           const newWorker = registration.installing;
+//           if (newWorker) {
+//             newWorker.addEventListener('statechange', () => {
+//               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+//                 // New service worker available, reload the page
+//                 console.log('🔄 New service worker available, reloading...');
+//                 window.location.reload();
+//               }
+//             });
+//           }
+//         });
+//       })
+//       .catch((error) => {
+//         console.error('❌ Service Worker registration failed:', error);
+//       });
+//   });
+// } else if (isInstagramBrowser) {
+//   console.log('📱 Instagram browser detected - Service Worker disabled');
+// }
 
 const rootElement = document.getElementById('root');
 

@@ -1,5 +1,5 @@
 // Service Worker for SwipeUp PWA
-const CACHE_NAME = 'swipeup-v11-20251028-emergency-clear';
+const CACHE_NAME = 'swipeup-v12-20251124-auth-fix';
 const urlsToCache = [
   '/plane_new.png',
   '/NEU_PSD_swipeup-marketing_2.png'
@@ -56,6 +56,11 @@ self.addEventListener('fetch', (event) => {
                        url.hostname.includes('gstatic.com');
   
   if (!isOwnDomain && !isFontDomain) {
+    return;
+  }
+  
+  // Skip auth endpoints entirely - let browser handle them natively
+  if (url.pathname.includes('/auth/')) {
     return;
   }
   
