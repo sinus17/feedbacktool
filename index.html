@@ -112,6 +112,11 @@
         }, true);
       })();
     </script>
+    
+    <!-- Fix for Vite HMR __HMR_CONFIG_NAME__ error -->
+    <script>
+      window.__HMR_CONFIG_NAME__ = 'default';
+    </script>
   </head>
   <body>
     <div id="root"></div>

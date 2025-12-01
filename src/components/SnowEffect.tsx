@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 
 interface SnowflakeProps {
   index: number;
@@ -13,8 +13,8 @@ const Snowflake: React.FC<SnowflakeProps> = ({ index, isStorm }) => {
     if (isStorm) {
       return {
         left,
-        '--storm-duration': `${2 + Math.random()}s`,
-        '--storm-delay': `${Math.random() * -2}s`,
+        '--storm-duration': `${4 + Math.random() * 3}s`, // Slower: 4-7s instead of 2-4s
+        '--storm-delay': `${Math.random() * -8}s`, // Spread evenly over 8 seconds
       } as React.CSSProperties;
     }
 
@@ -22,7 +22,7 @@ const Snowflake: React.FC<SnowflakeProps> = ({ index, isStorm }) => {
       left,
       '--drift': drift,
       '--fall-duration': `${8 + Math.random() * 4}s`,
-      '--fall-delay': `${Math.random() * -15}s`,
+      '--fall-delay': `${Math.random() * -20}s`, // Spread evenly over 20 seconds
     } as React.CSSProperties;
   }, [index, isStorm]);
 
@@ -35,37 +35,14 @@ const Snowflake: React.FC<SnowflakeProps> = ({ index, isStorm }) => {
 };
 
 export const SnowEffect: React.FC = () => {
-  const [showStorm, setShowStorm] = useState(true);
-
-  useEffect(() => {
-    const stormTimer = setTimeout(() => {
-      setShowStorm(false);
-    }, 3000);
-
-    return () => clearTimeout(stormTimer);
-  }, []);
-
-  // Generate arrays of snowflakes
-  const gentleSnow = useMemo(() => [...Array(75)], []); // Reduced number for better performance
-  const stormSnow = useMemo(() => [...Array(150)], []);
+  // Generate array of snowflakes - consistent count throughout
+  const snowflakes = useMemo(() => [...Array(50)], []); // Consistent gentle snowfall
 
   return (
-    <>
-      {/* Permanent gentle snowfall */}
-      <div className="snow-container fixed inset-0 pointer-events-none z-50">
-        {gentleSnow.map((_, i) => (
-          <Snowflake key={`snow-${i}`} index={i} />
-        ))}
-      </div>
-
-      {/* Initial intense snowstorm */}
-      {showStorm && (
-        <div className="snowstorm-container fixed inset-0 pointer-events-none z-50">
-          {stormSnow.map((_, i) => (
-            <Snowflake key={`storm-${i}`} index={i} isStorm />
-          ))}
-        </div>
-      )}
-    </>
+    <div className="snow-container fixed inset-0 pointer-events-none z-50">
+      {snowflakes.map((_, i) => (
+        <Snowflake key={`snow-${i}`} index={i} />
+      ))}
+    </div>
   );
 };
