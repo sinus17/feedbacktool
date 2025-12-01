@@ -51,6 +51,13 @@ class WhatsAppServiceImpl implements IWhatsAppService {
       
       if (!params.groupId) {
         console.error('❌ WhatsApp: Invalid group ID - empty or undefined');
+        await this.logNotification(
+          'whatsapp_message',
+          'error',
+          'Failed to send WhatsApp message - Invalid group ID',
+          'Group ID is empty or undefined',
+          { groupId: params.groupId, text: params.text }
+        );
         return;
       }
       
@@ -61,6 +68,13 @@ class WhatsAppServiceImpl implements IWhatsAppService {
       // Validate the cleaned group ID
       if (!cleanGroupId || cleanGroupId.length < 15) {
         console.error('❌ WhatsApp: Group ID is too short or invalid:', params.groupId, 'cleaned:', cleanGroupId);
+        await this.logNotification(
+          'whatsapp_message',
+          'error',
+          'Failed to send WhatsApp message - Invalid group ID format',
+          `Group ID too short or invalid: ${params.groupId}, cleaned: ${cleanGroupId}`,
+          { groupId: params.groupId, cleanGroupId, text: params.text }
+        );
         return;
       }
       
@@ -91,11 +105,18 @@ class WhatsAppServiceImpl implements IWhatsAppService {
       // Check if token is available
       if (!WHATSAPP_CONFIG.TOKEN) {
         console.error('❌ WhatsApp: No API token available');
+        await this.logNotification(
+          'whatsapp_message',
+          'error',
+          'Failed to send WhatsApp message - No API token',
+          'VITE_WHAPI_TOKEN is not configured',
+          { groupId: cleanGroupId, text: params.text }
+        );
         return;
       }
 
-      // Send message without waiting for response (fire and forget)
-      fetch(`${WHATSAPP_CONFIG.API_URL}`, {
+      // Send message and await the response
+      const response = await fetch(`${WHATSAPP_CONFIG.API_URL}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${WHATSAPP_CONFIG.TOKEN}`,
@@ -107,40 +128,60 @@ class WhatsAppServiceImpl implements IWhatsAppService {
           body: params.text,
           preview_url: true
         })
-      }).then(response => {
-        if (response.ok) {
-          console.log('✅ WhatsApp: Message sent successfully (fire and forget)');
-        } else {
-          console.log('❌ WhatsApp: Message send failed (fire and forget):', response.status);
-        }
-      }).catch(error => {
-        console.log('❌ WhatsApp: Message send error (fire and forget):', error.message);
       });
       
-      console.log('🔔 WhatsApp: Message dispatched (not waiting for response)');
+      if (response.ok) {
+        console.log('✅ WhatsApp: Message sent successfully');
+        const responseData = await response.json().catch(() => ({}));
+        await this.logNotification(
+          'whatsapp_message',
+          'success',
+          'WhatsApp message sent successfully',
+          null,
+          {
+            groupId: cleanGroupId,
+            text: params.text,
+            response: responseData
+          }
+        );
+      } else {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.log('❌ WhatsApp: Message send failed:', response.status, errorText);
+        await this.logNotification(
+          'whatsapp_message',
+          'error',
+          'WhatsApp message send failed',
+          `HTTP ${response.status}: ${errorText}`,
+          {
+            groupId: cleanGroupId,
+            text: params.text,
+            statusCode: response.status
+          }
+        );
+      }
     } catch (error) {
       console.error('❌ WhatsApp: Error sending message:', error);
+      await this.logNotification(
+        'whatsapp_message',
+        'error',
+        'WhatsApp message send error',
+        error instanceof Error ? error.message : String(error),
+        {
+          groupId: params.groupId,
+          text: params.text,
+          error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error)
+        }
+      );
     }
   }
 
   async sendMessage(params: { groupId: string; text: string }): Promise<void> {
-    // Always run in background with fire-and-forget approach
+    // Run in background but await the actual send
     setTimeout(() => {
       console.log('🔔 WhatsApp: sendMessage called with group ID:', params.groupId);
-      this.sendMessageFireAndForget(params);
-      
-      // Log that message was dispatched (not waiting for response)
-      this.logNotification(
-        'whatsapp_message',
-        'info',
-        'WhatsApp message dispatched (fire and forget)',
-        null,
-        {
-          groupId: params.groupId,
-          text: params.text,
-          approach: 'fire_and_forget'
-        }
-      ).catch(console.error);
+      this.sendMessageFireAndForget(params).catch(error => {
+        console.error('❌ WhatsApp: Error in sendMessageFireAndForget:', error);
+      });
     }, 0);
   }
 
@@ -200,6 +241,8 @@ class WhatsAppServiceImpl implements IWhatsAppService {
       this.sendMessageFireAndForget({
         groupId: cleanTeamGroupId,
         text: message
+      }).catch(error => {
+        console.error('❌ WhatsApp: Error in team notification:', error);
       });
       
       console.log('✅ WhatsApp: Team notification dispatched');
@@ -294,6 +337,8 @@ class WhatsAppServiceImpl implements IWhatsAppService {
           this.sendMessageFireAndForget({
             groupId: cleanTeamGroupId,
             text: teamMessage
+          }).catch(error => {
+            console.error('❌ WhatsApp: Error in team notification for artist update:', error);
           });
           console.log('🔔 WhatsApp: Team notification dispatched for artist update');
           
@@ -361,6 +406,8 @@ class WhatsAppServiceImpl implements IWhatsAppService {
           this.sendMessageFireAndForget({
             groupId: cleanTeamGroupId,
             text: teamMessage
+          }).catch(error => {
+            console.error('❌ WhatsApp: Error in team notification for artist update:', error);
           });
           console.log('🔔 WhatsApp: Team notification dispatched for artist update');
           
@@ -423,6 +470,8 @@ class WhatsAppServiceImpl implements IWhatsAppService {
         this.sendMessageFireAndForget({
           groupId: cleanArtistGroupId,
           text: artistMessage
+        }).catch(error => {
+          console.error('❌ WhatsApp: Error in artist notification:', error);
         });
         console.log('🔔 WhatsApp: Artist notification dispatched');
       } else {
@@ -469,6 +518,8 @@ class WhatsAppServiceImpl implements IWhatsAppService {
             this.sendMessageFireAndForget({
               groupId: cleanTeamGroupId,
               text: teamMessage
+            }).catch(error => {
+              console.error('❌ WhatsApp: Error in team notification for admin feedback:', error);
             });
             console.log('🔔 WhatsApp: Team admin feedback notification dispatched');
             
@@ -735,6 +786,8 @@ class WhatsAppServiceImpl implements IWhatsAppService {
         this.sendMessageFireAndForget({
           groupId: cleanArtistGroupId,
           text: message
+        }).catch(error => {
+          console.error('❌ WhatsApp: Error in ad creative notification:', error);
         });
         console.log('🔔 WhatsApp: Ad creative notification dispatched');
         
@@ -839,6 +892,8 @@ class WhatsAppServiceImpl implements IWhatsAppService {
       this.sendMessageFireAndForget({
         groupId: cleanGroupId,
         text: message
+      }).catch(error => {
+        console.error('❌ WhatsApp: Error in ad creative submission notification:', error);
       });
       
       console.log('✅ WhatsApp: Ad creative submission notification dispatched');
