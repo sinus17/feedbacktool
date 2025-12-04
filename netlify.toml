@@ -16,13 +16,13 @@
   status = 301
   force = true
 
-# URL Shortener - Handled by Netlify Edge Function
-# The edge function queries the database dynamically
-# No need to add redirects here - manage them in the admin UI!
-
-[[edge_functions]]
-  function = "redirect"
-  path = "/*"
+# URL Shortener - Redirect swipe.fm/* to /redirect/* route in React app
+# The React app queries the database and performs the redirect
+[[redirects]]
+  from = "https://swipe.fm/*"
+  to = "https://tool.swipeup-marketing.com/redirect/:splat"
+  status = 301
+  force = true
 
 [[headers]]
   for = "/*.js"

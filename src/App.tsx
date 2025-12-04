@@ -26,6 +26,7 @@ import { NovelTest } from './pages/NovelTest';
 import NewCampaignSubmission from './pages/NewCampaignSubmission';
 import { ComponentLibrary } from './pages/ComponentLibrary';
 import { URLShortener } from './pages/URLShortener';
+import { Redirect } from './pages/Redirect';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -191,6 +192,7 @@ function App() {
           <div className="min-h-screen bg-gray-50 dark:bg-[#000000] text-gray-900 dark:text-dark-100">
             <Routes>
               {/* Public routes */}
+              <Route path="/redirect/:shortCode" element={<Redirect />} />
               <Route path="/artist/:id" element={<PublicArtistView />} />
               <Route path="/artist/:id/ad-creatives" element={<ArtistAdCreatives />} />
               <Route path="/artist/:id/content-plan" element={<ArtistContentPlan />} />
