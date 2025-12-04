@@ -16,12 +16,73 @@
   status = 301
   force = true
 
-# URL Shortener - Redirect swipe.fm/* to Supabase Edge Function
-# IMPORTANT: This must come before the SPA catch-all redirect
+# URL Shortener - Proxy swipe.fm/* to Supabase Edge Function
+# The edge function will handle the actual 301 redirect
 [[redirects]]
   from = "https://swipe.fm/*"
   to = "https://wrlgoxbzlngdtomjhvnz.supabase.co/functions/v1/redirect-short-url/:splat"
   status = 200
+  force = true
+  
+# Alternative: Direct redirects for known short codes (temporary solution)
+[[redirects]]
+  from = "https://swipe.fm/campaign"
+  to = "https://wkf.ms/3QH2ORQ"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "https://swipe.fm/access"
+  to = "https://swipeup-marketing.notion.site/Account-Freigaben-5663e8da87f34a39ab2b5957d61b301c?source=copy_link"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "https://swipe.fm/zoom"
+  to = "https://us06web.zoom.us/j/3203597972"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "https://swipe.fm/stats"
+  to = "https://www.notion.so/swipeup-marketing/Instagram-TikTok-Account-Stats-1b55bcd5930f8076bcfce4a80d364ab5?source=copy_link"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "https://swipe.fm/stats-en"
+  to = "https://www.notion.so/swipeup-marketing/Instagram-TikTok-Account-Stats-1d75bcd5930f805a94d4db3ee348fdc6?source=copy_link"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "https://swipe.fm/access-en"
+  to = "https://www.notion.so/swipeup-marketing/Account-Freigaben-984f4004329e45b2bceeee841c0ab6c0?source=copy_link"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "https://swipe.fm/benchmarks"
+  to = "https://swipeup-marketing.notion.site/KPIs-Benchmarks-0bfbe49b0995411daf87daa63c47e099?source=copy_link"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "https://swipe.fm/benchmarks-en"
+  to = "https://swipeup-marketing.notion.site/KPIs-Benchmarks-19f5bcd5930f808e986dc3fddbc91e67?source=copy_link"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "https://swipe.fm/spotify-uri"
+  to = "https://swipeup-marketing.notion.site/Album-URI-vor-Release-auf-Spotify-finden-0e8d259b89bd4230810f9b09d557a554?source=copy_link"
+  status = 301
+  force = true
+  
+[[redirects]]
+  from = "https://swipe.fm/auth"
+  to = "https://www.notion.so/swipeup-marketing/TikTok-AUTH-Code-generieren-1625bcd5930f8044b326dfd63be695fd?source=copy_link"
+  status = 301
   force = true
   
 [[headers]]
