@@ -10,7 +10,10 @@ export function Redirect() {
 
   useEffect(() => {
     const performRedirect = async () => {
+      console.log('🔗 Redirect component loaded with shortCode:', shortCode);
+      
       if (!shortCode) {
+        console.log('❌ No short code provided');
         setError('No short code provided');
         return;
       }
@@ -24,13 +27,16 @@ export function Redirect() {
           .eq('is_active', true)
           .maybeSingle();
 
+        console.log('📊 Database query result:', { data, queryError });
+
         if (queryError) {
-          console.error('Database error:', queryError);
+          console.error('❌ Database error:', queryError);
           setError('Database error');
           return;
         }
 
         if (!data) {
+          console.log('❌ Short URL not found in database');
           setError('Short URL not found');
           return;
         }
@@ -61,7 +67,8 @@ export function Redirect() {
           });
 
         // Perform the redirect
-        window.location.href = data.destination_url;
+        console.log('✅ Redirecting to:', destinationUrl);
+        window.location.href = destinationUrl;
       } catch (err) {
         console.error('Redirect error:', err);
         setError('An error occurred');
