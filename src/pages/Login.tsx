@@ -16,6 +16,12 @@ export const Login: React.FC = () => {
   const message = location.state?.message;
 
   useEffect(() => {
+    // If user came from a /redirect/* route, send them to 404 instead of login
+    if (from.startsWith('/redirect/')) {
+      navigate('/404', { replace: true });
+      return;
+    }
+
     if (currentUser) {
       navigate(from, { replace: true });
     }
