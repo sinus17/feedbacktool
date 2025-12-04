@@ -240,33 +240,101 @@ async function uploadVideoToStorage(
   videoId: string,
   platform: string
 ): Promise<string> {
-  // Download video
-  const videoResponse = await fetch(videoUrl);
-  if (!videoResponse.ok) {
-    throw new Error('Failed to download video from source');
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Downloading video (attempt ${attempt}/${maxRetries})...`);
+      
+      // Download video with timeout
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
+      const videoResponse = await fetch(videoUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      clearTimeout(timeout);
+      
+      if (!videoResponse.ok) {
+        throw new Error(`Failed to download video: HTTP ${videoResponse.status}`);
+      }
+
+      // Check content type
+      const contentType = videoResponse.headers.get('content-type');
+      console.log('Video content-type:', contentType);
+      
+      // Get content length if available
+      const contentLength = videoResponse.headers.get('content-length');
+      if (contentLength) {
+        const sizeInMB = parseInt(contentLength) / (1024 * 1024);
+        console.log(`Video size: ${sizeInMB.toFixed(2)} MB`);
+        
+        // Validate minimum size (at least 10KB to avoid empty/corrupted files)
+        if (parseInt(contentLength) < 10240) {
+          throw new Error(`Video file too small (${contentLength} bytes), likely corrupted`);
+        }
+      }
+
+      const videoBlob = await videoResponse.blob();
+      console.log(`Downloaded video blob: ${videoBlob.size} bytes, type: ${videoBlob.type}`);
+      
+      // Validate blob size
+      if (videoBlob.size < 10240) {
+        throw new Error(`Downloaded video too small (${videoBlob.size} bytes), likely corrupted`);
+      }
+
+      // Validate it's actually a video by checking the first few bytes for MP4 signature
+      const arrayBuffer = await videoBlob.slice(0, 12).arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      
+      // Check for ftyp box (MP4 signature) - should be at bytes 4-7
+      const hasMP4Signature = bytes[4] === 0x66 && bytes[5] === 0x74 && 
+                              bytes[6] === 0x79 && bytes[7] === 0x70;
+      
+      if (!hasMP4Signature) {
+        console.warn('Video does not have valid MP4 signature, but continuing anyway');
+      }
+
+      const fileName = `${platform}-${videoId}-${Date.now()}.mp4`;
+
+      // Upload to Supabase storage
+      console.log(`Uploading video to storage: ${fileName}`);
+      const { data, error } = await supabase.storage
+        .from('library-videos')
+        .upload(fileName, videoBlob, {
+          contentType: 'video/mp4',
+          upsert: false,
+        });
+
+      if (error) {
+        throw new Error(`Failed to upload video to storage: ${error.message}`);
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('library-videos')
+        .getPublicUrl(fileName);
+
+      console.log(`Video uploaded successfully: ${urlData.publicUrl}`);
+      return urlData.publicUrl;
+      
+    } catch (error) {
+      lastError = error as Error;
+      console.error(`Video download/upload attempt ${attempt} failed:`, error);
+      
+      if (attempt < maxRetries) {
+        const waitTime = attempt * 2000; // Exponential backoff: 2s, 4s, 6s
+        console.log(`Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
   }
 
-  const videoBlob = await videoResponse.blob();
-  const fileName = `${platform}-${videoId}-${Date.now()}.mp4`;
-
-  // Upload to Supabase storage
-  const { data, error } = await supabase.storage
-    .from('library-videos')
-    .upload(fileName, videoBlob, {
-      contentType: 'video/mp4',
-      upsert: false,
-    });
-
-  if (error) {
-    throw new Error(`Failed to upload video to storage: ${error.message}`);
-  }
-
-  // Get public URL
-  const { data: urlData } = supabase.storage
-    .from('library-videos')
-    .getPublicUrl(fileName);
-
-  return urlData.publicUrl;
+  throw new Error(`Failed to download/upload video after ${maxRetries} attempts: ${lastError?.message}`);
 }
 
 async function uploadImageToStorage(

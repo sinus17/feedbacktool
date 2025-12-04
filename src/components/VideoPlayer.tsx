@@ -256,7 +256,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, isPhotoPost = fal
         className="w-full h-full object-contain"
         playsInline
         controls={false}
-        preload="auto"
+        preload="metadata"
         onTimeUpdate={() => videoRef.current && setCurrentTime(videoRef.current.currentTime)}
         onLoadedMetadata={handleLoadedMetadata}
         onPlaying={() => {
