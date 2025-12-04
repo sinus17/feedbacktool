@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link2, Plus, Copy, Trash2, BarChart3, ExternalLink, Check, AlertCircle } from 'lucide-react';
+import { Link2, Plus, Copy, Trash2, BarChart3, ExternalLink, Check, AlertCircle, Edit } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -20,6 +20,7 @@ export function URLShortener() {
   const [shortUrls, setShortUrls] = useState<ShortUrl[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingUrl, setEditingUrl] = useState<ShortUrl | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -285,13 +286,22 @@ export function URLShortener() {
                     {new Date(url.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => deleteShortUrl(url.id)}
-                      className="text-red-400 hover:text-red-300 p-2 hover:bg-gray-700 rounded transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => setEditingUrl(url)}
+                        className="text-blue-400 hover:text-blue-300 p-2 hover:bg-gray-700 rounded transition-colors"
+                        title="Edit"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => deleteShortUrl(url.id)}
+                        className="text-red-400 hover:text-red-300 p-2 hover:bg-gray-700 rounded transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -305,6 +315,17 @@ export function URLShortener() {
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
+            loadShortUrls();
+          }}
+        />
+      )}
+
+      {editingUrl && (
+        <EditShortUrlModal
+          url={editingUrl}
+          onClose={() => setEditingUrl(null)}
+          onSuccess={() => {
+            setEditingUrl(null);
             loadShortUrls();
           }}
         />
@@ -476,6 +497,169 @@ function CreateShortUrlModal({ onClose, onSuccess }: CreateShortUrlModalProps) {
               onMouseLeave={(e) => !loading && (e.currentTarget.style.backgroundColor = '#0000fe')}
             >
               {loading ? 'Creating...' : 'Create Short Link'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface EditShortUrlModalProps {
+  url: ShortUrl;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function EditShortUrlModal({ url, onClose, onSuccess }: EditShortUrlModalProps) {
+  const [destinationUrl, setDestinationUrl] = useState(url.destination_url);
+  const [title, setTitle] = useState(url.title || '');
+  const [description, setDescription] = useState(url.description || '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    // Validate URL
+    try {
+      new URL(destinationUrl);
+    } catch {
+      setError('Please enter a valid URL');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        setError('Please log in');
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-short-urls`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: url.id,
+            destination_url: destinationUrl,
+            title: title || null,
+            description: description || null,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update short URL');
+      }
+
+      toast.success('Short URL updated successfully!');
+      onSuccess();
+    } catch (error: any) {
+      console.error('Error updating short URL:', error);
+      setError(error.message || 'Failed to update short URL');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-gray-800 rounded-lg max-w-2xl w-full p-6">
+        <h2 className="text-2xl font-bold text-white mb-6">Edit Short Link</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Short Code
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400">swipe.fm/</span>
+              <input
+                type="text"
+                value={url.short_code}
+                disabled
+                className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 text-gray-500 cursor-not-allowed"
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Short code cannot be changed
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Destination URL *
+            </label>
+            <input
+              type="url"
+              value={destinationUrl}
+              onChange={(e) => setDestinationUrl(e.target.value)}
+              placeholder="https://example.com/your-page"
+              required
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Title (optional)
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="My Campaign Link"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Description (optional)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add notes about this link..."
+              rows={3}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 text-red-400 bg-red-900/20 p-3 rounded-lg">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: loading ? '#666' : '#0000fe' }}
+              onMouseEnter={(e) => !loading && (e.currentTarget.style.backgroundColor = '#0000cc')}
+              onMouseLeave={(e) => !loading && (e.currentTarget.style.backgroundColor = '#0000fe')}
+            >
+              {loading ? 'Updating...' : 'Update Short Link'}
             </button>
           </div>
         </form>
