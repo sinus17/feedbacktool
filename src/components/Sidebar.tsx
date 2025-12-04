@@ -13,7 +13,8 @@ import {
   FileText,
   Library,
   Bell,
-  Music
+  Music,
+  Link2
 } from 'lucide-react';
 import { useStore } from '../store';
 import { Logo } from './Logo';
@@ -36,6 +37,7 @@ export function Sidebar() {
     { path: '/whatsapp', icon: MessageSquare, label: 'WhatsApp Logs', exact: false },
     { path: '/archive', icon: Archive, label: 'Archive', exact: false },
     { path: '/notifications', icon: Bell, label: 'Notifications', exact: false },
+    { path: '/url-shortener', icon: Link2, label: 'URL Shortener', exact: false },
     { path: '/settings', icon: Settings, label: 'Settings', exact: false }
   ];
 

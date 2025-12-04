@@ -11,13 +11,17 @@
     "*.css": "tailwindcss"
   },
   "typescript.tsserver.pluginPaths": [],
-  "[typescript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
   "css.lint.unknownAtRules": "ignore",
   "scss.lint.unknownAtRules": "ignore",
   "less.lint.unknownAtRules": "ignore",
   "css.validate": false,
   "tailwindCSS.emmetCompletions": true,
-  "json.schemaDownload.enable": false
+  "json.schemaDownload.enable": false,
+  "typescript.tsserver.maxTsServerMemory": 4096,
+  "files.watcherExclude": {
+    "**/supabase/functions/**": true
+  },
+  "search.exclude": {
+    "**/supabase/functions/**": false
+  }
 }

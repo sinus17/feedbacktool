@@ -25,6 +25,7 @@ import { PushNotifications } from './pages/PushNotifications';
 import { NovelTest } from './pages/NovelTest';
 import NewCampaignSubmission from './pages/NewCampaignSubmission';
 import { ComponentLibrary } from './pages/ComponentLibrary';
+import { URLShortener } from './pages/URLShortener';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -241,6 +242,7 @@ function App() {
                             <Route path="archive" element={<Archive />} />
                             <Route path="settings" element={<Settings />} />
                             <Route path="notifications" element={<PushNotifications />} />
+                            <Route path="url-shortener" element={<URLShortener />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                           </Routes>
                         </div>
