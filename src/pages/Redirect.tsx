@@ -72,17 +72,17 @@ export function Redirect() {
   }, [shortCode]);
 
   if (error) {
-    // Redirect to swipeup-marketing.com if no route found
+    // Redirect to 404 page if no route found
     setTimeout(() => {
-      window.location.href = 'https://swipeup-marketing.com';
-    }, 2000);
+      window.location.href = '/404';
+    }, 1500);
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-white mb-4">Link not found</h1>
-          <p className="text-gray-400 text-lg mb-4">{error}</p>
-          <p className="text-gray-500">Redirecting to swipeup-marketing.com...</p>
+          <Loader className="w-12 h-12 animate-spin text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-white mb-2">Link not found</h1>
+          <p className="text-gray-400">{error}</p>
         </div>
       </div>
     );
