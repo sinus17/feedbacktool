@@ -17,12 +17,12 @@
   force = true
 
 # URL Shortener - Redirect swipe.fm/* to Supabase Edge Function
+# IMPORTANT: This must come before the SPA catch-all redirect
 [[redirects]]
   from = "https://swipe.fm/*"
   to = "https://wrlgoxbzlngdtomjhvnz.supabase.co/functions/v1/redirect-short-url/:splat"
-  status = 200
+  status = 200!
   force = true
-  headers = {X-From = "swipe.fm"}
   
 [[headers]]
   for = "/*.js"
@@ -66,6 +66,7 @@
   from = "/*"
   to = "/index.html"
   status = 200
+  conditions = {Host = ["!swipe.fm"]}
 
 [build.environment]
   NODE_VERSION = "20"
