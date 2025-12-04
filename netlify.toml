@@ -67,7 +67,6 @@
   from = "/*"
   to = "/index.html"
   status = 200
-  conditions = {Host = ["!swipe.fm"]}
 
 [build.environment]
   NODE_VERSION = "20"
