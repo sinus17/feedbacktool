@@ -1,3 +1,5 @@
+// @ts-nocheck
+// This is a Deno edge function - TypeScript errors are expected in Node.js environment
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 const corsHeaders = {

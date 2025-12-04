@@ -21,7 +21,7 @@
 [[redirects]]
   from = "https://swipe.fm/*"
   to = "https://wrlgoxbzlngdtomjhvnz.supabase.co/functions/v1/redirect-short-url/:splat"
-  status = 200!
+  status = 200
   force = true
   
 [[headers]]
