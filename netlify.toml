@@ -16,12 +16,12 @@
   status = 301
   force = true
 
-# URL Shortener - Redirect swipe.fm/* to /redirect/* route in React app
+# URL Shortener - Rewrite swipe.fm/* to /redirect/* route in React app
 # The React app queries the database and performs the redirect
 [[redirects]]
   from = "https://swipe.fm/*"
-  to = "https://tool.swipeup-marketing.com/redirect/:splat"
-  status = 301
+  to = "/redirect/:splat"
+  status = 200
   force = true
 
 [[headers]]
