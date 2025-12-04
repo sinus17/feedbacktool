@@ -16,28 +16,9 @@ export function NotFound() {
         <h2 className="text-3xl font-semibold text-gray-300 mb-4">
           Page Not Found
         </h2>
-        <p className="text-gray-400 text-lg mb-8">
+        <p className="text-gray-400 text-lg">
           Oops! The page you're looking for doesn't exist.
         </p>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <a
-            href="/"
-            className="px-8 py-3 text-white rounded-lg font-semibold transition-colors"
-            style={{ backgroundColor: '#0000fe' }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0000cc'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0000fe'}
-          >
-            Go Home
-          </a>
-          <a
-            href="https://swipeup-marketing.com"
-            className="px-8 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors"
-          >
-            Visit SwipeUp Marketing
-          </a>
-        </div>
       </div>
     </div>
   );
