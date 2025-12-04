@@ -28,6 +28,7 @@ import { ComponentLibrary } from './pages/ComponentLibrary';
 import { URLShortener } from './pages/URLShortener';
 import { Redirect } from './pages/Redirect';
 import { NotFound } from './pages/NotFound';
+import { DynamicShortUrlRoutes } from './components/DynamicShortUrlRoutes';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -195,6 +196,10 @@ function App() {
               {/* Public routes */}
               <Route path="/404" element={<NotFound />} />
               <Route path="/redirect/:shortCode" element={<Redirect />} />
+              
+              {/* Dynamic short URL routes - only for swipe.fm */}
+              {window.location.hostname === 'swipe.fm' && <Route path="/*" element={<DynamicShortUrlRoutes />} />}
+              
               <Route path="/artist/:id" element={<PublicArtistView />} />
               <Route path="/artist/:id/ad-creatives" element={<ArtistAdCreatives />} />
               <Route path="/artist/:id/content-plan" element={<ArtistContentPlan />} />
