@@ -19,10 +19,11 @@
 # URL Shortener - Rewrite swipe.fm/* to /redirect/* route in React app
 # The React app queries the database and performs the redirect
 [[redirects]]
-  from = "https://swipe.fm/*"
+  from = "/*"
   to = "/redirect/:splat"
   status = 200
   force = true
+  conditions = {Host = ["swipe.fm"]}
 
 [[headers]]
   for = "/*.js"
