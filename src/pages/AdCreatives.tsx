@@ -427,6 +427,54 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
     return filtered;
   }, [adCreatives, isInitialized]);
 
+  // Create a flat list with divider markers
+  const creativesWithDividers = useMemo(() => {
+    const releaseMap = new Map<string | null, any[]>();
+    
+    filteredCreatives.forEach(creative => {
+      const releaseId = (creative as any).release_id || null;
+      if (!releaseMap.has(releaseId)) {
+        releaseMap.set(releaseId, []);
+      }
+      releaseMap.get(releaseId)!.push(creative);
+    });
+
+    // Check if we should show dividers
+    const shouldShowDividers = releaseMap.size > 1 || (releaseMap.size === 1 && !releaseMap.has(null));
+    
+    if (!shouldShowDividers) {
+      return filteredCreatives.map(c => ({ type: 'creative' as const, data: c }));
+    }
+
+    // Create sorted groups
+    const groups: { releaseId: string | null; releaseName: string | null; creatives: any[] }[] = [];
+    releaseMap.forEach((creatives, releaseId) => {
+      groups.push({
+        releaseId,
+        releaseName: releaseId ? (creatives[0] as any).releases?.name : null,
+        creatives
+      });
+    });
+
+    // Sort: releases first (by name), then "No Release"
+    groups.sort((a, b) => {
+      if (a.releaseId === null) return 1;
+      if (b.releaseId === null) return -1;
+      return (a.releaseName || '').localeCompare(b.releaseName || '');
+    });
+
+    // Flatten with dividers
+    const result: Array<{ type: 'divider' | 'creative'; data: any; releaseName?: string }> = [];
+    groups.forEach(group => {
+      result.push({ type: 'divider', data: group, releaseName: group.releaseName || 'No Release' });
+      group.creatives.forEach(creative => {
+        result.push({ type: 'creative', data: creative });
+      });
+    });
+
+    return result;
+  }, [filteredCreatives]);
+
   // Determine if we're in artist view
   const isArtistView = !!artistId;
 
@@ -487,17 +535,13 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
                 {!isArtistView && hasActiveFilter && (
-                  <th className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider transition-all duration-200 ${
-                    isHoveringTable || selectedCreatives.size > 0 ? 'w-12 opacity-100' : 'w-0 opacity-0 px-0'
-                  }`}>
-                    {(isHoveringTable || selectedCreatives.size > 0) && (
-                      <input
-                        type="checkbox"
-                        checked={selectedCreatives.size === filteredCreatives.length && filteredCreatives.length > 0}
-                        onChange={toggleSelectAll}
-                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
-                      />
-                    )}
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-12">
+                    <input
+                      type="checkbox"
+                      checked={selectedCreatives.size === filteredCreatives.length && filteredCreatives.length > 0}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+                    />
                   </th>
                 )}
                 {!isArtistView && (
@@ -536,7 +580,21 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                   </td>
                 </tr>
               ) : (
-                filteredCreatives.map((creative) => (
+                creativesWithDividers.map((item, index) => {
+                  if (item.type === 'divider') {
+                    return (
+                      <tr key={`divider-${index}`}>
+                        <td colSpan={isArtistView ? 5 : (hasActiveFilter ? 7 : 6)} className="px-6 py-2" style={{ backgroundColor: '#0000fe' }}>
+                          <div className="text-sm font-medium text-white">
+                            {item.releaseName === 'No Release' ? 'No Release Assigned' : item.releaseName}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  
+                  const creative = item.data;
+                  return (
                   <tr 
                     key={creative.id} 
                     className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
@@ -550,23 +608,19 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                   >
                     {!isArtistView && hasActiveFilter && (
                       <td 
-                        className={`px-6 py-4 whitespace-nowrap transition-all duration-200 ${
-                          isHoveringTable || selectedCreatives.size > 0 ? 'w-12 opacity-100' : 'w-0 opacity-0 px-0'
-                        }`}
+                        className="px-6 py-4 whitespace-nowrap w-12"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {(isHoveringTable || selectedCreatives.size > 0) && (
-                          <input
-                            type="checkbox"
-                            checked={selectedCreatives.has(creative.id)}
-                            onChange={() => {}}
-                            onClick={(e) => {
-                              const index = filteredCreatives.findIndex(c => c.id === creative.id);
-                              toggleSelectCreative(creative.id, index, e.shiftKey);
-                            }}
-                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
-                          />
-                        )}
+                        <input
+                          type="checkbox"
+                          checked={selectedCreatives.has(creative.id)}
+                          onChange={() => {}}
+                          onClick={(e) => {
+                            const index = filteredCreatives.findIndex(c => c.id === creative.id);
+                            toggleSelectCreative(creative.id, index, e.shiftKey);
+                          }}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+                        />
                       </td>
                     )}
                     {!isArtistView && (
@@ -894,7 +948,8 @@ export function AdCreatives({ artistId }: AdCreativesProps) {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

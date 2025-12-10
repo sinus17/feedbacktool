@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { User, Building, Calendar, DollarSign, Target, Upload, Music, Mail, Phone, MapPin, Loader, CreditCard, AlertCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface CampaignSubmissionData {
   // Step 1: User type
@@ -70,6 +72,7 @@ interface CampaignSubmissionData {
 }
 
 const NewCampaignSubmission: React.FC = () => {
+  const { currentUser } = useAuth();
   const [formData, setFormData] = useState<CampaignSubmissionData>({
     // Step 1: User type
     user_type: '',
@@ -147,42 +150,56 @@ const NewCampaignSubmission: React.FC = () => {
   const [showConfirmationWarning, setShowConfirmationWarning] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
   const [submittedData, setSubmittedData] = useState<any>(null);
+  const [artistSearchQuery, setArtistSearchQuery] = useState('');
+  const [artistsLoaded, setArtistsLoaded] = useState(false);
 
-  // Load cached verification state on mount
+  // Load all artists for authenticated users, or cached verification for public users
+  // Only run once on mount
   useEffect(() => {
-    const cachedVerification = sessionStorage.getItem('phone_verification');
-    console.log('🔍 Checking cache:', cachedVerification);
+    if (artistsLoaded) return; // Prevent re-loading
     
-    if (cachedVerification) {
-      try {
-        const { phone, verified, artists } = JSON.parse(cachedVerification);
-        console.log('📦 Cache data:', { phone, verified, artistsCount: artists?.length });
-        
-        if (verified && phone) {
-          setFormData(prev => ({
-            ...prev,
-            verification_phone: phone,
-            is_phone_verified: true
-          }));
-          setCodeSent(true);
+    if (currentUser) {
+      // Authenticated user - load all artists from database
+      console.log('🔐 Authenticated user detected, loading all artists');
+      loadAllArtists();
+      setArtistsLoaded(true);
+    } else {
+      // Public user - check cache
+      const cachedVerification = sessionStorage.getItem('phone_verification');
+      console.log('🔍 Checking cache:', cachedVerification);
+      
+      if (cachedVerification) {
+        try {
+          const { phone, verified, artists } = JSON.parse(cachedVerification);
+          console.log('📦 Cache data:', { phone, verified, artistsCount: artists?.length });
           
-          if (artists && artists.length > 0) {
-            console.log('✅ Restoring artists from cache:', artists);
-            setAssociatedArtists(artists);
-          } else {
-            console.log('⚠️ No artists in cache, fetching from database...');
-            // If no artists in cache, fetch them
-            lookupArtistsByWhatsAppGroups(phone);
+          if (verified && phone) {
+            setFormData(prev => ({
+              ...prev,
+              verification_phone: phone,
+              is_phone_verified: true
+            }));
+            setCodeSent(true);
+            
+            if (artists && artists.length > 0) {
+              console.log('✅ Restoring artists from cache:', artists);
+              setAssociatedArtists(artists);
+            } else {
+              console.log('⚠️ No artists in cache, fetching from database...');
+              // If no artists in cache, fetch them
+              lookupArtistsByWhatsAppGroups(phone);
+            }
+            
+            console.log('✅ Restored verification from cache:', phone);
           }
-          
-          console.log('✅ Restored verification from cache:', phone);
+        } catch (error) {
+          console.error('Error loading cached verification:', error);
+          sessionStorage.removeItem('phone_verification');
         }
-      } catch (error) {
-        console.error('Error loading cached verification:', error);
-        sessionStorage.removeItem('phone_verification');
       }
+      setArtistsLoaded(true);
     }
-  }, []);
+  }, [currentUser, artistsLoaded]);
 
   // Country mapping from English to German names
   const mapCountryToGerman = (englishName: string): string => {
@@ -391,6 +408,37 @@ const NewCampaignSubmission: React.FC = () => {
     }
   };
 
+  const loadAllArtists = async () => {
+    setIsLoadingArtists(true);
+    try {
+      console.log('🎨 Loading all artists from database for authenticated user');
+      
+      const { data: artists, error } = await supabase
+        .from('artists')
+        .select('id, name, instagram_url, tiktok_url, spotify_url, archived')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      // Filter out archived artists
+      const activeArtists = (artists || []).filter((artist: any) => !artist.archived);
+      
+      console.log('✅ Loaded artists:', activeArtists.length);
+      setAssociatedArtists(activeArtists);
+      
+      // Mark as verified to skip phone verification step
+      setFormData(prev => ({
+        ...prev,
+        is_phone_verified: true
+      }));
+    } catch (error) {
+      console.error('Error loading all artists:', error);
+      toast.error('Fehler beim Laden der Künstler');
+    } finally {
+      setIsLoadingArtists(false);
+    }
+  };
+
   const lookupArtistsByWhatsAppGroups = async (phone: string) => {
     setIsLoadingArtists(true);
     try {
@@ -455,7 +503,7 @@ const NewCampaignSubmission: React.FC = () => {
     
     try {
       // Fetch full artist and contact data from database
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/artists?id=eq.${artist.id}&select=*,customer_id,contacts:artist_contacts(contact_id,contacts(*))`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/artists?id=eq.${artist.id}&select=*,customer_id,contacts:artist_contacts(contact_id,contacts(*,customers(*)))`, {
         headers: {
           'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
@@ -466,9 +514,11 @@ const NewCampaignSubmission: React.FC = () => {
         const artistData = await response.json();
         const fullArtist = artistData[0];
         const contact = fullArtist?.contacts?.[0]?.contacts;
+        const customer = contact?.customers;
 
         console.log('📊 Full artist data:', fullArtist);
         console.log('📊 Contact data:', contact);
+        console.log('📊 Customer data:', customer);
 
         // Pre-fill form data with all available information
         setFormData((prev: CampaignSubmissionData) => ({
@@ -476,7 +526,7 @@ const NewCampaignSubmission: React.FC = () => {
           kuenstlername: fullArtist.name || artist.name,
           vorname: contact?.first_name || '',
           nachname: contact?.last_name || '',
-          firma: contact?.company || '',
+          firma: customer?.type === 'company' ? customer?.name : '',
           email: contact?.email || '',
           telefon: contact?.phone || formData.verification_phone,
           // Address data
@@ -625,6 +675,10 @@ const NewCampaignSubmission: React.FC = () => {
       case 1.5:
       case 1.7:
         // Step 1 variants: Wer bist du? - phone verification required for 1.7
+        // For authenticated users, skip user_type validation
+        if (currentUser) {
+          return true; // Authenticated users skip step 1 validation
+        }
         if (step === 1.7) {
           return !!(formData.user_type && formData.is_phone_verified);
         }
@@ -714,16 +768,20 @@ const NewCampaignSubmission: React.FC = () => {
     setIsSubmitting(true);
     
     try {
+      // For authenticated users, set user_type to 'manager' if not set
+      const submissionData = {
+        ...formData,
+        user_type: formData.user_type || (currentUser ? 'manager' : ''),
+        werbebudget_netto: formData.werbebudget_netto * 100
+      };
+      
       const response = await fetch('https://wrlgoxbzlngdtomjhvnz.supabase.co/functions/v1/submit-campaign', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
         },
-        body: JSON.stringify({
-          ...formData,
-          werbebudget_netto: formData.werbebudget_netto * 100
-        })
+        body: JSON.stringify(submissionData)
       });
 
       if (!response.ok) {
@@ -886,8 +944,8 @@ const NewCampaignSubmission: React.FC = () => {
         <div className="max-w-4xl mx-auto">
           <div className="bg-black backdrop-blur-lg rounded-3xl p-8 border border-gray-800 shadow-2xl">
             <form onSubmit={handleSubmit}>
-              {/* Step 1: Wer bist du? */}
-              {currentStep === 1 && (
+              {/* Step 1: Wer bist du? OR Artist Selection for Authenticated Users */}
+              {currentStep === 1 && !currentUser && (
                 <div className="space-y-6">
                   <div className="text-center mb-8">
                     <User className="w-12 h-12 text-[#0000fe] mx-auto mb-4" />
@@ -942,6 +1000,76 @@ const NewCampaignSubmission: React.FC = () => {
                       </label>
                     </div>
                   </div>
+                </div>
+              )}
+              
+              {/* Artist Selection for Authenticated Users */}
+              {currentStep === 1 && currentUser && (
+                <div className="space-y-6">
+                  <div className="text-center mb-8">
+                    <Music className="w-12 h-12 text-[#0000fe] mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-white mb-2">Künstler auswählen</h2>
+                    <p className="text-white">Wähle einen Künstler aus oder lege einen neuen an</p>
+                  </div>
+
+                  {isLoadingArtists ? (
+                    <div className="flex flex-col items-center justify-center py-8">
+                      <Loader className="w-12 h-12 text-[#0000fe] animate-spin mb-4" />
+                      <p className="text-white">Lade Künstler...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {associatedArtists.length > 0 && (
+                        <>
+                          {/* Search Bar */}
+                          <div className="mb-4">
+                            <input
+                              type="text"
+                              value={artistSearchQuery}
+                              onChange={(e) => setArtistSearchQuery(e.target.value)}
+                              placeholder="Künstler suchen..."
+                              className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0000fe] focus:border-transparent"
+                            />
+                          </div>
+                          
+                          {/* Artist List */}
+                          <div className="max-h-96 overflow-y-auto space-y-3">
+                            {associatedArtists
+                              .filter(artist => 
+                                artist.name.toLowerCase().includes(artistSearchQuery.toLowerCase())
+                              )
+                              .map((artist, index) => (
+                                <div key={index} className="p-4 bg-gray-900 border border-gray-800 rounded-lg cursor-pointer hover:border-[#0000fe] transition-colors">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <h4 className="font-semibold text-white">{artist.name}</h4>
+                                      {artist.instagram_url && (
+                                        <p className="text-sm text-gray-400">Instagram: {artist.instagram_url.split('/').pop()}</p>
+                                      )}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => selectExistingArtist(artist)}
+                                      className="px-4 py-2 text-white font-medium rounded-lg transition-colors" style={{ backgroundColor: '#0000fe' }}
+                                    >
+                                      Auswählen
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </>
+                      )}
+                      
+                      <button
+                        type="button"
+                        onClick={createNewArtist}
+                        className="w-full px-6 py-3 text-white font-medium rounded-lg border border-gray-600 hover:border-[#0000fe] transition-colors bg-transparent"
+                      >
+                        Neuen Künstler & Release anlegen
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1090,23 +1218,46 @@ const NewCampaignSubmission: React.FC = () => {
                           <div className="space-y-4">
                             <p className="text-white">Wähle einen Künstler aus oder lege einen neuen an:</p>
                             
-                            {associatedArtists.length > 0 && associatedArtists.map((artist, index) => (
-                              <div key={index} className="p-4 bg-gray-900 border border-gray-800 rounded-lg cursor-pointer hover:border-[#0000fe] transition-colors">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <h4 className="font-semibold text-white">{artist.name}</h4>
-                                    <p className="text-sm text-gray-400">{artist.contact?.email || artist.email}</p>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => selectExistingArtist(artist)}
-                                    className="px-4 py-2 text-white font-medium rounded-lg transition-colors" style={{ backgroundColor: '#0000fe' }}
-                                  >
-                                    Auswählen
-                                  </button>
+                            {associatedArtists.length > 0 && (
+                              <>
+                                {/* Search Bar */}
+                                <div className="mb-4">
+                                  <input
+                                    type="text"
+                                    value={artistSearchQuery}
+                                    onChange={(e) => setArtistSearchQuery(e.target.value)}
+                                    placeholder="Künstler suchen..."
+                                    className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0000fe] focus:border-transparent"
+                                  />
                                 </div>
-                              </div>
-                            ))}
+                                
+                                {/* Artist List */}
+                                <div className="max-h-96 overflow-y-auto space-y-3">
+                                  {associatedArtists
+                                    .filter(artist => 
+                                      artist.name.toLowerCase().includes(artistSearchQuery.toLowerCase()) ||
+                                      (artist.contact?.email || artist.email || '').toLowerCase().includes(artistSearchQuery.toLowerCase())
+                                    )
+                                    .map((artist, index) => (
+                                      <div key={index} className="p-4 bg-gray-900 border border-gray-800 rounded-lg cursor-pointer hover:border-[#0000fe] transition-colors">
+                                        <div className="flex items-center justify-between">
+                                          <div>
+                                            <h4 className="font-semibold text-white">{artist.name}</h4>
+                                            <p className="text-sm text-gray-400">{artist.contact?.email || artist.email}</p>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => selectExistingArtist(artist)}
+                                            className="px-4 py-2 text-white font-medium rounded-lg transition-colors" style={{ backgroundColor: '#0000fe' }}
+                                          >
+                                            Auswählen
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                </div>
+                              </>
+                            )}
                             
                             <button
                               type="button"

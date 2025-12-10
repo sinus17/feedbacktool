@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, AlertCircle, Loader, Instagram } from 'lucide-react';
 import { useStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,6 +16,8 @@ interface AdCreativeSubmissionModalProps {
 
 export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: AdCreativeSubmissionModalProps) {
   const [selectedArtist, setSelectedArtist] = useState(artistId || '');
+  const [selectedRelease, setSelectedRelease] = useState<string>('');
+  const [releases, setReleases] = useState<any[]>([]);
   const [socialMediaUrls, setSocialMediaUrls] = useState('');
   const [dropboxUrls, setDropboxUrls] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -36,6 +38,50 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
 
   // Filter out archived artists
   const activeArtists = artists.filter(artist => !artist.archived);
+
+  // Fetch releases for selected artist
+  useEffect(() => {
+    const fetchReleases = async () => {
+      if (!selectedArtist) {
+        setReleases([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('releases')
+          .select('id, name, release_date, created_at')
+          .eq('artist_id', selectedArtist as any)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const releases = (data || []) as any[];
+        setReleases(releases);
+
+        // Load saved release from session storage or select default
+        const savedReleaseKey = `selected_release_${selectedArtist}`;
+        const savedRelease = sessionStorage.getItem(savedReleaseKey);
+
+        if (releases && releases.length > 0) {
+          if (savedRelease && releases.find((r: any) => r.id === savedRelease)) {
+            // Use saved selection if it exists
+            setSelectedRelease(savedRelease);
+          } else if (releases.length === 1) {
+            // Auto-select if only one release
+            setSelectedRelease(releases[0].id);
+          } else {
+            // Select newest (first in list due to order by created_at desc)
+            setSelectedRelease(releases[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching releases:', error);
+      }
+    };
+
+    fetchReleases();
+  }, [selectedArtist]);
 
   // Count Instagram and TikTok URLs
   const socialMediaLines = socialMediaUrls.split('\n').filter(url => url.trim());
@@ -299,7 +345,13 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
         submission_id?: string | null;
         video_name?: string | null;
         thumbnail_url?: string | null;
+        release_id?: string | null;
       };
+
+      // Save selected release to session storage
+      if (selectedRelease && selectedArtist) {
+        sessionStorage.setItem(`selected_release_${selectedArtist}`, selectedRelease);
+      }
 
       const entries: AdCreativeInsert[] = [];
 
@@ -320,7 +372,8 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
                 artists_id: artistId || selectedArtist,
                 platform: 'tiktok',
                 content: url,
-                status: 'pending' as const
+                status: 'pending' as const,
+                release_id: selectedRelease || null
               })));
             } catch (err) {
               console.error('Error validating TikTok code:', err);
@@ -335,7 +388,8 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
                 artists_id: artistId || selectedArtist,
                 platform: 'instagram',
                 content: url,
-                status: 'pending' as const
+                status: 'pending' as const,
+                release_id: selectedRelease || null
               })));
               
               // Try to fetch Instagram thumbnails
@@ -380,7 +434,8 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
             submission_id: matchingSubmission?.id?.toString() || null,
             video_name: matchingSubmission?.projectName || null, 
             status: 'pending' as const,
-            thumbnail_url: thumbnailUrl || null
+            thumbnail_url: thumbnailUrl || null,
+            release_id: selectedRelease || null
           };
         }));
       }
@@ -397,7 +452,8 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
         status: entry.status,
         thumbnail_url: entry.thumbnail_url,
         submission_id: entry.submission_id,
-        video_name: entry.video_name
+        video_name: entry.video_name,
+        release_id: entry.release_id
       }));
 
       const { error } = await supabase
@@ -588,6 +644,30 @@ export function AdCreativeSubmissionModal({ onClose, artistId, isOpen = true }: 
                 )}
               </div>
             </div>
+            
+            {/* Release Selection Dropdown */}
+            {releases.length > 0 && (
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Release
+                </label>
+                <select
+                  value={selectedRelease}
+                  onChange={(e) => setSelectedRelease(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  {releases.map((release: any) => {
+                    const releaseDate = new Date(release.release_date);
+                    const formattedDate = `${releaseDate.getDate()}.${releaseDate.getMonth() + 1}.${releaseDate.getFullYear()}`;
+                    return (
+                      <option key={release.id} value={release.id}>
+                        {release.name} ({formattedDate})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
             <textarea
               value={socialMediaUrls}
               onChange={(e) => setSocialMediaUrls(e.target.value)}

@@ -282,7 +282,7 @@ const useStore = create<StoreState>((set, get) => ({
 
       let query = supabase
         .from('ad_creatives')
-        .select('*', { count: 'exact' });
+        .select('*, releases(id, name, release_date)', { count: 'exact' });
 
       // Apply filters
       if (filters.artistId) {
@@ -319,7 +319,9 @@ const useStore = create<StoreState>((set, get) => ({
         submissionId: creative.submission_id,
         thumbnail_url: creative.thumbnail_url,
         instagram_thumbnail_url: creative.instagram_thumbnail_url,
-        tiktok_thumbnail_url: creative.tiktok_thumbnail_url
+        tiktok_thumbnail_url: creative.tiktok_thumbnail_url,
+        release_id: creative.release_id,
+        releases: creative.releases
       }));
 
       const totalCount = count || 0;

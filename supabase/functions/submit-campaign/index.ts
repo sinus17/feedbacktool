@@ -64,6 +64,39 @@ serve(async (req: Request) => {
       }
     }
 
+    // Create or get customer first
+    // Use firma if provided, otherwise use kuenstlername
+    const customerName = campaignData.firma || campaignData.kuenstlername
+    const customerType = campaignData.firma ? 'company' : 'individual'
+    
+    const { data: existingCustomer, error: customerCheckError } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('name', customerName)
+      .single()
+
+    let customerId = existingCustomer?.id
+
+    if (!customerId) {
+      // Create new customer
+      const { data: newCustomer, error: customerError } = await supabase
+        .from('customers')
+        .insert({
+          name: customerName,
+          type: customerType,
+        })
+        .select()
+        .single()
+
+      if (customerError) {
+        console.error('Error creating customer:', customerError)
+        throw new Error('Failed to create customer')
+      }
+
+      customerId = newCustomer.id
+      console.log('✅ Created new customer:', customerId, 'Type:', customerType)
+    }
+
     // Create or get contact
     const { data: existingContact, error: contactCheckError } = await supabase
       .from('contacts')
@@ -78,16 +111,15 @@ serve(async (req: Request) => {
       const { data: newContact, error: contactError } = await supabase
         .from('contacts')
         .insert({
+          customer_id: customerId,
           first_name: campaignData.vorname,
           last_name: campaignData.nachname,
           email: campaignData.email,
           phone: campaignData.telefon,
-          company: campaignData.firma || null,
           street: campaignData.strasse,
           zip: campaignData.plz,
           city: campaignData.ort,
           country: campaignData.land,
-          vat_id: campaignData.vat_id || null,
         })
         .select()
         .single()
