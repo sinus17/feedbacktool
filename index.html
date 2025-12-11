@@ -116,6 +116,10 @@
     <!-- Fix for Vite HMR __HMR_CONFIG_NAME__ error -->
     <script>
       window.__HMR_CONFIG_NAME__ = 'default';
+      window.__BASE__ = '/';
+      window.__SERVER_HOST__ = 'localhost:3000';
+      window.__HMR_PROTOCOL__ = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      window.__HMR_PORT__ = 3000;
     </script>
   </head>
   <body>

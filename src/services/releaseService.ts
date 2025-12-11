@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { supabase as feedbackSupabase } from '../lib/supabase';
 
 // Reporting database (for releases sync) - only create ONE additional client
@@ -6,14 +6,16 @@ import { supabase as feedbackSupabase } from '../lib/supabase';
 const reportingSupabaseUrl = import.meta.env.VITE_REPORTING_SUPABASE_URL || 'https://uydhsjvwrgupgfjevqsz.supabase.co';
 const reportingSupabaseKey = import.meta.env.VITE_REPORTING_SUPABASE_ANON_KEY || '';
 
-if (!reportingSupabaseKey) {
-  console.warn('VITE_REPORTING_SUPABASE_ANON_KEY not set in environment variables');
-}
+let reportingSupabase: SupabaseClient | null = null;
 
-const reportingSupabase = createClient(
-  reportingSupabaseUrl,
-  reportingSupabaseKey
-);
+if (reportingSupabaseKey) {
+  reportingSupabase = createClient(
+    reportingSupabaseUrl,
+    reportingSupabaseKey
+  );
+} else {
+  console.warn('VITE_REPORTING_SUPABASE_ANON_KEY not set - reporting database features will be disabled');
+}
 
 export interface Release {
   id: string;
@@ -127,6 +129,11 @@ export class ReleaseService {
 
   // Releases sync from reporting database
   static async getReleases(): Promise<Release[]> {
+    if (!reportingSupabase) {
+      console.warn('Reporting database not configured - returning empty releases list');
+      return [];
+    }
+    
     try {
       console.log('Fetching releases from reporting database...');
       
@@ -158,6 +165,11 @@ export class ReleaseService {
   }
 
   static async getRelease(id: string): Promise<Release | null> {
+    if (!reportingSupabase) {
+      console.warn('Reporting database not configured');
+      return null;
+    }
+    
     try {
       const { data, error } = await reportingSupabase
         .from('releases')
@@ -171,11 +183,11 @@ export class ReleaseService {
       }
       
       return {
-        id: data.id,
-        title: data.name || 'Unknown Release',
-        artist_name: data.artist || 'Unknown Artist',
-        release_date: data.release_date,
-        status: data.status || 'unknown'
+        id: data?.id,
+        title: data?.name || 'Unknown Release',
+        artist_name: data?.artist || 'Unknown Artist',
+        release_date: data?.release_date,
+        status: data?.status || 'unknown'
       };
     } catch (error) {
       console.error('Error connecting to reporting database:', error);
