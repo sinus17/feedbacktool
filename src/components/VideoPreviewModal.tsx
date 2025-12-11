@@ -24,6 +24,7 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   platform?: 'instagram' | 'tiktok';
+  isNew?: boolean; // Indicates if this URL was added after the last activation
 }
 
 export const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
@@ -48,9 +49,9 @@ export const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
     if (isOpen && creativeId) {
       const fetchCreativeData = async () => {
         try {
-          // Fetch creative data including thumbnail
+          // Fetch creative data including thumbnail and timestamp data
           const { data, error } = await supabase.from('ad_creatives')
-            .select('merged_instagram_reel_url, merged_tiktok_auth_code, thumbnail_url, instagram_thumbnail_url, tiktok_thumbnail_url')
+            .select('merged_instagram_reel_url, merged_tiktok_auth_code, thumbnail_url, instagram_thumbnail_url, tiktok_thumbnail_url, instagram_url_updated_at, tiktok_url_updated_at, last_activated_at, status')
             .eq('id', creativeId).single();
 
           if (error) throw error;
@@ -127,12 +128,18 @@ export const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
             // Filter out any existing Instagram messages first
             const existingInstagramMessage = initialMessages.find(m => m.platform === 'instagram');
             if (!existingInstagramMessage) {
+              // Check if this Instagram URL is new (added after last activation)
+              const isNewInstagram = data.instagram_url_updated_at && data.last_activated_at 
+                ? new Date(data.instagram_url_updated_at) > new Date(data.last_activated_at)
+                : false;
+              
               initialMessages.push({
                 id: 'instagram-' + Date.now(),
                 type: 'user' as const,
                 content: data.merged_instagram_reel_url,
                 timestamp: new Date(Date.now() - 60000), // 1 minute ago 
-                platform: 'instagram' as const
+                platform: 'instagram' as const,
+                isNew: isNewInstagram
               });
               
               // If we don't have an Instagram thumbnail yet, try to fetch it
@@ -153,12 +160,18 @@ export const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
             // Filter out any existing TikTok messages first
             const existingTikTokMessage = initialMessages.find(m => m.platform === 'tiktok');
             if (!existingTikTokMessage) {
+              // Check if this TikTok code is new (added after last activation)
+              const isNewTikTok = data.tiktok_url_updated_at && data.last_activated_at 
+                ? new Date(data.tiktok_url_updated_at) > new Date(data.last_activated_at)
+                : false;
+              
               initialMessages.push({
                 id: 'tiktok-' + Date.now(),
                 type: 'user' as const,
                 content: data.merged_tiktok_auth_code,
                 timestamp: new Date(Date.now() - 120000), // 2 minutes ago
-                platform: 'tiktok' as const
+                platform: 'tiktok' as const,
+                isNew: isNewTikTok
               });
             }
           }
@@ -557,13 +570,22 @@ export const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({
                       transition={{ duration: 0.3 }}
                     >
                       <motion.div
-                        className={`max-w-[85%] rounded-lg p-3 ${
+                        className={`max-w-[85%] rounded-lg p-3 relative ${
                           message.type === 'user'
                             ? 'bg-primary-500 text-white'
                             : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
                         }`}
                         whileHover={{ scale: 1.02 }}
                       >
+                        {message.isNew && message.type === 'user' && (
+                          <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold shadow-lg flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/>
+                              <path d="M12 6v6l4 2"/>
+                            </svg>
+                            NEW
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mb-1">
                           {message.platform === 'instagram' && (
                             <Instagram className="h-4 w-4" />
