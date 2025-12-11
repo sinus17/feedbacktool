@@ -2,7 +2,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
-const RAPIDAPI_KEY = '14f8e13cf8msh72d1c5e7c21cce5p1fde48jsne68dcd853309';
 const TIKTOK_API_HOST = 'tiktok-api23.p.rapidapi.com';
 const INSTAGRAM_API_HOST = 'instagram-media-api.p.rapidapi.com';
 

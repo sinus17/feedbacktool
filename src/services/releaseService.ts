@@ -2,9 +2,17 @@ import { createClient } from '@supabase/supabase-js';
 import { supabase as feedbackSupabase } from '../lib/supabase';
 
 // Reporting database (for releases sync) - only create ONE additional client
+// Use environment variables for credentials
+const reportingSupabaseUrl = import.meta.env.VITE_REPORTING_SUPABASE_URL || 'https://uydhsjvwrgupgfjevqsz.supabase.co';
+const reportingSupabaseKey = import.meta.env.VITE_REPORTING_SUPABASE_ANON_KEY || '';
+
+if (!reportingSupabaseKey) {
+  console.warn('VITE_REPORTING_SUPABASE_ANON_KEY not set in environment variables');
+}
+
 const reportingSupabase = createClient(
-  'https://uydhsjvwrgupgfjevqsz.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5ZGhzanZ3cmd1cGdmamV2cXN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI1NDAzNjcsImV4cCI6MjA0ODExNjM2N30.xfCQFURkzjvBrVnF5ap5OAytCmo3cWqM7PmIcBTVZLk'
+  reportingSupabaseUrl,
+  reportingSupabaseKey
 );
 
 export interface Release {

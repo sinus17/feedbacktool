@@ -132,7 +132,10 @@ serve(async (req) => {
 
     // Get post details from RapidAPI for complete author data
     console.log(`📋 [RAPIDAPI] Fetching post details for ${videoId}`)
-    const rapidApiKey = Deno.env.get('RAPIDAPI_KEY') || '14f8e13cf8msh72d1c5e7c21cce5p1fde48jsne68dcd853309'
+    const rapidApiKey = Deno.env.get('RAPIDAPI_KEY')
+    if (!rapidApiKey) {
+      throw new Error('RAPIDAPI_KEY environment variable is required')
+    }
     const postDetailUrl = `https://tiktok-api23.p.rapidapi.com/api/post/detail?videoId=${videoId}`
     
     let followerCount = null

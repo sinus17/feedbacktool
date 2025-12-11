@@ -3,7 +3,10 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 
 // @ts-ignore - Deno global object (available in Deno runtime, not in Node.js)
-const RAPIDAPI_KEY = Deno.env.get('RAPIDAPI_KEY') || '14f8e13cf8msh72d1c5e7c21cce5p1fde48jsne68dcd853309'
+const RAPIDAPI_KEY = Deno.env.get('RAPIDAPI_KEY')
+if (!RAPIDAPI_KEY) {
+  throw new Error('RAPIDAPI_KEY environment variable is required')
+}
 const RAPIDAPI_HOST = 'tiktok-api23.p.rapidapi.com'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!

@@ -3,8 +3,7 @@
 export const VAPID_PUBLIC_KEY = 'BLeXYHMpjqspKNY_pxGtuCHgDbH6IxE6Ksk0vAtZPySciN9JvgrDX20TtAbjLWapDQU_BYO3Qbc4IQr10MWZTDk';
 
 // Private key should ONLY be used in backend/edge functions
-// DO NOT use this in frontend code
-export const VAPID_PRIVATE_KEY = 'rLySOBREIcQ9kr26LOAmBwsjI65IxyLxQ0Sg08KVJj4';
+// DO NOT import or use this in frontend code - use environment variables in edge functions instead
 
 // Helper function to convert base64 string to Uint8Array
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
