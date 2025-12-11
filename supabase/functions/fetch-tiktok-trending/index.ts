@@ -1,8 +1,7 @@
-// @ts-ignore - Deno runtime import (IDE shows error but works in Supabase Edge Functions)
+// @ts-nocheck - Deno runtime (IDE shows errors but works in Supabase Edge Functions)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 
-// @ts-ignore - Deno global object (available in Deno runtime, not in Node.js)
 const RAPIDAPI_KEY = Deno.env.get('RAPIDAPI_KEY')
 if (!RAPIDAPI_KEY) {
   throw new Error('RAPIDAPI_KEY environment variable is required')
