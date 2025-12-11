@@ -695,13 +695,20 @@ async function processTikTokVideo(
   } catch (error) {
     console.error('Error processing video:', error);
 
+    // Get current retry count
+    const { data: queueData } = await supabase
+      .from('video_library_queue')
+      .select('retry_count')
+      .eq('id', queueId)
+      .single();
+
     // Update queue with error
     await supabase
       .from('video_library_queue')
       .update({
         status: 'failed',
         error_message: error.message,
-        retry_count: supabase.from('video_library_queue').select('retry_count').eq('id', queueId).single().then((r: any) => (r.data?.retry_count || 0) + 1),
+        retry_count: (queueData?.retry_count || 0) + 1,
         updated_at: new Date().toISOString(),
       })
       .eq('id', queueId);
@@ -1062,13 +1069,20 @@ async function processInstagramReel(
   } catch (error) {
     console.error('Error processing Instagram reel:', error);
 
+    // Get current retry count
+    const { data: queueData } = await supabase
+      .from('video_library_queue')
+      .select('retry_count')
+      .eq('id', queueId)
+      .single();
+
     // Update queue with error
     await supabase
       .from('video_library_queue')
       .update({
         status: 'failed',
         error_message: error.message,
-        retry_count: supabase.from('video_library_queue').select('retry_count').eq('id', queueId).single().then((r: any) => (r.data?.retry_count || 0) + 1),
+        retry_count: (queueData?.retry_count || 0) + 1,
         updated_at: new Date().toISOString(),
       })
       .eq('id', queueId);
